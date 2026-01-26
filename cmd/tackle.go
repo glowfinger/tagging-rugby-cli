@@ -122,8 +122,14 @@ var tackleAddCmd = &cobra.Command{
 var tackleListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all tackles for the current video",
-	Long:  `Display all tackles for the current video as a table, sorted by timestamp.`,
+	Long:  `Display all tackles for the current video as a table, sorted by timestamp. Supports filtering by player, outcome, and starred status.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Get filter flags
+		playerFilter, _ := cmd.Flags().GetString("player")
+		outcomeFilter, _ := cmd.Flags().GetString("outcome")
+		starFilter, _ := cmd.Flags().GetBool("star")
+		starFilterSet := cmd.Flags().Changed("star")
+
 		// Connect to mpv to get current video path
 		client := mpv.NewClient("")
 		if err := client.Connect(); err != nil {
@@ -148,11 +154,26 @@ var tackleListCmd = &cobra.Command{
 		}
 		defer database.Close()
 
+		// Build dynamic query with filters
+		query := `SELECT id, timestamp_seconds, player, team, attempt, outcome, followed, star, notes, zone FROM tackles WHERE video_path = ?`
+		queryArgs := []interface{}{videoPath}
+
+		if playerFilter != "" {
+			query += " AND player = ?"
+			queryArgs = append(queryArgs, playerFilter)
+		}
+		if outcomeFilter != "" {
+			query += " AND outcome = ?"
+			queryArgs = append(queryArgs, outcomeFilter)
+		}
+		if starFilterSet && starFilter {
+			query += " AND star = 1"
+		}
+
+		query += " ORDER BY timestamp_seconds ASC"
+
 		// Query tackles
-		rows, err := database.Query(
-			`SELECT id, timestamp_seconds, player, team, attempt, outcome, followed, star, notes, zone FROM tackles WHERE video_path = ? ORDER BY timestamp_seconds ASC`,
-			videoPath,
-		)
+		rows, err := database.Query(query, queryArgs...)
 		if err != nil {
 			return fmt.Errorf("failed to query tackles: %w", err)
 		}
@@ -243,6 +264,11 @@ func init() {
 	tackleAddCmd.Flags().BoolP("star", "s", false, "Mark this tackle as starred/important")
 	tackleAddCmd.Flags().StringP("notes", "n", "", "Additional notes about the tackle")
 	tackleAddCmd.Flags().StringP("zone", "z", "", "Field zone where the tackle occurred")
+
+	// Add filter flags to tackle list command
+	tackleListCmd.Flags().StringP("player", "p", "", "Filter by player name or number")
+	tackleListCmd.Flags().StringP("outcome", "o", "", "Filter by outcome: missed, completed, possible, other")
+	tackleListCmd.Flags().BoolP("star", "s", false, "Filter to show only starred tackles")
 
 	// Build command tree
 	tackleCmd.AddCommand(tackleAddCmd)
