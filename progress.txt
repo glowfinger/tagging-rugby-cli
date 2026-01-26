@@ -132,3 +132,14 @@
   - SetProperty accepts any interface{} so strings and floats both work
 
 ---
+
+## 2026-01-26 - US-013
+- What was implemented: Dependency checker with doctor command
+- Files changed: deps/deps.go (new), cmd/root.go
+- **Learnings for future iterations:**
+  - Use `exec.LookPath` to check if a binary is available in PATH
+  - deps package provides CheckMpv, CheckFfmpeg, and CheckAll functions
+  - DependencyError type includes name and install URL for user-friendly messages
+  - Doctor command exits with code 1 if any dependency is missing
+
+---

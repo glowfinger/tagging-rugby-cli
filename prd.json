@@ -192,8 +192,8 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created deps/deps.go with CheckMpv, CheckFfmpeg, CheckAll, and DependencyError type. Added doctor command to cmd/root.go."
     },
     {
       "id": "US-014",
