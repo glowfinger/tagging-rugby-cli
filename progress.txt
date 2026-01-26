@@ -75,3 +75,16 @@
   - Custom errors: ErrNotConnected, ErrSocketNotFound for clear error handling
 
 ---
+
+## 2026-01-26 - US-008
+- What was implemented: sendCommand method for mpv IPC JSON protocol
+- Files changed: mpv/client.go
+- **Learnings for future iterations:**
+  - mpv IPC uses JSON with format: `{"command": [cmd, args...], "request_id": <id>}`
+  - Responses include `data`, `error`, and `request_id` fields
+  - Use request_id to match responses since mpv can send async events
+  - Use bufio.Reader for efficient line-based reading (responses are newline-terminated)
+  - Error field is "success" on success, otherwise contains error message
+  - Use sync/atomic for thread-safe request ID generation
+
+---
