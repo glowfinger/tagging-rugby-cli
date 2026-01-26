@@ -55,3 +55,12 @@
   - Categories table has UNIQUE constraint on name column
 
 ---
+
+## 2026-01-26 - US-006
+- What was implemented: Tackles table migration for detailed tackle tracking
+- Files changed: db/db.go
+- **Learnings for future iterations:**
+  - Use SQLite CHECK constraint for enum-like fields: `outcome TEXT CHECK(outcome IN ('missed', 'completed', 'possible', 'other'))`
+  - Star field is INTEGER (0/1) since SQLite has no native boolean type
+
+---
