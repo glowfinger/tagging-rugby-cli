@@ -31,8 +31,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Uses modernc.org/sqlite (pure Go, no CGO). Typecheck passes with CGO_ENABLED=0."
     },
     {
       "id": "US-003",

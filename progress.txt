@@ -1,0 +1,27 @@
+## Codebase Patterns
+- Use `CGO_ENABLED=0` for all Go build/vet commands (required for modernc.org/sqlite)
+- Go binary is at `/home/node/go/bin/go` - use `export PATH="$PATH:/home/node/go/bin"` before Go commands
+- Database connection uses modernc.org/sqlite (pure Go implementation, no CGO)
+
+---
+
+## 2026-01-26 - US-001
+- Initial project scaffolding with cobra CLI framework
+- Created main.go and cmd/root.go with root and version commands
+- Files changed: main.go, cmd/root.go, go.mod, go.sum
+- **Learnings for future iterations:**
+  - Typecheck with CGO_ENABLED=0 to avoid CGO issues
+  - cobra CLI structure: main.go calls cmd.Execute(), cmd/root.go defines rootCmd
+
+---
+
+## 2026-01-26 - US-002
+- What was implemented: SQLite database setup with Open function
+- Files changed: db/db.go, go.mod, go.sum
+- **Learnings for future iterations:**
+  - Database file stored at ~/.local/share/tagging-rugby-cli/data.db
+  - Uses modernc.org/sqlite for pure Go SQLite (no CGO required)
+  - db.Open() creates parent directories automatically
+  - Always verify connection with db.Ping() before returning
+
+---
