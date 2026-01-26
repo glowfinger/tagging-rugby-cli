@@ -132,8 +132,8 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented GetProperty, SetProperty, GetTimePos, GetDuration, GetPaused methods. Added toFloat64 helper for numeric type conversions."
     },
     {
       "id": "US-010",

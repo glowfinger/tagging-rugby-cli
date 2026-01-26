@@ -88,3 +88,15 @@
   - Use sync/atomic for thread-safe request ID generation
 
 ---
+
+## 2026-01-26 - US-009
+- What was implemented: Get/set property methods for mpv IPC client
+- Files changed: mpv/client.go
+- **Learnings for future iterations:**
+  - Use `get_property` and `set_property` mpv commands for property access
+  - mpv property names use hyphens (e.g., "time-pos", "ab-loop-a")
+  - JSON unmarshals numbers as float64 - use helper function to handle type conversions
+  - Boolean properties (like "pause") return Go bool type directly from JSON
+  - Convenience methods (GetTimePos, GetDuration, GetPaused) wrap GetProperty for type safety
+
+---
