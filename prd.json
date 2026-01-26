@@ -148,8 +148,8 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented Play, Pause, TogglePause, Seek, SeekRelative methods. Uses mpv seek command with 'absolute' and 'relative' flags."
     },
     {
       "id": "US-011",

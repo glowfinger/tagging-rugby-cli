@@ -100,3 +100,14 @@
   - Convenience methods (GetTimePos, GetDuration, GetPaused) wrap GetProperty for type safety
 
 ---
+
+## 2026-01-26 - US-010
+- What was implemented: Playback control methods for mpv IPC client
+- Files changed: mpv/client.go
+- **Learnings for future iterations:**
+  - Use `seek` command with "absolute" or "relative" as second argument for seeking
+  - Play/Pause simply set the "pause" property to false/true
+  - TogglePause reads current state then inverts it
+  - mpv seek command: `{"command": ["seek", <seconds>, "<mode>"]}`
+
+---
