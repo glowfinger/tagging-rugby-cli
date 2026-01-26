@@ -36,3 +36,12 @@
   - Each table creation should use CREATE TABLE IF NOT EXISTS for idempotency
 
 ---
+
+## 2026-01-26 - US-004
+- What was implemented: Clips table migration for storing video segments
+- Files changed: db/db.go
+- **Learnings for future iterations:**
+  - Follow same pattern as notes table: add to migrate() function with CREATE TABLE IF NOT EXISTS
+  - Clips table stores start_seconds and end_seconds (REAL) to define video segments
+
+---

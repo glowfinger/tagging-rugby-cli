@@ -58,8 +58,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migration added to migrate() function in db/db.go. Uses CREATE TABLE IF NOT EXISTS for idempotency."
     },
     {
       "id": "US-005",
