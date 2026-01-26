@@ -16,8 +16,8 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Dependencies will be added via go get when needed. Typecheck passes with CGO_ENABLED=0."
     },
     {
       "id": "US-002",

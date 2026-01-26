@@ -1,0 +1,32 @@
+# Ralph Progress Log
+Started: Mon Jan 26 15:12:42 PST 2026
+---
+
+## Codebase Patterns
+- Build with `CGO_ENABLED=0` - this environment doesn't support CGO (no gcc -m64)
+- Use `export PATH=$HOME/go/bin:$PATH` before running go commands - Go is installed in home directory
+- Dependencies are added with `go get` and pruned by `go mod tidy` if not directly imported
+- Run quality checks with `CGO_ENABLED=0 go vet ./...`
+
+---
+
+## 2026-01-26 - US-001
+- What was implemented:
+  - Go module initialized as github.com/user/tagging-rugby-cli
+  - cobra dependency installed for CLI framework
+  - main.go created with cobra root command
+  - cmd/root.go with Execute(), root command, and version command
+  - Root command shows help with app name and description
+  - Version command prints "tagging-rugby-cli version 0.1.0"
+- Files changed:
+  - go.mod (new)
+  - go.sum (new)
+  - main.go (new)
+  - cmd/root.go (new)
+  - prd.json (added to track progress)
+- **Learnings for future iterations:**
+  - This environment has no sudo access and CGO doesn't work (gcc -m64 error)
+  - Go was installed to $HOME/go from tarball, need to add to PATH
+  - modernc.org/sqlite is CGO-free SQLite but won't be in go.mod until imported
+  - viper dependency will be added when configuration features are needed
+---
