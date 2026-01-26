@@ -184,6 +184,51 @@ func (c *Client) SeekRelative(seconds float64) error {
 	return err
 }
 
+// SetSpeed sets the playback speed multiplier.
+// 1.0 is normal speed, 0.5 is half speed, 2.0 is double speed.
+func (c *Client) SetSpeed(multiplier float64) error {
+	return c.SetProperty("speed", multiplier)
+}
+
+// GetSpeed returns the current playback speed multiplier.
+func (c *Client) GetSpeed() (float64, error) {
+	result, err := c.GetProperty("speed")
+	if err != nil {
+		return 0, err
+	}
+	return toFloat64(result)
+}
+
+// FrameStep advances playback by one frame and pauses.
+func (c *Client) FrameStep() error {
+	_, err := c.sendCommand("frame-step")
+	return err
+}
+
+// FrameBackStep steps backward by one frame and pauses.
+func (c *Client) FrameBackStep() error {
+	_, err := c.sendCommand("frame-back-step")
+	return err
+}
+
+// SetMute sets the mute state.
+func (c *Client) SetMute(muted bool) error {
+	return c.SetProperty("mute", muted)
+}
+
+// GetMute returns true if audio is muted.
+func (c *Client) GetMute() (bool, error) {
+	result, err := c.GetProperty("mute")
+	if err != nil {
+		return false, err
+	}
+	muted, ok := result.(bool)
+	if !ok {
+		return false, fmt.Errorf("mpv: unexpected mute value type: %T", result)
+	}
+	return muted, nil
+}
+
 // toFloat64 converts an interface{} to float64.
 // JSON numbers from mpv are typically decoded as float64.
 func toFloat64(v interface{}) (float64, error) {
