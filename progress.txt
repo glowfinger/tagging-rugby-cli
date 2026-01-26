@@ -190,3 +190,15 @@
   - Use fmt.Scanln to read user confirmation input
 
 ---
+
+## 2026-01-26 - US-018
+- What was implemented: Note filtering capabilities for note list command
+- Files changed: cmd/note.go
+- **Learnings for future iterations:**
+  - Use parseTimeToSeconds helper to parse MM:SS or raw seconds for time range filters
+  - Dynamic SQL query building for filters: start with base query, append " AND field = ?" for each filter
+  - Collect query args in []interface{} slice, append as filters are added
+  - All filters combine with AND logic for narrowing results
+  - fmt.Sscanf returns count of successfully scanned values - use this to detect format
+
+---
