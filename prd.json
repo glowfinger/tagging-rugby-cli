@@ -366,8 +366,8 @@
         "Typecheck passes"
       ],
       "priority": 24,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added --player, --outcome, --star filter flags to tackle list command. Uses dynamic SQL query building with AND logic for combined filters."
     },
     {
       "id": "US-025",

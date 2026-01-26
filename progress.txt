@@ -256,3 +256,13 @@
   - Tackles table was already created in US-006 with CHECK constraint on outcome column
 
 ---
+## 2026-01-26 - US-024
+- What was implemented: Tackle filtering for tackle list command
+- Files changed: cmd/tackle.go
+- **Learnings for future iterations:**
+  - Follow same filtering pattern as note list (dynamic SQL query building with AND logic)
+  - Use cmd.Flags().Changed("flag") to detect if boolean flag was explicitly set vs using default
+  - Star filter only applies when explicitly set to true (--star flag present)
+  - Reuse queryArgs slice pattern: start with base query, append " AND field = ?" for each filter
+
+---
