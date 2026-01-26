@@ -86,8 +86,15 @@ var noteAddCmd = &cobra.Command{
 var noteListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all notes for the current video",
-	Long:  `Display all notes for the current video as a table, sorted by timestamp.`,
+	Long:  `Display all notes for the current video as a table, sorted by timestamp. Supports filtering by category, player, team, and time range.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Get filter flags
+		categoryFilter, _ := cmd.Flags().GetString("category")
+		playerFilter, _ := cmd.Flags().GetString("player")
+		teamFilter, _ := cmd.Flags().GetString("team")
+		fromFilter, _ := cmd.Flags().GetString("from")
+		toFilter, _ := cmd.Flags().GetString("to")
+
 		// Connect to mpv to get current video path
 		client := mpv.NewClient("")
 		if err := client.Connect(); err != nil {
@@ -112,11 +119,45 @@ var noteListCmd = &cobra.Command{
 		}
 		defer database.Close()
 
+		// Build dynamic query with filters
+		query := `SELECT id, timestamp_seconds, category, player, team, text FROM notes WHERE video_path = ?`
+		queryArgs := []interface{}{videoPath}
+
+		if categoryFilter != "" {
+			query += " AND category = ?"
+			queryArgs = append(queryArgs, categoryFilter)
+		}
+		if playerFilter != "" {
+			query += " AND player = ?"
+			queryArgs = append(queryArgs, playerFilter)
+		}
+		if teamFilter != "" {
+			query += " AND team = ?"
+			queryArgs = append(queryArgs, teamFilter)
+		}
+
+		// Parse and apply time range filters
+		if fromFilter != "" {
+			fromSeconds, err := parseTimeToSeconds(fromFilter)
+			if err != nil {
+				return fmt.Errorf("invalid --from time format: %w", err)
+			}
+			query += " AND timestamp_seconds >= ?"
+			queryArgs = append(queryArgs, fromSeconds)
+		}
+		if toFilter != "" {
+			toSeconds, err := parseTimeToSeconds(toFilter)
+			if err != nil {
+				return fmt.Errorf("invalid --to time format: %w", err)
+			}
+			query += " AND timestamp_seconds <= ?"
+			queryArgs = append(queryArgs, toSeconds)
+		}
+
+		query += " ORDER BY timestamp_seconds ASC"
+
 		// Query notes
-		rows, err := database.Query(
-			`SELECT id, timestamp_seconds, category, player, team, text FROM notes WHERE video_path = ? ORDER BY timestamp_seconds ASC`,
-			videoPath,
-		)
+		rows, err := database.Query(query, queryArgs...)
 		if err != nil {
 			return fmt.Errorf("failed to query notes: %w", err)
 		}
@@ -164,7 +205,7 @@ var noteListCmd = &cobra.Command{
 		w.Flush()
 
 		if count == 0 {
-			fmt.Println("\nNo notes found for this video.")
+			fmt.Println("\nNo matching notes found.")
 		} else {
 			fmt.Printf("\n%d note(s) found.\n", count)
 		}
@@ -368,11 +409,35 @@ func joinStrings(strs []string, sep string) string {
 	return result
 }
 
+// parseTimeToSeconds parses a time string in MM:SS or seconds format.
+func parseTimeToSeconds(timeStr string) (float64, error) {
+	// Try MM:SS format first
+	var minutes, seconds int
+	if n, err := fmt.Sscanf(timeStr, "%d:%d", &minutes, &seconds); n == 2 && err == nil {
+		return float64(minutes*60 + seconds), nil
+	}
+
+	// Try seconds format (float)
+	var secs float64
+	if n, err := fmt.Sscanf(timeStr, "%f", &secs); n == 1 && err == nil {
+		return secs, nil
+	}
+
+	return 0, fmt.Errorf("expected MM:SS or seconds, got '%s'", timeStr)
+}
+
 func init() {
 	// Add flags to note add command
 	noteAddCmd.Flags().StringP("category", "c", "", "Note category (e.g., try, tackle, turnover)")
 	noteAddCmd.Flags().StringP("player", "p", "", "Player name or number")
 	noteAddCmd.Flags().StringP("team", "t", "", "Team name")
+
+	// Add flags to note list command for filtering
+	noteListCmd.Flags().StringP("category", "c", "", "Filter by category")
+	noteListCmd.Flags().StringP("player", "p", "", "Filter by player")
+	noteListCmd.Flags().StringP("team", "t", "", "Filter by team")
+	noteListCmd.Flags().String("from", "", "Filter notes from this time (MM:SS or seconds)")
+	noteListCmd.Flags().String("to", "", "Filter notes up to this time (MM:SS or seconds)")
 
 	// Add flags to note edit command
 	noteEditCmd.Flags().StringP("category", "c", "", "Update note category")
