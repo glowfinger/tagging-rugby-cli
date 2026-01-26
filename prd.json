@@ -224,8 +224,8 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added openCmd to cmd/root.go. Resolves paths, validates file existence, launches mpv, waits for socket with retry loop, displays duration in MM:SS format."
     },
     {
       "id": "US-016",
@@ -242,8 +242,8 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created cmd/note.go with noteCmd, noteAddCmd, noteListCmd. Uses tabwriter for table display. Gets timestamp and video path from mpv IPC."
     },
     {
       "id": "US-017",
