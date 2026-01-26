@@ -229,6 +229,23 @@ func (c *Client) GetMute() (bool, error) {
 	return muted, nil
 }
 
+// SetABLoop sets the A-B loop points for looping playback between start and end times.
+// Both start and end are in seconds.
+func (c *Client) SetABLoop(start, end float64) error {
+	if err := c.SetProperty("ab-loop-a", start); err != nil {
+		return err
+	}
+	return c.SetProperty("ab-loop-b", end)
+}
+
+// ClearABLoop clears the A-B loop by setting both loop points to "no".
+func (c *Client) ClearABLoop() error {
+	if err := c.SetProperty("ab-loop-a", "no"); err != nil {
+		return err
+	}
+	return c.SetProperty("ab-loop-b", "no")
+}
+
 // toFloat64 converts an interface{} to float64.
 // JSON numbers from mpv are typically decoded as float64.
 func toFloat64(v interface{}) (float64, error) {
