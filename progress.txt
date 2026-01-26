@@ -235,3 +235,13 @@
   - Pattern: database lookup first, then mpv connection and operations
 
 ---
+## 2026-01-26 - US-022
+- What was implemented: Category commands - list, add, delete
+- Files changed: cmd/category.go (new)
+- **Learnings for future iterations:**
+  - Category commands don't need mpv connection - they're pure database operations
+  - Use isUniqueConstraintError helper to detect duplicate category errors (SQLite "UNIQUE constraint failed")
+  - Categories table has UNIQUE constraint on name column from US-005 migration
+  - Simple contains() helper used instead of importing strings package to minimize dependencies
+
+---

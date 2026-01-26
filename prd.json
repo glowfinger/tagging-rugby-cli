@@ -336,8 +336,8 @@
         "Typecheck passes"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created cmd/category.go with list, add, delete subcommands. Uses tabwriter for table display. Add command checks for unique constraint violations."
     },
     {
       "id": "US-023",
