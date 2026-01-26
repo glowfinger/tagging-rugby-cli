@@ -245,3 +245,14 @@
   - Simple contains() helper used instead of importing strings package to minimize dependencies
 
 ---
+## 2026-01-26 - US-023
+- What was implemented: Tackle commands - add and list
+- Files changed: cmd/tackle.go (new)
+- **Learnings for future iterations:**
+  - Tackle commands follow the same pattern as note/clip commands
+  - Required flags are validated manually in RunE (cobra doesn't enforce required flags for non-positional args)
+  - Use isValidOutcome helper to validate outcome against allowed values (missed, completed, possible, other)
+  - Star field is INTEGER in SQLite (0/1) - convert from bool with if/else
+  - Tackles table was already created in US-006 with CHECK constraint on outcome column
+
+---
