@@ -213,3 +213,15 @@
   - Query note by ID and check for sql.ErrNoRows for "not found" error handling
 
 ---
+## 2026-01-26 - US-020
+- What was implemented: Clip commands - create and list
+- Files changed: cmd/clip.go (new)
+- **Learnings for future iterations:**
+  - Clip commands follow same pattern as note commands (connect to mpv, get video path, use database)
+  - Use sync.Mutex for thread-safe in-memory state storage (clip start timestamp)
+  - clipStartState struct holds temporary clip start position until 'clip end' is called
+  - Reuse parseTimeToSeconds and nullStringValue helpers from cmd/note.go
+  - Validate that video hasn't changed between 'clip start' and 'clip end' calls
+  - Validate start < end for clip timestamps
+
+---
