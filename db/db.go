@@ -103,6 +103,27 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
+	// Create tackles table
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS tackles (
+			id INTEGER PRIMARY KEY,
+			video_path TEXT,
+			timestamp_seconds REAL,
+			player TEXT,
+			team TEXT,
+			attempt INTEGER,
+			outcome TEXT CHECK(outcome IN ('missed', 'completed', 'possible', 'other')),
+			followed TEXT,
+			star INTEGER DEFAULT 0,
+			notes TEXT,
+			zone TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
