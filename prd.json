@@ -207,8 +207,8 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created mpv/launch.go with LaunchMpv function. Uses deps.CheckMpv for dependency check, returns *exec.Cmd for process handle."
     },
     {
       "id": "US-015",

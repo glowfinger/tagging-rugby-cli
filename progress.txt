@@ -143,3 +143,15 @@
   - Doctor command exits with code 1 if any dependency is missing
 
 ---
+
+## 2026-01-26 - US-014
+- What was implemented: LaunchMpv function to start mpv with IPC socket
+- Files changed: mpv/launch.go (new)
+- **Learnings for future iterations:**
+  - LaunchMpv is in separate file mpv/launch.go (keeps concerns separated from client.go)
+  - Uses deps.CheckMpv() to verify mpv is installed before launching
+  - Returns *exec.Cmd which can be used to Wait() or Kill() the process later
+  - Uses cmd.Start() (non-blocking) rather than cmd.Run() (blocking)
+  - Socket path is shared via mpv.DefaultSocketPath constant
+
+---
