@@ -45,8 +45,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migration runs automatically on db.Open(). Uses migrate() helper function for future table additions."
     },
     {
       "id": "US-004",

@@ -2,6 +2,7 @@
 - Use `CGO_ENABLED=0` for all Go build/vet commands (required for modernc.org/sqlite)
 - Go binary is at `/home/node/go/bin/go` - use `export PATH="$PATH:/home/node/go/bin"` before Go commands
 - Database connection uses modernc.org/sqlite (pure Go implementation, no CGO)
+- Add new table migrations to the `migrate()` function in db/db.go - always use `CREATE TABLE IF NOT EXISTS`
 
 ---
 
@@ -23,5 +24,15 @@
   - Uses modernc.org/sqlite for pure Go SQLite (no CGO required)
   - db.Open() creates parent directories automatically
   - Always verify connection with db.Ping() before returning
+
+---
+
+## 2026-01-26 - US-003
+- What was implemented: Notes table migration with idempotent CREATE TABLE IF NOT EXISTS
+- Files changed: db/db.go
+- **Learnings for future iterations:**
+  - Migrations run automatically via migrate() helper in db.Open()
+  - Add future table migrations to the migrate() function
+  - Each table creation should use CREATE TABLE IF NOT EXISTS for idempotency
 
 ---
