@@ -152,6 +152,38 @@ func (c *Client) GetPaused() (bool, error) {
 	return paused, nil
 }
 
+// Play resumes playback by setting pause to false.
+func (c *Client) Play() error {
+	return c.SetProperty("pause", false)
+}
+
+// Pause pauses playback by setting pause to true.
+func (c *Client) Pause() error {
+	return c.SetProperty("pause", true)
+}
+
+// TogglePause toggles the pause state.
+func (c *Client) TogglePause() error {
+	paused, err := c.GetPaused()
+	if err != nil {
+		return err
+	}
+	return c.SetProperty("pause", !paused)
+}
+
+// Seek performs an absolute seek to the specified position in seconds.
+func (c *Client) Seek(seconds float64) error {
+	_, err := c.sendCommand("seek", seconds, "absolute")
+	return err
+}
+
+// SeekRelative performs a relative seek by the specified number of seconds.
+// Positive values seek forward, negative values seek backward.
+func (c *Client) SeekRelative(seconds float64) error {
+	_, err := c.sendCommand("seek", seconds, "relative")
+	return err
+}
+
 // toFloat64 converts an interface{} to float64.
 // JSON numbers from mpv are typically decoded as float64.
 func toFloat64(v interface{}) (float64, error) {
