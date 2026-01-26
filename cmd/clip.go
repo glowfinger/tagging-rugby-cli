@@ -244,6 +244,96 @@ var clipAddCmd = &cobra.Command{
 	},
 }
 
+var clipPlayCmd = &cobra.Command{
+	Use:   "play <id>",
+	Short: "Play a clip with A-B loop",
+	Long:  `Seek to a clip's start timestamp and set mpv A-B loop to loop the clip continuously.`,
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		var clipID int64
+		if _, err := fmt.Sscanf(args[0], "%d", &clipID); err != nil {
+			return fmt.Errorf("invalid clip ID: %s", args[0])
+		}
+
+		// Open database
+		database, err := db.Open()
+		if err != nil {
+			return fmt.Errorf("failed to open database: %w", err)
+		}
+		defer database.Close()
+
+		// Query clip by ID
+		var startSec, endSec float64
+		var description sql.NullString
+		err = database.QueryRow(
+			`SELECT start_seconds, end_seconds, description FROM clips WHERE id = ?`,
+			clipID,
+		).Scan(&startSec, &endSec, &description)
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("clip not found: ID %d", clipID)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to query clip: %w", err)
+		}
+
+		// Connect to mpv
+		client := mpv.NewClient("")
+		if err := client.Connect(); err != nil {
+			return fmt.Errorf("failed to connect to mpv: %w\n(Is mpv running with a video open?)", err)
+		}
+		defer client.Close()
+
+		// Seek to clip start
+		if err := client.Seek(startSec); err != nil {
+			return fmt.Errorf("failed to seek to clip start: %w", err)
+		}
+
+		// Set A-B loop
+		if err := client.SetABLoop(startSec, endSec); err != nil {
+			return fmt.Errorf("failed to set A-B loop: %w", err)
+		}
+
+		// Format timestamps
+		startMin := int(startSec) / 60
+		startSecInt := int(startSec) % 60
+		endMin := int(endSec) / 60
+		endSecInt := int(endSec) % 60
+		duration := endSec - startSec
+
+		descStr := nullStringValue(description)
+		if descStr == "" {
+			descStr = "(no description)"
+		}
+
+		fmt.Printf("Playing clip %d: %s\n", clipID, descStr)
+		fmt.Printf("Looping %d:%02d - %d:%02d (%.1fs)\n", startMin, startSecInt, endMin, endSecInt, duration)
+		fmt.Println("Use 'clip stop' to clear the loop.")
+		return nil
+	},
+}
+
+var clipStopCmd = &cobra.Command{
+	Use:   "stop",
+	Short: "Stop clip loop playback",
+	Long:  `Clear the A-B loop to stop looping the current clip.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Connect to mpv
+		client := mpv.NewClient("")
+		if err := client.Connect(); err != nil {
+			return fmt.Errorf("failed to connect to mpv: %w\n(Is mpv running with a video open?)", err)
+		}
+		defer client.Close()
+
+		// Clear A-B loop
+		if err := client.ClearABLoop(); err != nil {
+			return fmt.Errorf("failed to clear A-B loop: %w", err)
+		}
+
+		fmt.Println("A-B loop cleared.")
+		return nil
+	},
+}
+
 var clipListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all clips for the current video",
@@ -354,5 +444,7 @@ func init() {
 	clipCmd.AddCommand(clipEndCmd)
 	clipCmd.AddCommand(clipAddCmd)
 	clipCmd.AddCommand(clipListCmd)
+	clipCmd.AddCommand(clipPlayCmd)
+	clipCmd.AddCommand(clipStopCmd)
 	rootCmd.AddCommand(clipCmd)
 }
