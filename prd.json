@@ -290,8 +290,8 @@
         "Typecheck passes"
       ],
       "priority": 19,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added noteGotoCmd to cmd/note.go. Uses client.Seek() to jump to note timestamp. Displays note details (text, category, player, team) after seeking."
     },
     {
       "id": "US-020",

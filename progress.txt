@@ -202,3 +202,14 @@
   - fmt.Sscanf returns count of successfully scanned values - use this to detect format
 
 ---
+
+## 2026-01-26 - US-019
+- What was implemented: Note goto command to jump to a note's timestamp
+- Files changed: cmd/note.go
+- **Learnings for future iterations:**
+  - Pattern for "goto" commands: fetch record from DB first, then connect to mpv and seek
+  - Use client.Seek(timestamp) for absolute positioning (uses the existing mpv client method)
+  - Display note details after seeking for better UX (confirms which note was jumped to)
+  - Query note by ID and check for sql.ErrNoRows for "not found" error handling
+
+---
