@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/user/tagging-rugby-cli/deps"
 )
 
 var Version = "0.1.0"
@@ -30,8 +31,47 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+var doctorCmd = &cobra.Command{
+	Use:   "doctor",
+	Short: "Check system dependencies",
+	Long:  `Check that all required system dependencies (mpv, ffmpeg) are installed and available.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("Checking dependencies...")
+		fmt.Println()
+
+		allGood := true
+
+		// Check mpv
+		if err := deps.CheckMpv(); err != nil {
+			fmt.Println("✗ mpv: NOT FOUND")
+			fmt.Printf("  Install from: %s\n", deps.MpvInstallURL)
+			allGood = false
+		} else {
+			fmt.Println("✓ mpv: OK")
+		}
+
+		// Check ffmpeg
+		if err := deps.CheckFfmpeg(); err != nil {
+			fmt.Println("✗ ffmpeg: NOT FOUND")
+			fmt.Printf("  Install from: %s\n", deps.FfmpegInstallURL)
+			allGood = false
+		} else {
+			fmt.Println("✓ ffmpeg: OK")
+		}
+
+		fmt.Println()
+		if allGood {
+			fmt.Println("All dependencies are installed!")
+		} else {
+			fmt.Println("Some dependencies are missing. Please install them to use all features.")
+			os.Exit(1)
+		}
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(doctorCmd)
 }
 
 func Execute() {
