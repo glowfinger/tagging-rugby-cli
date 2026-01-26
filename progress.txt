@@ -111,3 +111,14 @@
   - mpv seek command: `{"command": ["seek", <seconds>, "<mode>"]}`
 
 ---
+
+## 2026-01-26 - US-011
+- What was implemented: Advanced playback controls - speed, frame stepping, and mute
+- Files changed: mpv/client.go
+- **Learnings for future iterations:**
+  - mpv `speed` property accepts float multipliers (1.0 = normal, 0.5 = half, 2.0 = double)
+  - `frame-step` and `frame-back-step` are mpv commands (not properties) for single frame navigation
+  - `mute` property is a boolean for audio muting
+  - Boolean properties (pause, mute) return Go bool directly from JSON unmarshal
+
+---

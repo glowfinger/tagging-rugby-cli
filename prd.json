@@ -164,8 +164,8 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented SetSpeed, GetSpeed, FrameStep, FrameBackStep, SetMute, GetMute methods. Uses mpv speed and mute properties, and frame-step/frame-back-step commands."
     },
     {
       "id": "US-012",
