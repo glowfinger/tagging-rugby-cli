@@ -122,3 +122,13 @@
   - Boolean properties (pause, mute) return Go bool directly from JSON unmarshal
 
 ---
+
+## 2026-01-26 - US-012
+- What was implemented: A-B loop controls for clip playback
+- Files changed: mpv/client.go
+- **Learnings for future iterations:**
+  - A-B loop uses `ab-loop-a` and `ab-loop-b` properties (hyphens, not underscores)
+  - To clear the loop, set both properties to the string "no" (not a boolean or nil)
+  - SetProperty accepts any interface{} so strings and floats both work
+
+---
