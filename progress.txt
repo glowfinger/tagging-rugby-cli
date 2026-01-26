@@ -225,3 +225,13 @@
   - Validate start < end for clip timestamps
 
 ---
+## 2026-01-26 - US-021
+- What was implemented: Clip playback with A-B loop
+- Files changed: cmd/clip.go
+- **Learnings for future iterations:**
+  - clip play command: fetches clip from DB, seeks to start, sets A-B loop with SetABLoop()
+  - clip stop command: uses ClearABLoop() to stop looping
+  - mpv client already had SetABLoop(start, end) and ClearABLoop() from US-012
+  - Pattern: database lookup first, then mpv connection and operations
+
+---

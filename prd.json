@@ -321,8 +321,8 @@
         "Typecheck passes"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added clipPlayCmd and clipStopCmd to cmd/clip.go. Uses existing mpv client Seek, SetABLoop, and ClearABLoop methods."
     },
     {
       "id": "US-022",
