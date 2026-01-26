@@ -108,6 +108,65 @@ func (c *Client) SocketPath() string {
 	return c.socketPath
 }
 
+// GetProperty retrieves the value of an mpv property.
+// The property name should be the mpv property name (e.g., "time-pos", "duration", "pause").
+func (c *Client) GetProperty(name string) (interface{}, error) {
+	return c.sendCommand("get_property", name)
+}
+
+// SetProperty sets the value of an mpv property.
+// The property name should be the mpv property name (e.g., "pause", "speed").
+func (c *Client) SetProperty(name string, value interface{}) error {
+	_, err := c.sendCommand("set_property", name, value)
+	return err
+}
+
+// GetTimePos returns the current playback position in seconds.
+func (c *Client) GetTimePos() (float64, error) {
+	result, err := c.GetProperty("time-pos")
+	if err != nil {
+		return 0, err
+	}
+	return toFloat64(result)
+}
+
+// GetDuration returns the total duration of the video in seconds.
+func (c *Client) GetDuration() (float64, error) {
+	result, err := c.GetProperty("duration")
+	if err != nil {
+		return 0, err
+	}
+	return toFloat64(result)
+}
+
+// GetPaused returns true if playback is paused.
+func (c *Client) GetPaused() (bool, error) {
+	result, err := c.GetProperty("pause")
+	if err != nil {
+		return false, err
+	}
+	paused, ok := result.(bool)
+	if !ok {
+		return false, fmt.Errorf("mpv: unexpected pause value type: %T", result)
+	}
+	return paused, nil
+}
+
+// toFloat64 converts an interface{} to float64.
+// JSON numbers from mpv are typically decoded as float64.
+func toFloat64(v interface{}) (float64, error) {
+	switch n := v.(type) {
+	case float64:
+		return n, nil
+	case int:
+		return float64(n), nil
+	case int64:
+		return float64(n), nil
+	default:
+		return 0, fmt.Errorf("mpv: unexpected numeric value type: %T", v)
+	}
+}
+
 // sendCommand sends a JSON IPC command to mpv and returns the result.
 // The command is formatted as {"command": [command, args...], "request_id": <id>}
 // and sent as newline-terminated JSON over the socket.
