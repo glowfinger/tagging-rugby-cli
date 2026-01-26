@@ -64,3 +64,14 @@
   - Star field is INTEGER (0/1) since SQLite has no native boolean type
 
 ---
+
+## 2026-01-26 - US-007
+- What was implemented: mpv IPC client with Unix socket connection
+- Files changed: mpv/client.go (new file)
+- **Learnings for future iterations:**
+  - mpv package provides Client struct with Connect() and Close() methods
+  - Default socket path: /tmp/tagging-rugby-mpv.sock (defined as DefaultSocketPath constant)
+  - Use sync.Mutex for thread-safe connection handling
+  - Custom errors: ErrNotConnected, ErrSocketNotFound for clear error handling
+
+---

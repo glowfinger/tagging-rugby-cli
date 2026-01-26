@@ -101,8 +101,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created mpv/client.go with Client struct, NewClient(), Connect(), Close(), and IsConnected() methods. Uses sync.Mutex for thread safety."
     },
     {
       "id": "US-008",
