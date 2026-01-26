@@ -155,3 +155,26 @@
   - Socket path is shared via mpv.DefaultSocketPath constant
 
 ---
+
+## 2026-01-26 - US-015
+- What was implemented: Open command to launch video session
+- Files changed: cmd/root.go
+- **Learnings for future iterations:**
+  - openCmd in cmd/root.go launches mpv and connects via IPC
+  - Uses retry loop (50 attempts, 100ms each) to wait for socket to be ready
+  - Displays duration in MM:SS format after connecting
+  - Waits for mpv process to exit before returning
+
+---
+
+## 2026-01-26 - US-016
+- What was implemented: Note CRUD - add and list commands
+- Files changed: cmd/note.go (new)
+- **Learnings for future iterations:**
+  - Subcommands organized in separate files (cmd/note.go for note commands)
+  - Use client.GetProperty("path") to get current video path from mpv
+  - Use sql.NullString for nullable TEXT columns from database
+  - tabwriter package provides clean table formatting with column alignment
+  - Pattern: connect to mpv first, then open database, then perform operations
+
+---
