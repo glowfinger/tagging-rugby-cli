@@ -322,6 +322,70 @@ var noteEditCmd = &cobra.Command{
 	},
 }
 
+var noteGotoCmd = &cobra.Command{
+	Use:   "goto <id>",
+	Short: "Jump to a note's timestamp",
+	Long:  `Seek mpv to the timestamp of an existing note by ID.`,
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		var noteID int64
+		if _, err := fmt.Sscanf(args[0], "%d", &noteID); err != nil {
+			return fmt.Errorf("invalid note ID: %s", args[0])
+		}
+
+		// Open database
+		database, err := db.Open()
+		if err != nil {
+			return fmt.Errorf("failed to open database: %w", err)
+		}
+		defer database.Close()
+
+		// Fetch the note
+		var timestamp float64
+		var categoryVal, playerVal, teamVal, textVal sql.NullString
+		err = database.QueryRow(
+			`SELECT timestamp_seconds, category, player, team, text FROM notes WHERE id = ?`,
+			noteID,
+		).Scan(&timestamp, &categoryVal, &playerVal, &teamVal, &textVal)
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("note with ID %d not found", noteID)
+		} else if err != nil {
+			return fmt.Errorf("failed to fetch note: %w", err)
+		}
+
+		// Connect to mpv
+		client := mpv.NewClient("")
+		if err := client.Connect(); err != nil {
+			return fmt.Errorf("failed to connect to mpv: %w\n(Is mpv running with a video open?)", err)
+		}
+		defer client.Close()
+
+		// Seek to the note's timestamp
+		if err := client.Seek(timestamp); err != nil {
+			return fmt.Errorf("failed to seek to timestamp: %w", err)
+		}
+
+		// Format timestamp
+		minutes := int(timestamp) / 60
+		seconds := int(timestamp) % 60
+
+		// Display note details
+		fmt.Printf("Jumped to note %d at %d:%02d\n", noteID, minutes, seconds)
+		fmt.Printf("  Text:     %s\n", nullStringValue(textVal))
+		if categoryVal.Valid && categoryVal.String != "" {
+			fmt.Printf("  Category: %s\n", categoryVal.String)
+		}
+		if playerVal.Valid && playerVal.String != "" {
+			fmt.Printf("  Player:   %s\n", playerVal.String)
+		}
+		if teamVal.Valid && teamVal.String != "" {
+			fmt.Printf("  Team:     %s\n", teamVal.String)
+		}
+
+		return nil
+	},
+}
+
 var noteDeleteCmd = &cobra.Command{
 	Use:   "delete <id>",
 	Short: "Delete a note",
@@ -453,5 +517,6 @@ func init() {
 	noteCmd.AddCommand(noteListCmd)
 	noteCmd.AddCommand(noteEditCmd)
 	noteCmd.AddCommand(noteDeleteCmd)
+	noteCmd.AddCommand(noteGotoCmd)
 	rootCmd.AddCommand(noteCmd)
 }
