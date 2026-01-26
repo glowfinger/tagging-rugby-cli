@@ -45,3 +45,13 @@
   - Clips table stores start_seconds and end_seconds (REAL) to define video segments
 
 ---
+
+## 2026-01-26 - US-005
+- What was implemented: Categories table migration with default category seeding
+- Files changed: db/db.go
+- **Learnings for future iterations:**
+  - Use `INSERT OR IGNORE INTO` for idempotent seeding of default values
+  - Default categories: try, tackle, turnover, lineout, scrum, penalty, kick
+  - Categories table has UNIQUE constraint on name column
+
+---

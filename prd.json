@@ -72,8 +72,8 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Categories table added to migrate() function. Uses INSERT OR IGNORE for idempotent seeding of default categories."
     },
     {
       "id": "US-006",
