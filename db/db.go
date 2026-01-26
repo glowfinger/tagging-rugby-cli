@@ -35,7 +35,36 @@ func Open() (*sql.DB, error) {
 		return nil, err
 	}
 
+	// Run migrations
+	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	return db, nil
+}
+
+// migrate runs all database migrations.
+// Migrations are idempotent (safe to run multiple times).
+func migrate(db *sql.DB) error {
+	// Create notes table
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS notes (
+			id INTEGER PRIMARY KEY,
+			video_path TEXT,
+			timestamp_seconds REAL,
+			text TEXT,
+			category TEXT,
+			player TEXT,
+			team TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // getDBPath returns the path to the database file.
