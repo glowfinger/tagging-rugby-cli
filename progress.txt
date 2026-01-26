@@ -178,3 +178,15 @@
   - Pattern: connect to mpv first, then open database, then perform operations
 
 ---
+
+## 2026-01-26 - US-017
+- What was implemented: Note CRUD - edit and delete commands
+- Files changed: cmd/note.go
+- **Learnings for future iterations:**
+  - Use cmd.Flags().Changed("flagname") to check if a flag was explicitly set (vs just using default)
+  - Dynamic SQL query building: collect fields and args in slices, then join for UPDATE
+  - For edit commands: first check if the record exists with QueryRow before attempting update
+  - Delete command shows record details before prompting for confirmation (better UX)
+  - Use fmt.Scanln to read user confirmation input
+
+---

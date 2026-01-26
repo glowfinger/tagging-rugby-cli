@@ -260,8 +260,8 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added noteEditCmd and noteDeleteCmd to cmd/note.go. Edit command updates text and optionally category/player/team/timestamp. Delete command prompts for confirmation with --force to skip."
     },
     {
       "id": "US-018",
