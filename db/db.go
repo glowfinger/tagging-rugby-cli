@@ -82,6 +82,27 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 
+	// Create categories table
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS categories (
+			id INTEGER PRIMARY KEY,
+			name TEXT UNIQUE,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Seed default categories (INSERT OR IGNORE for idempotency)
+	defaultCategories := []string{"try", "tackle", "turnover", "lineout", "scrum", "penalty", "kick"}
+	for _, cat := range defaultCategories {
+		_, err = db.Exec(`INSERT OR IGNORE INTO categories (name) VALUES (?)`, cat)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
