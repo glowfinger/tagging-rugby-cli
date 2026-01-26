@@ -64,6 +64,24 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 
+	// Create clips table
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS clips (
+			id INTEGER PRIMARY KEY,
+			video_path TEXT,
+			start_seconds REAL,
+			end_seconds REAL,
+			description TEXT,
+			category TEXT,
+			player TEXT,
+			team TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
