@@ -534,8 +534,8 @@
         "Typecheck passes"
       ],
       "priority": 34,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created tui/components/help.go with HelpOverlay function. Added showHelp field to Model and ? key handling in Update. Groups: Playback, Navigation, Views, Commands."
     },
     {
       "id": "US-035",

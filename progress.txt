@@ -379,3 +379,15 @@
   - Uses resultDisplayDuration (3 seconds) for auto-dismissing the jump message
 
 ---
+## 2026-01-26 - US-034
+- What was implemented: TUI help screen with keybindings overlay
+- Files changed: tui/components/help.go (new), tui/tui.go
+- **Learnings for future iterations:**
+  - Help overlay is a full-screen replacement view (not a floating overlay on top of existing content)
+  - showHelp boolean field in Model controls overlay visibility
+  - Handle help dismissal BEFORE command mode check in Update - any key dismisses when help is shown
+  - Keybindings grouped into struct slices for easy maintenance: Playback, Navigation, Views, Commands
+  - Use lipgloss.Width() to calculate content dimensions for centering
+  - Panel centering: calculate marginLeft = (width - panelWidth) / 2, marginTop = (height - panelHeight) / 2
+
+---
