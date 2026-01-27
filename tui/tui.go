@@ -1268,14 +1268,12 @@ func (m *Model) View() string {
 		return statusBar + "\n" + controlsDisplay + "\n" + tackleInput
 	}
 
-	// Calculate available height for notes list (minus status bar, controls, and command input)
-	listHeight := m.height - 3 // 1 for status bar, 1 for controls, 1 for command input
-	if listHeight < 5 {
-		listHeight = 5
-	}
+	// Fixed height for notes table (10 rows + 1 header = 11 lines)
+	// The table is always 10 rows, regardless of terminal height
+	listHeight := 11
 
-	// Render notes list
-	notesList := components.NotesList(m.notesList, m.width, listHeight)
+	// Render notes list (pass current time position for auto-scroll)
+	notesList := components.NotesList(m.notesList, m.width, listHeight, m.statusBar.TimePos)
 
 	// Render command input at bottom
 	commandInput := components.CommandInput(m.commandInput, m.width)

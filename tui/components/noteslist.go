@@ -49,88 +49,140 @@ type NotesListState struct {
 	ScrollOffset int
 }
 
-// NotesList renders the notes list component.
-// It displays a scrollable list of notes and tackles sorted by timestamp.
-func NotesList(state NotesListState, width, height int) string {
-	if len(state.Items) == 0 {
-		emptyStyle := lipgloss.NewStyle().
-			Foreground(styles.Lavender).
-			Italic(true).
-			Padding(1, 2)
-		return emptyStyle.Render("No notes or tackles for this video")
-	}
+// tableRows is the fixed number of rows in the table (excluding header).
+const tableRows = 10
 
-	// Calculate visible area (leave room for header)
-	visibleHeight := height - 2
-	if visibleHeight < 1 {
-		visibleHeight = 1
-	}
-
-	// Adjust scroll offset to keep selected item visible
-	if state.SelectedIndex < state.ScrollOffset {
-		state.ScrollOffset = state.SelectedIndex
-	} else if state.SelectedIndex >= state.ScrollOffset+visibleHeight {
-		state.ScrollOffset = state.SelectedIndex - visibleHeight + 1
-	}
-
-	// Build the list
+// NotesList renders the notes list component as a fixed 10-row table at the bottom.
+// It displays notes and tackles sorted by timestamp.
+// The currentTimePos parameter is used to auto-scroll to show notes near the current video timestamp.
+func NotesList(state NotesListState, width, height int, currentTimePos float64) string {
+	// Build the table
 	var lines []string
 
-	// Header
+	// Table header
 	headerStyle := lipgloss.NewStyle().
 		Foreground(styles.Lavender).
 		Bold(true).
-		Width(width)
-	lines = append(lines, headerStyle.Render(fmt.Sprintf(" Notes & Tackles (%d items)", len(state.Items))))
+		Underline(true)
 
-	// Render visible items
-	for i := state.ScrollOffset; i < len(state.Items) && i < state.ScrollOffset+visibleHeight; i++ {
-		item := state.Items[i]
-		isSelected := i == state.SelectedIndex
-		lines = append(lines, renderListItem(item, isSelected, width))
+	// Column widths (ID: 6, Timestamp: 8, Category: 12, Text: rest)
+	idWidth := 6
+	timeWidth := 8
+	catWidth := 12
+	textWidth := width - idWidth - timeWidth - catWidth - 8 // 8 for spacing/borders
+	if textWidth < 10 {
+		textWidth = 10
+	}
+
+	// Build header row
+	header := fmt.Sprintf(" %-*s %-*s %-*s %-*s",
+		idWidth, "ID",
+		timeWidth, "Time",
+		catWidth, "Category",
+		textWidth, "Text")
+	lines = append(lines, headerStyle.Render(header))
+
+	if len(state.Items) == 0 {
+		// Empty state - show placeholder rows
+		emptyStyle := lipgloss.NewStyle().
+			Foreground(styles.Purple).
+			Italic(true)
+		emptyRow := emptyStyle.Render(fmt.Sprintf(" %-*s", width-2, "No notes or tackles for this video"))
+		lines = append(lines, emptyRow)
+		// Fill remaining rows with empty space
+		for i := 1; i < tableRows; i++ {
+			lines = append(lines, "")
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	// Auto-scroll to show notes near current video timestamp
+	state.scrollToCurrentTime(currentTimePos)
+
+	// Adjust scroll offset to keep selected item visible within the 10 rows
+	if state.SelectedIndex < state.ScrollOffset {
+		state.ScrollOffset = state.SelectedIndex
+	} else if state.SelectedIndex >= state.ScrollOffset+tableRows {
+		state.ScrollOffset = state.SelectedIndex - tableRows + 1
+	}
+
+	// Ensure scroll offset doesn't go negative or beyond items
+	if state.ScrollOffset < 0 {
+		state.ScrollOffset = 0
+	}
+	maxOffset := len(state.Items) - tableRows
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if state.ScrollOffset > maxOffset {
+		state.ScrollOffset = maxOffset
+	}
+
+	// Render exactly 10 rows
+	for row := 0; row < tableRows; row++ {
+		itemIndex := state.ScrollOffset + row
+		if itemIndex < len(state.Items) {
+			item := state.Items[itemIndex]
+			isSelected := itemIndex == state.SelectedIndex
+			lines = append(lines, renderTableRow(item, isSelected, idWidth, timeWidth, catWidth, textWidth, width))
+		} else {
+			// Empty row
+			lines = append(lines, "")
+		}
 	}
 
 	return strings.Join(lines, "\n")
 }
 
-// renderListItem renders a single list item.
-func renderListItem(item ListItem, selected bool, width int) string {
-	// Timestamp
+// scrollToCurrentTime adjusts the scroll offset to show notes near the current timestamp.
+func (s *NotesListState) scrollToCurrentTime(currentTimePos float64) {
+	if len(s.Items) == 0 {
+		return
+	}
+
+	// Find the first item that is at or after the current time
+	nearestIndex := 0
+	for i, item := range s.Items {
+		if item.TimestampSeconds >= currentTimePos {
+			nearestIndex = i
+			break
+		}
+		nearestIndex = i // Keep track of the last item if all are before current time
+	}
+
+	// Center the view around the nearest item if not already selected
+	if s.SelectedIndex < s.ScrollOffset || s.SelectedIndex >= s.ScrollOffset+tableRows {
+		// Only auto-scroll if selection is out of view - position nearest item in upper third
+		targetOffset := nearestIndex - tableRows/3
+		if targetOffset < 0 {
+			targetOffset = 0
+		}
+		maxOffset := len(s.Items) - tableRows
+		if maxOffset < 0 {
+			maxOffset = 0
+		}
+		if targetOffset > maxOffset {
+			targetOffset = maxOffset
+		}
+		s.ScrollOffset = targetOffset
+	}
+}
+
+// renderTableRow renders a single table row.
+func renderTableRow(item ListItem, selected bool, idWidth, timeWidth, catWidth, textWidth, fullWidth int) string {
+	// Format ID with star symbol if starred
+	idStr := fmt.Sprintf("%d", item.ID)
+	if item.Starred {
+		idStr = "★" + idStr
+	}
+
+	// Format timestamp
 	timeStr := formatTime(item.TimestampSeconds)
 
-	// Type badge
-	var typeBadge string
-	var badgeStyle lipgloss.Style
-	if item.Type == ItemTypeNote {
-		badgeStyle = lipgloss.NewStyle().
-			Background(styles.Cyan).
-			Foreground(styles.DeepPurple).
-			Bold(true).
-			Padding(0, 1)
-		typeBadge = badgeStyle.Render("note")
-	} else {
-		badgeStyle = lipgloss.NewStyle().
-			Background(styles.Pink).
-			Foreground(styles.DeepPurple).
-			Bold(true).
-			Padding(0, 1)
-		typeBadge = badgeStyle.Render("tackle")
-	}
-
-	// Star symbol for starred items
-	starStr := ""
-	if item.Starred {
-		starStr = " ★"
-	}
-
-	// Build prefix with timestamp and badge
-	prefix := fmt.Sprintf(" %s %s%s ", timeStr, typeBadge, starStr)
-	prefixWidth := lipgloss.Width(prefix)
-
-	// Calculate remaining width for text preview
-	textWidth := width - prefixWidth - 2 // 2 for padding
-	if textWidth < 10 {
-		textWidth = 10
+	// Get category (or type badge for tackles)
+	catStr := item.Category
+	if item.Type == ItemTypeTackle && catStr == "" {
+		catStr = "tackle"
 	}
 
 	// Truncate text if needed
@@ -139,8 +191,12 @@ func renderListItem(item ListItem, selected bool, width int) string {
 		text = text[:textWidth-3] + "..."
 	}
 
-	// Full line content
-	content := prefix + text
+	// Build row content
+	content := fmt.Sprintf(" %-*s %-*s %-*s %-*s",
+		idWidth, truncateStr(idStr, idWidth),
+		timeWidth, timeStr,
+		catWidth, truncateStr(catStr, catWidth),
+		textWidth, text)
 
 	// Apply style based on selection
 	var lineStyle lipgloss.Style
@@ -149,14 +205,25 @@ func renderListItem(item ListItem, selected bool, width int) string {
 			Background(styles.BrightPurple).
 			Foreground(styles.LightLavender).
 			Bold(true).
-			Width(width)
+			Width(fullWidth)
 	} else {
 		lineStyle = lipgloss.NewStyle().
 			Foreground(styles.LightLavender).
-			Width(width)
+			Width(fullWidth)
 	}
 
 	return lineStyle.Render(content)
+}
+
+// truncateStr truncates a string to maxLen characters.
+func truncateStr(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen <= 3 {
+		return s[:maxLen]
+	}
+	return s[:maxLen-3] + "..."
 }
 
 // MoveUp moves the selection up in the list.
