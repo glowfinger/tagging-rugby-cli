@@ -342,3 +342,17 @@
   - Badge rendering uses different background colors (Cyan for notes, Pink for tackles) for visual distinction
 
 ---
+## 2026-01-26 - US-031
+- What was implemented: Command input component for TUI with command mode, parsing, and execution
+- Files changed: tui/components/commandinput.go (new), tui/tui.go
+- **Learnings for future iterations:**
+  - CommandInputState struct holds Active, Input, CursorPos, Result, IsError fields
+  - Use tea.KeyMsg.Type == tea.KeyRunes for handling typed characters (msg.Runes contains the runes)
+  - For single printable chars, msg.String() returns the character as a string
+  - clearResultMsg pattern: send a tea.Tick that returns clearResultMsg after a delay to auto-dismiss messages
+  - Command parsing with strings.Fields splits command line into parts; first element is command, rest are args
+  - Model now has clipStartTimestamp and clipStartSet for clip start/end workflow (not using global state)
+  - parseTimeToSeconds and formatTimeString helpers added to tui/tui.go for time parsing and formatting
+  - Commands implemented: note (add/list/goto), clip (start/end/list/play/stop), tackle (add/list), pause/play, mute, seek, speed, quit, help
+
+---

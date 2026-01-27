@@ -485,8 +485,8 @@
         "Typecheck passes"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created tui/components/commandinput.go with CommandInputState struct and render function. Updated tui/tui.go with handleCommandInput for key handling, executeCommand for command parsing and execution. Supports note/clip/tackle commands, playback controls, and seek. Result messages auto-dismiss after 3 seconds."
     },
     {
       "id": "US-032",
