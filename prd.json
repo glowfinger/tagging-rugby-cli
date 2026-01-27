@@ -600,6 +600,67 @@
       "priority": 38,
       "passes": true,
       "notes": "Added session resume functionality to openCmd. Queries database for existing notes, clips, and tackles before displaying session info. Shows 'Resuming session: X notes, Y clips, Z tackles' message when reopening a video with existing data."
+    },
+    {
+      "id": "US-039",
+      "title": "Quick note input in TUI",
+      "description": "As a coach, I want to quickly add a note with a single keypress so that I can annotate moments without interrupting my review flow.",
+      "acceptanceCriteria": [
+        "N key opens a note input prompt at the bottom of the screen",
+        "Prompt shows current timestamp and text input field",
+        "Enter saves the note at the current timestamp and closes the prompt",
+        "Escape cancels input and closes the prompt without saving",
+        "Optional: Tab cycles through category/player/team fields before saving",
+        "Note is saved to database and appears in notes list immediately",
+        "Confirmation message displays briefly after saving",
+        "Input prompt styled consistently with command input area",
+        "Typecheck/lint passes"
+      ],
+      "priority": 39,
+      "passes": true,
+      "notes": "Created tui/components/noteinput.go with NoteInputState struct and NoteInput render function. N key opens prompt showing timestamp and input fields. Tab cycles through text/category/player/team fields. Enter saves note, Escape cancels. Confirmation message auto-dismisses after 3 seconds."
+    },
+    {
+      "id": "US-040",
+      "title": "Quick tackle input in TUI",
+      "description": "As a coach, I want to quickly record a tackle with a single keypress so that I can track defensive events without interrupting my review flow.",
+      "acceptanceCriteria": [
+        "T key opens a tackle input prompt at the bottom of the screen",
+        "Prompt shows current timestamp and required fields",
+        "Fields displayed in order: Player, Team, Attempt #, Outcome",
+        "Outcome field offers selection: completed, missed, possible, other",
+        "Tab moves to next field, Shift+Tab moves to previous field",
+        "Enter saves the tackle when all required fields are filled",
+        "Escape cancels input and closes the prompt without saving",
+        "Optional fields (followed, star, notes, zone) accessible via additional tab stops or modifier key",
+        "* or S while in prompt toggles star on the tackle",
+        "Tackle is saved to database and appears in list immediately",
+        "Confirmation message displays briefly after saving",
+        "Input prompt styled consistently with command input area",
+        "Typecheck/lint passes"
+      ],
+      "priority": 40,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-041",
+      "title": "Shorthand commands in TUI",
+      "description": "As a coach, I want shorthand commands for common actions so that I can work faster without typing full command names.",
+      "acceptanceCriteria": [
+        ":nt (no args) opens the quick tackle input prompt (same as T key)",
+        ":nt <player> <team> <attempt> <outcome> adds tackle with positional args",
+        ":nt with partial args shows error with usage hint",
+        ":nn (no args) opens the quick note input prompt (same as N key)",
+        ":nn <text> adds note with the given text (shorthand for :note add)",
+        ":cs marks clip start (shorthand for :clip start)",
+        ":ce <description> marks clip end (shorthand for :clip end)",
+        "Shorthand commands documented in help screen (?)",
+        "Typecheck/lint passes"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": ""
     }
   ]
 }

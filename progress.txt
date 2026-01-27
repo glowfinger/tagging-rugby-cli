@@ -443,3 +443,19 @@
   - Graceful handling when database fails to open - continue without session info
 
 ---
+
+## 2026-01-27 - US-039
+- What was implemented: Quick note input in TUI with N key to open prompt
+- Files changed: tui/components/noteinput.go (new), tui/tui.go, tui/components/help.go
+- **Learnings for future iterations:**
+  - Created NoteInputState struct with Active, CurrentField, Text, Category, Player, Team, Timestamp fields
+  - NoteInputField enum (iota) for tracking which field is active: Text, Category, Player, Team
+  - Tab cycles through fields using NextField() with modulo operator: (field + 1) % 4
+  - Shift+Tab goes to previous field using PrevField() with bounds checking
+  - InsertChar/Backspace methods operate on the current field via switch statement
+  - NoteInput component replaces the normal view (notes list + command input) when active
+  - Same pattern as other overlays: check m.noteInput.Active in Update before other handlers
+  - Note saving uses same SQL INSERT as addNote but at captured timestamp from when prompt opened
+  - openNoteInput captures timestamp at prompt open time, not at save time (matches user expectation)
+
+---
