@@ -431,3 +431,15 @@
   - StatusBar.OverlayEnabled field tracks and displays overlay state with 📺 icon
 
 ---
+
+## 2026-01-26 - US-038
+- What was implemented: Session resume - display existing notes/clips/tackles count when opening a video
+- Files changed: cmd/root.go
+- **Learnings for future iterations:**
+  - Session data is detected by querying COUNT(*) on notes, clips, and tackles tables filtered by video_path
+  - Database connection is opened early in openCmd to check for existing data, then reused for TUI mode
+  - When totalItems > 0, display "Resuming session: X notes, Y clips, Z tackles" message
+  - Database must be closed in CLI mode after counting (when not entering TUI mode)
+  - Graceful handling when database fails to open - continue without session info
+
+---
