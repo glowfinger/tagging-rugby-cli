@@ -303,3 +303,14 @@
   - tui.Run() is the main entry point that creates Model and runs the program
 
 ---
+## 2026-01-26 - US-028
+- What was implemented: Lipgloss color palette and styles for TUI
+- Files changed: tui/styles/styles.go (new)
+- **Learnings for future iterations:**
+  - Lipgloss styles package at tui/styles/styles.go provides reusable UI styles
+  - Color constants defined as lipgloss.Color type (e.g., `DeepPurple = lipgloss.Color("#1a1a2e")`)
+  - Pre-defined styles use lipgloss.NewStyle() with chained methods (.Background(), .Foreground(), .Bold(), etc.)
+  - Available styles: Background, Panel, Border, Highlight, PrimaryText, SecondaryText, Warning, Success
+  - Import with `"github.com/user/tagging-rugby-cli/tui/styles"` and use as `styles.Highlight`, etc.
+
+---
