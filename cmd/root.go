@@ -90,25 +90,58 @@ var openCmd = &cobra.Command{
 		}
 		defer client.Close()
 
+		// Open database to check for existing session data
+		database, err := db.Open()
+		if err != nil {
+			// If we can't open the database, just continue without session info
+			database = nil
+		}
+
+		// Check for existing notes, clips, and tackles for this video
+		var noteCount, clipCount, tackleCount int
+		if database != nil {
+			// Count notes
+			row := database.QueryRow("SELECT COUNT(*) FROM notes WHERE video_path = ?", absPath)
+			row.Scan(&noteCount)
+
+			// Count clips
+			row = database.QueryRow("SELECT COUNT(*) FROM clips WHERE video_path = ?", absPath)
+			row.Scan(&clipCount)
+
+			// Count tackles
+			row = database.QueryRow("SELECT COUNT(*) FROM tackles WHERE video_path = ?", absPath)
+			row.Scan(&tackleCount)
+		}
+
 		// Get duration and print confirmation
 		duration, err := client.GetDuration()
-		if err != nil {
-			fmt.Printf("Video session started: %s\n", filepath.Base(absPath))
-		} else {
+		durationStr := ""
+		if err == nil {
 			minutes := int(duration) / 60
 			seconds := int(duration) % 60
-			fmt.Printf("Video session started: %s (duration: %d:%02d)\n", filepath.Base(absPath), minutes, seconds)
+			durationStr = fmt.Sprintf(" (duration: %d:%02d)", minutes, seconds)
+		}
+
+		// Print session info
+		totalItems := noteCount + clipCount + tackleCount
+		if totalItems > 0 {
+			fmt.Printf("Resuming session: %d notes, %d clips, %d tackles\n", noteCount, clipCount, tackleCount)
+			fmt.Printf("Video: %s%s\n", filepath.Base(absPath), durationStr)
+		} else {
+			fmt.Printf("Video session started: %s%s\n", filepath.Base(absPath), durationStr)
 		}
 
 		// Launch TUI if requested
 		if useTUI {
-			// Open database connection for TUI
-			database, err := db.Open()
-			if err != nil {
-				if process.Process != nil {
-					process.Process.Kill()
+			// Ensure database is available for TUI
+			if database == nil {
+				database, err = db.Open()
+				if err != nil {
+					if process.Process != nil {
+						process.Process.Kill()
+					}
+					return fmt.Errorf("failed to open database: %w", err)
 				}
-				return fmt.Errorf("failed to open database: %w", err)
 			}
 			defer database.Close()
 
@@ -125,6 +158,11 @@ var openCmd = &cobra.Command{
 				process.Process.Kill()
 			}
 			return nil
+		}
+
+		// Close database if not used by TUI
+		if database != nil {
+			database.Close()
 		}
 
 		// Wait for mpv to exit
