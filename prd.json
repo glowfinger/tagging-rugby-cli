@@ -385,8 +385,8 @@
         "Typecheck passes"
       ],
       "priority": 25,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added tackleExportCmd to cmd/tackle.go with --player (required), --output, and --video flags. Uses SQL aggregation for statistics and outputs formatted text file with star symbol for starred tackles."
     },
     {
       "id": "US-026",

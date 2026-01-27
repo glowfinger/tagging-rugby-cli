@@ -266,3 +266,14 @@
   - Reuse queryArgs slice pattern: start with base query, append " AND field = ?" for each filter
 
 ---
+## 2026-01-26 - US-025
+- What was implemented: Tackle export command to export player statistics to text file
+- Files changed: cmd/tackle.go
+- **Learnings for future iterations:**
+  - Export commands don't require mpv connection - pure database operations
+  - Use SQL CASE WHEN aggregations for counting by outcome type: `SUM(CASE WHEN outcome = 'completed' THEN 1 ELSE 0 END)`
+  - File output uses os.Create and fmt.Fprintf for formatted text writing
+  - Star symbol (★) indicates starred tackles in export output
+  - Pattern for exports: query counts first, then query details, write both to file
+
+---
