@@ -2,6 +2,7 @@ package tui
 
 import (
 	"database/sql"
+	"sort"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -38,6 +39,8 @@ type Model struct {
 	height int
 	// status bar state
 	statusBar components.StatusBarState
+	// notes list state
+	notesList components.NotesListState
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -134,17 +137,110 @@ func (m *Model) View() string {
 	// Render status bar at top
 	statusBar := components.StatusBar(m.statusBar, m.width)
 
-	// Main content area
-	content := "\n\nVideo: " + m.videoPath + "\n\nPress q to quit.\n"
+	// Calculate available height for notes list (minus status bar and footer)
+	listHeight := m.height - 3 // 1 for status bar, 2 for footer
+	if listHeight < 5 {
+		listHeight = 5
+	}
 
-	return statusBar + content
+	// Render notes list
+	notesList := components.NotesList(m.notesList, m.width, listHeight)
+
+	// Footer with help hint
+	footer := "\n Press q to quit"
+
+	return statusBar + "\n" + notesList + footer
 }
 
 // Run starts the Bubbletea program with the given model.
 // It returns an error if the program fails to start or run.
 func Run(client *mpv.Client, db *sql.DB, videoPath string) error {
 	model := NewModel(client, db, videoPath)
+	// Load notes and tackles for the current video
+	model.loadNotesAndTackles()
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	_, err := p.Run()
 	return err
+}
+
+// loadNotesAndTackles loads notes and tackles from the database for the current video.
+func (m *Model) loadNotesAndTackles() {
+	if m.db == nil {
+		return
+	}
+
+	var items []components.ListItem
+
+	// Load notes
+	rows, err := m.db.Query(`
+		SELECT id, timestamp_seconds, text, category, player, team
+		FROM notes
+		WHERE video_path = ?
+		ORDER BY timestamp_seconds ASC
+	`, m.videoPath)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var item components.ListItem
+			var text, category, player, team sql.NullString
+			err := rows.Scan(&item.ID, &item.TimestampSeconds, &text, &category, &player, &team)
+			if err == nil {
+				item.Type = components.ItemTypeNote
+				item.Text = text.String
+				item.Category = category.String
+				item.Player = player.String
+				item.Team = team.String
+				items = append(items, item)
+			}
+		}
+	}
+
+	// Load tackles
+	tackleRows, err := m.db.Query(`
+		SELECT id, timestamp_seconds, player, team, outcome, notes, star
+		FROM tackles
+		WHERE video_path = ?
+		ORDER BY timestamp_seconds ASC
+	`, m.videoPath)
+	if err == nil {
+		defer tackleRows.Close()
+		for tackleRows.Next() {
+			var item components.ListItem
+			var player, team, outcome, notes sql.NullString
+			var star int
+			err := tackleRows.Scan(&item.ID, &item.TimestampSeconds, &player, &team, &outcome, &notes, &star)
+			if err == nil {
+				item.Type = components.ItemTypeTackle
+				item.Player = player.String
+				item.Team = team.String
+				item.Starred = star == 1
+				// Build text from player, outcome, and notes
+				if player.Valid && player.String != "" {
+					item.Text = player.String
+					if outcome.Valid && outcome.String != "" {
+						item.Text += " - " + outcome.String
+					}
+				} else if outcome.Valid && outcome.String != "" {
+					item.Text = outcome.String
+				}
+				if notes.Valid && notes.String != "" {
+					if item.Text != "" {
+						item.Text += ": " + notes.String
+					} else {
+						item.Text = notes.String
+					}
+				}
+				items = append(items, item)
+			}
+		}
+	}
+
+	// Sort all items by timestamp
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].TimestampSeconds < items[j].TimestampSeconds
+	})
+
+	m.notesList.Items = items
+	m.notesList.SelectedIndex = 0
+	m.notesList.ScrollOffset = 0
 }
