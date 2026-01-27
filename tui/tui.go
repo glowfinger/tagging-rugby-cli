@@ -66,6 +66,8 @@ type Model struct {
 	overlayEnabled bool
 	// noteInput holds the state for the quick note input
 	noteInput components.NoteInputState
+	// tackleInput holds the state for the quick tackle input
+	tackleInput components.TackleInputState
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -131,6 +133,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle note input mode
 		if m.noteInput.Active {
 			return m.handleNoteInput(msg)
+		}
+
+		// Handle tackle input mode
+		if m.tackleInput.Active {
+			return m.handleTackleInput(msg)
 		}
 
 		// Handle command mode input
@@ -219,6 +226,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "n", "N":
 			// N opens quick note input prompt
 			return m.openNoteInput()
+		case "t", "T":
+			// T opens quick tackle input prompt
+			return m.openTackleInput()
 		}
 	}
 
@@ -371,6 +381,145 @@ func (m *Model) handleNoteInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else if msg.Type == tea.KeyRunes {
 			for _, r := range msg.Runes {
 				m.noteInput.InsertChar(r)
+			}
+		}
+		return m, nil
+	}
+}
+
+// openTackleInput opens the quick tackle input prompt.
+func (m *Model) openTackleInput() (tea.Model, tea.Cmd) {
+	if m.client == nil || !m.client.IsConnected() {
+		m.commandInput.SetResult("Not connected to mpv", true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Get current timestamp from mpv
+	timestamp, err := m.client.GetTimePos()
+	if err != nil {
+		m.commandInput.SetResult("Failed to get timestamp: "+err.Error(), true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Initialize tackle input state
+	m.tackleInput.Clear()
+	m.tackleInput.Active = true
+	m.tackleInput.Timestamp = timestamp
+	m.tackleInput.CurrentField = components.TackleInputFieldPlayer
+
+	return m, nil
+}
+
+// handleTackleInput handles key events when in tackle input mode.
+func (m *Model) handleTackleInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "escape":
+		// Cancel tackle input
+		m.tackleInput.Clear()
+		return m, nil
+
+	case "enter":
+		// Validate required fields
+		if errMsg := m.tackleInput.ValidationError(); errMsg != "" {
+			m.commandInput.SetResult(errMsg, true)
+			return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+				return clearResultMsg{}
+			})
+		}
+
+		// Save tackle to database
+		player, team, attemptStr, outcome, followed, notes, zone, star, timestamp := m.tackleInput.GetTackle()
+
+		// Parse attempt as integer
+		var attempt int
+		fmt.Sscanf(attemptStr, "%d", &attempt)
+
+		// Convert star bool to int
+		starInt := 0
+		if star {
+			starInt = 1
+		}
+
+		result, err := m.db.Exec(
+			`INSERT INTO tackles (video_path, timestamp_seconds, player, team, attempt, outcome, followed, notes, zone, star) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			m.videoPath, timestamp, player, team, attempt, outcome, followed, notes, zone, starInt,
+		)
+		if err != nil {
+			m.tackleInput.Clear()
+			m.commandInput.SetResult("Error: "+err.Error(), true)
+			return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+				return clearResultMsg{}
+			})
+		}
+
+		tackleID, _ := result.LastInsertId()
+
+		// Clear tackle input and reload list
+		m.tackleInput.Clear()
+		m.loadNotesAndTackles()
+
+		// Show confirmation
+		starSymbol := ""
+		if star {
+			starSymbol = " ★"
+		}
+		m.commandInput.SetResult(fmt.Sprintf("Tackle %d recorded: %s %s%s", tackleID, player, outcome, starSymbol), false)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+
+	case "tab":
+		// Move to next field
+		m.tackleInput.NextField()
+		return m, nil
+
+	case "shift+tab":
+		// Move to previous field
+		m.tackleInput.PrevField()
+		return m, nil
+
+	case "*", "s", "S":
+		// Toggle star (when not in a text field or when * is pressed)
+		if msg.String() == "*" || m.tackleInput.CurrentField == components.TackleInputFieldOutcome {
+			m.tackleInput.ToggleStar()
+			return m, nil
+		}
+		// For s/S in text fields, insert the character
+		m.tackleInput.InsertChar(rune(msg.String()[0]))
+		return m, nil
+
+	case "left":
+		// For outcome field, cycle to previous outcome
+		if m.tackleInput.CurrentField == components.TackleInputFieldOutcome {
+			m.tackleInput.PrevOutcome()
+		}
+		return m, nil
+
+	case "right":
+		// For outcome field, cycle to next outcome
+		if m.tackleInput.CurrentField == components.TackleInputFieldOutcome {
+			m.tackleInput.NextOutcome()
+		}
+		return m, nil
+
+	case "backspace":
+		// Delete last character
+		m.tackleInput.Backspace()
+		return m, nil
+
+	default:
+		// Insert character if it's a printable rune (except in outcome field)
+		if m.tackleInput.CurrentField != components.TackleInputFieldOutcome {
+			if len(msg.String()) == 1 {
+				m.tackleInput.InsertChar(rune(msg.String()[0]))
+			} else if msg.Type == tea.KeyRunes {
+				for _, r := range msg.Runes {
+					m.tackleInput.InsertChar(r)
+				}
 			}
 		}
 		return m, nil
@@ -1049,6 +1198,13 @@ func (m *Model) View() string {
 		// Show note input overlay instead of normal view
 		noteInput := components.NoteInput(m.noteInput, m.width, m.noteInput.Timestamp)
 		return statusBar + "\n" + noteInput
+	}
+
+	// Check if tackle input is active
+	if m.tackleInput.Active {
+		// Show tackle input overlay instead of normal view
+		tackleInput := components.TackleInput(m.tackleInput, m.width, m.tackleInput.Timestamp)
+		return statusBar + "\n" + tackleInput
 	}
 
 	// Calculate available height for notes list (minus status bar and command input)
