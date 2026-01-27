@@ -250,9 +250,20 @@ func (m *Model) handleCommandInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			result, err := m.executeCommand(cmd)
 			if err != nil {
 				m.commandInput.SetResult("Error: "+err.Error(), true)
-			} else {
-				m.commandInput.SetResult(result, false)
+				return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+					return clearResultMsg{}
+				})
 			}
+			// Handle special return values that open input prompts
+			if result == "OPEN_NOTE_INPUT" {
+				m.commandInput.Clear()
+				return m.openNoteInput()
+			}
+			if result == "OPEN_TACKLE_INPUT" {
+				m.commandInput.Clear()
+				return m.openTackleInput()
+			}
+			m.commandInput.SetResult(result, false)
 			// Schedule clearing the result message
 			return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
 				return clearResultMsg{}
@@ -545,6 +556,16 @@ func (m *Model) executeCommand(cmdStr string) (string, error) {
 		return m.executeClipCommand(args)
 	case "tackle":
 		return m.executeTackleCommand(args)
+	// Shorthand commands
+	case "nn":
+		return m.executeShorthandNoteCommand(args)
+	case "nt":
+		return m.executeShorthandTackleCommand(args)
+	case "cs":
+		return m.executeClipCommand([]string{"start"})
+	case "ce":
+		// Shorthand for clip end - args become the description
+		return m.executeClipCommand(append([]string{"end"}, args...))
 	case "pause", "p":
 		if err := m.client.Pause(); err != nil {
 			return "", err
@@ -782,6 +803,43 @@ func (m *Model) executeTackleCommand(args []string) (string, error) {
 	default:
 		return "", fmt.Errorf("unknown tackle subcommand: %s", subcmd)
 	}
+}
+
+// executeShorthandNoteCommand handles the :nn shorthand command.
+// With no args, it opens the quick note input prompt (same as N key).
+// With args, it adds a note with the given text.
+func (m *Model) executeShorthandNoteCommand(args []string) (string, error) {
+	if len(args) == 0 {
+		// No args - open quick note input prompt
+		// Return special value to signal opening the input
+		return "OPEN_NOTE_INPUT", nil
+	}
+	// With args - add note with the text
+	text := strings.Join(args, " ")
+	return m.addNote(text, "", "", "")
+}
+
+// executeShorthandTackleCommand handles the :nt shorthand command.
+// With no args, it opens the quick tackle input prompt (same as T key).
+// With 4 positional args, it adds a tackle: :nt <player> <team> <attempt> <outcome>
+// With partial args, it shows a usage hint.
+func (m *Model) executeShorthandTackleCommand(args []string) (string, error) {
+	if len(args) == 0 {
+		// No args - open quick tackle input prompt
+		return "OPEN_TACKLE_INPUT", nil
+	}
+	if len(args) != 4 {
+		return "", fmt.Errorf("usage: :nt <player> <team> <attempt> <outcome>")
+	}
+	// Parse positional args
+	player := args[0]
+	team := args[1]
+	var attempt int
+	if _, err := fmt.Sscanf(args[2], "%d", &attempt); err != nil || attempt < 1 {
+		return "", fmt.Errorf("invalid attempt number: %s (must be a positive integer)", args[2])
+	}
+	outcome := args[3]
+	return m.addTackle(player, team, attempt, outcome)
 }
 
 // addNote adds a note at the current timestamp.

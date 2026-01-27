@@ -71,6 +71,18 @@ func HelpOverlay(width, height int) string {
 				{"q", "Quit application"},
 			},
 		},
+		{
+			title: "Shorthand Commands",
+			bindings: []struct {
+				key  string
+				desc string
+			}{
+				{":nn", "Quick note (or :nn <text>)"},
+				{":nt", "Quick tackle (or :nt <p> <t> <a> <o>)"},
+				{":cs", "Clip start"},
+				{":ce <desc>", "Clip end with description"},
+			},
+		},
 	}
 
 	// Title style
