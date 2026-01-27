@@ -21,6 +21,10 @@ const (
 	resultDisplayDuration = 3 * time.Second
 )
 
+// stepSizes defines the available step sizes for seek operations.
+// Users can cycle through these with < and > keys.
+var stepSizes = []float64{0.1, 0.5, 1, 2, 5, 10, 30}
+
 // tickMsg is a message sent on every tick interval to update playback status.
 type tickMsg time.Time
 
@@ -117,6 +121,41 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.commandInput.Input = ""
 			m.commandInput.CursorPos = 0
 			m.commandInput.ClearResult()
+			return m, nil
+		case " ":
+			// Space toggles play/pause
+			if m.client != nil && m.client.IsConnected() {
+				_ = m.client.TogglePause()
+			}
+			return m, nil
+		case "m", "M":
+			// M toggles mute
+			if m.client != nil && m.client.IsConnected() {
+				muted, err := m.client.GetMute()
+				if err == nil {
+					_ = m.client.SetMute(!muted)
+				}
+			}
+			return m, nil
+		case "h", "H":
+			// H steps backward by current step size
+			if m.client != nil && m.client.IsConnected() {
+				_ = m.client.SeekRelative(-m.statusBar.StepSize)
+			}
+			return m, nil
+		case "l", "L":
+			// L steps forward by current step size
+			if m.client != nil && m.client.IsConnected() {
+				_ = m.client.SeekRelative(m.statusBar.StepSize)
+			}
+			return m, nil
+		case "<":
+			// Decrease step size
+			m.decreaseStepSize()
+			return m, nil
+		case ">":
+			// Increase step size
+			m.increaseStepSize()
 			return m, nil
 		}
 	}
@@ -575,6 +614,42 @@ func (m *Model) countTackles() (int, error) {
 	var count int
 	err := m.db.QueryRow(`SELECT COUNT(*) FROM tackles WHERE video_path = ?`, m.videoPath).Scan(&count)
 	return count, err
+}
+
+// decreaseStepSize cycles to the previous (smaller) step size.
+func (m *Model) decreaseStepSize() {
+	currentIndex := m.findStepSizeIndex()
+	if currentIndex > 0 {
+		m.statusBar.StepSize = stepSizes[currentIndex-1]
+	}
+}
+
+// increaseStepSize cycles to the next (larger) step size.
+func (m *Model) increaseStepSize() {
+	currentIndex := m.findStepSizeIndex()
+	if currentIndex < len(stepSizes)-1 {
+		m.statusBar.StepSize = stepSizes[currentIndex+1]
+	}
+}
+
+// findStepSizeIndex finds the index of the current step size in the stepSizes array.
+// If the current step size is not in the array, it returns the index of the closest value.
+func (m *Model) findStepSizeIndex() int {
+	for i, size := range stepSizes {
+		if m.statusBar.StepSize == size {
+			return i
+		}
+	}
+	// Find closest if not exact match
+	for i, size := range stepSizes {
+		if m.statusBar.StepSize < size {
+			if i == 0 {
+				return 0
+			}
+			return i - 1
+		}
+	}
+	return len(stepSizes) - 1
 }
 
 // parseTimeToSeconds parses a time string in MM:SS or seconds format.
