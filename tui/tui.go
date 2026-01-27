@@ -157,6 +157,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Increase step size
 			m.increaseStepSize()
 			return m, nil
+		case "j", "J":
+			// J moves selection to previous note/tackle in list
+			m.notesList.MoveUp()
+			return m, nil
+		case "k", "K":
+			// K moves selection to next note/tackle in list
+			m.notesList.MoveDown()
+			return m, nil
+		case "enter":
+			// Enter on selected item seeks mpv to that timestamp
+			return m.jumpToSelectedItem()
 		}
 	}
 
@@ -614,6 +625,74 @@ func (m *Model) countTackles() (int, error) {
 	var count int
 	err := m.db.QueryRow(`SELECT COUNT(*) FROM tackles WHERE video_path = ?`, m.videoPath).Scan(&count)
 	return count, err
+}
+
+// jumpToSelectedItem seeks mpv to the selected item's timestamp and displays details.
+func (m *Model) jumpToSelectedItem() (tea.Model, tea.Cmd) {
+	item := m.notesList.GetSelectedItem()
+	if item == nil {
+		m.commandInput.SetResult("No item selected", true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	if m.client == nil || !m.client.IsConnected() {
+		m.commandInput.SetResult("Not connected to mpv", true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Seek to the item's timestamp
+	if err := m.client.Seek(item.TimestampSeconds); err != nil {
+		m.commandInput.SetResult("Error: "+err.Error(), true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Build details message
+	var typeStr string
+	if item.Type == components.ItemTypeNote {
+		typeStr = "note"
+	} else {
+		typeStr = "tackle"
+	}
+
+	// Build info string
+	var info string
+	if item.Text != "" {
+		info = item.Text
+		if len(info) > 40 {
+			info = info[:37] + "..."
+		}
+	}
+	if item.Player != "" && item.Type == components.ItemTypeTackle {
+		if info != "" {
+			info = item.Player + ": " + info
+		} else {
+			info = item.Player
+		}
+	}
+	if item.Category != "" && item.Type == components.ItemTypeNote {
+		if info != "" {
+			info = "[" + item.Category + "] " + info
+		} else {
+			info = "[" + item.Category + "]"
+		}
+	}
+
+	starStr := ""
+	if item.Starred {
+		starStr = " ★"
+	}
+
+	result := fmt.Sprintf("Jumped to %s %d%s: %s", typeStr, item.ID, starStr, info)
+	m.commandInput.SetResult(result, false)
+	return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+		return clearResultMsg{}
+	})
 }
 
 // decreaseStepSize cycles to the previous (smaller) step size.
