@@ -327,3 +327,18 @@
   - Poll mpv silently by ignoring errors from Get* methods - display last known state on errors
 
 ---
+## 2026-01-26 - US-030
+- What was implemented: Notes list panel component for TUI
+- Files changed: tui/components/noteslist.go (new), tui/tui.go
+- **Learnings for future iterations:**
+  - ListItem struct unifies notes and tackles for display in a single sorted list
+  - ListItemType enum differentiates note vs tackle for badge rendering
+  - NotesListState holds Items slice, SelectedIndex, and ScrollOffset for scrollable list
+  - NotesList component calculates visible area and adjusts scroll offset to keep selection visible
+  - loadNotesAndTackles in tui.go queries both notes and tackles tables, merges results, sorts by timestamp
+  - For tackles, build display text from player + outcome + notes fields
+  - Use sql.NullString for nullable TEXT columns, check .Valid before accessing .String
+  - MoveUp/MoveDown/GetSelectedItem helper methods on NotesListState for list navigation (used in future stories)
+  - Badge rendering uses different background colors (Cyan for notes, Pink for tackles) for visual distinction
+
+---
