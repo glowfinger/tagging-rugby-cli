@@ -452,8 +452,8 @@
         "Typecheck passes"
       ],
       "priority": 29,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created tui/components/statusbar.go with StatusBarState struct and StatusBar render function. Updated tui/tui.go with tickMsg for 100ms polling, updateStatusFromMpv for real-time status updates, and integrated status bar into View."
     },
     {
       "id": "US-030",

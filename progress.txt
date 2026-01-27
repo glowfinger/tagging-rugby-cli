@@ -314,3 +314,16 @@
   - Import with `"github.com/user/tagging-rugby-cli/tui/styles"` and use as `styles.Highlight`, etc.
 
 ---
+## 2026-01-26 - US-029
+- What was implemented: Status bar component for TUI with real-time mpv polling
+- Files changed: tui/components/statusbar.go (new), tui/tui.go
+- **Learnings for future iterations:**
+  - TUI components go in tui/components/ directory (e.g., statusbar.go)
+  - Use tea.Tick for polling - returns a Cmd that schedules a message after a duration
+  - tickMsg pattern: define custom message type, create tickCmd() that returns tea.Tick, call tickCmd() from Init and after handling tick
+  - StatusBarState struct holds all display state (Paused, Muted, TimePos, Duration, StepSize, OverlayEnabled)
+  - Handle tea.WindowSizeMsg to get terminal dimensions for responsive layout
+  - Use lipgloss.Width() to measure rendered string width (accounts for unicode/emoji)
+  - Poll mpv silently by ignoring errors from Get* methods - display last known state on errors
+
+---
