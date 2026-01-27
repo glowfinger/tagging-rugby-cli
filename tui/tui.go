@@ -64,6 +64,8 @@ type Model struct {
 	statsView components.StatsViewState
 	// overlayEnabled indicates if the mpv overlay is enabled
 	overlayEnabled bool
+	// noteInput holds the state for the quick note input
+	noteInput components.NoteInputState
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -124,6 +126,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle stats view input
 		if m.statsView.Active {
 			return m.handleStatsViewInput(msg)
+		}
+
+		// Handle note input mode
+		if m.noteInput.Active {
+			return m.handleNoteInput(msg)
 		}
 
 		// Handle command mode input
@@ -209,6 +216,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
+		case "n", "N":
+			// N opens quick note input prompt
+			return m.openNoteInput()
 		}
 	}
 
@@ -263,6 +273,104 @@ func (m *Model) handleCommandInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else if msg.Type == tea.KeyRunes {
 			for _, r := range msg.Runes {
 				m.commandInput.InsertChar(r)
+			}
+		}
+		return m, nil
+	}
+}
+
+// openNoteInput opens the quick note input prompt.
+func (m *Model) openNoteInput() (tea.Model, tea.Cmd) {
+	if m.client == nil || !m.client.IsConnected() {
+		m.commandInput.SetResult("Not connected to mpv", true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Get current timestamp from mpv
+	timestamp, err := m.client.GetTimePos()
+	if err != nil {
+		m.commandInput.SetResult("Failed to get timestamp: "+err.Error(), true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Initialize note input state
+	m.noteInput.Clear()
+	m.noteInput.Active = true
+	m.noteInput.Timestamp = timestamp
+	m.noteInput.CurrentField = components.NoteInputFieldText
+
+	return m, nil
+}
+
+// handleNoteInput handles key events when in note input mode.
+func (m *Model) handleNoteInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "escape":
+		// Cancel note input
+		m.noteInput.Clear()
+		return m, nil
+
+	case "enter":
+		// Save note if text is not empty
+		text, category, player, team, timestamp := m.noteInput.GetNote()
+		if text == "" {
+			m.commandInput.SetResult("Note text cannot be empty", true)
+			return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+				return clearResultMsg{}
+			})
+		}
+
+		// Save note to database
+		result, err := m.db.Exec(
+			`INSERT INTO notes (video_path, timestamp_seconds, text, category, player, team) VALUES (?, ?, ?, ?, ?, ?)`,
+			m.videoPath, timestamp, text, category, player, team,
+		)
+		if err != nil {
+			m.noteInput.Clear()
+			m.commandInput.SetResult("Error: "+err.Error(), true)
+			return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+				return clearResultMsg{}
+			})
+		}
+
+		noteID, _ := result.LastInsertId()
+
+		// Clear note input and reload list
+		m.noteInput.Clear()
+		m.loadNotesAndTackles()
+
+		// Show confirmation
+		m.commandInput.SetResult(fmt.Sprintf("Note %d added at %s", noteID, formatTimeString(timestamp)), false)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+
+	case "tab":
+		// Move to next field
+		m.noteInput.NextField()
+		return m, nil
+
+	case "shift+tab":
+		// Move to previous field
+		m.noteInput.PrevField()
+		return m, nil
+
+	case "backspace":
+		// Delete last character
+		m.noteInput.Backspace()
+		return m, nil
+
+	default:
+		// Insert character if it's a printable rune
+		if len(msg.String()) == 1 {
+			m.noteInput.InsertChar(rune(msg.String()[0]))
+		} else if msg.Type == tea.KeyRunes {
+			for _, r := range msg.Runes {
+				m.noteInput.InsertChar(r)
 			}
 		}
 		return m, nil
@@ -935,6 +1043,13 @@ func (m *Model) View() string {
 
 	// Render status bar at top
 	statusBar := components.StatusBar(m.statusBar, m.width)
+
+	// Check if note input is active
+	if m.noteInput.Active {
+		// Show note input overlay instead of normal view
+		noteInput := components.NoteInput(m.noteInput, m.width, m.noteInput.Timestamp)
+		return statusBar + "\n" + noteInput
+	}
 
 	// Calculate available height for notes list (minus status bar and command input)
 	listHeight := m.height - 2 // 1 for status bar, 1 for command input
