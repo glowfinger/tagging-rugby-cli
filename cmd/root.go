@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/deps"
 	"github.com/user/tagging-rugby-cli/mpv"
+	"github.com/user/tagging-rugby-cli/tui"
 )
 
 var Version = "0.1.0"
@@ -41,6 +43,7 @@ var openCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		videoPath := args[0]
+		useTUI, _ := cmd.Flags().GetBool("tui")
 
 		// Resolve to absolute path
 		absPath, err := filepath.Abs(videoPath)
@@ -97,6 +100,33 @@ var openCmd = &cobra.Command{
 			fmt.Printf("Video session started: %s (duration: %d:%02d)\n", filepath.Base(absPath), minutes, seconds)
 		}
 
+		// Launch TUI if requested
+		if useTUI {
+			// Open database connection for TUI
+			database, err := db.Open()
+			if err != nil {
+				if process.Process != nil {
+					process.Process.Kill()
+				}
+				return fmt.Errorf("failed to open database: %w", err)
+			}
+			defer database.Close()
+
+			// Run TUI (blocks until quit)
+			if err := tui.Run(client, database, absPath); err != nil {
+				if process.Process != nil {
+					process.Process.Kill()
+				}
+				return fmt.Errorf("TUI error: %w", err)
+			}
+
+			// Kill mpv when TUI exits
+			if process.Process != nil {
+				process.Process.Kill()
+			}
+			return nil
+		}
+
 		// Wait for mpv to exit
 		return process.Wait()
 	},
@@ -144,6 +174,9 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(openCmd)
 	rootCmd.AddCommand(doctorCmd)
+
+	// Flags for open command
+	openCmd.Flags().BoolP("tui", "t", false, "Launch TUI instead of CLI mode")
 }
 
 func Execute() {
