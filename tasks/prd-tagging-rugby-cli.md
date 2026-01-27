@@ -300,6 +300,23 @@ A Go CLI tool for rugby coaches and analysts to review game footage. The tool co
 - [ ] Warnings styled with pink color from palette for visibility
 - [ ] Typecheck/lint passes
 
+### US-023: README documentation
+**Description:** As a user, I want a README file so that I can understand how to install, configure, and use the application.
+
+**Acceptance Criteria:**
+- [ ] README.md file created in project root
+- [ ] Explains what the application does (overview)
+- [ ] Lists prerequisites (Go 1.21+, mpv required, ffmpeg optional)
+- [ ] Provides installation instructions for dependencies (macOS, Ubuntu, Arch, Windows)
+- [ ] Includes build from source instructions
+- [ ] Documents the `doctor` command to verify dependencies
+- [ ] Shows quick start examples for TUI and CLI modes
+- [ ] Lists all TUI keybindings in tables (Playback, Navigation, Views, Stats, Commands)
+- [ ] Documents CLI commands with examples (notes, tackles, clips, categories)
+- [ ] Specifies data storage locations (database path, mpv socket path)
+- [ ] Lists the technology stack (Go, Cobra, Bubbletea, SQLite, mpv IPC)
+- [ ] Typecheck/lint passes
+
 ## Functional Requirements
 
 - FR-1: The CLI must communicate with mpv via JSON IPC protocol over Unix socket
