@@ -62,6 +62,8 @@ type Model struct {
 	showHelp bool
 	// statsView holds the state for the stats view
 	statsView components.StatsViewState
+	// overlayEnabled indicates if the mpv overlay is enabled
+	overlayEnabled bool
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -100,6 +102,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		// Update status bar from mpv
 		m.updateStatusFromMpv()
+		// Update overlay if enabled
+		if m.overlayEnabled {
+			m.updateOverlay()
+		}
 		// Continue ticking
 		return m, tickCmd()
 
@@ -192,6 +198,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			// Enter on selected item seeks mpv to that timestamp
 			return m.jumpToSelectedItem()
+		case "o", "O":
+			// O toggles overlay on/off
+			m.overlayEnabled = !m.overlayEnabled
+			m.statusBar.OverlayEnabled = m.overlayEnabled
+			if !m.overlayEnabled {
+				// Hide overlay when disabled
+				if m.client != nil && m.client.IsConnected() {
+					_ = m.client.HideOverlay(1)
+				}
+			}
+			return m, nil
 		}
 	}
 
@@ -781,6 +798,88 @@ func formatTimeString(seconds float64) string {
 	mins := totalSeconds / 60
 	secs := totalSeconds % 60
 	return fmt.Sprintf("%d:%02d", mins, secs)
+}
+
+// overlayProximitySeconds is how close (in seconds) a note must be to current timestamp to display.
+const overlayProximitySeconds = 2.0
+
+// overlayID is the ID used for the notes overlay in mpv.
+const overlayID = 1
+
+// updateOverlay displays notes near the current timestamp on the mpv video.
+func (m *Model) updateOverlay() {
+	if m.client == nil || !m.client.IsConnected() {
+		return
+	}
+
+	// Get current playback position
+	timePos := m.statusBar.TimePos
+
+	// Find notes within proximity of current timestamp
+	var nearbyNotes []components.ListItem
+	for _, item := range m.notesList.Items {
+		// Only show notes (not tackles) in overlay
+		if item.Type != components.ItemTypeNote {
+			continue
+		}
+		// Check if note is within proximity
+		diff := timePos - item.TimestampSeconds
+		if diff >= 0 && diff <= overlayProximitySeconds {
+			nearbyNotes = append(nearbyNotes, item)
+		}
+	}
+
+	// If no notes nearby, hide overlay
+	if len(nearbyNotes) == 0 {
+		_ = m.client.HideOverlay(overlayID)
+		return
+	}
+
+	// Build overlay text with ASS formatting for semi-transparent background
+	// ASS format: {\pos(x,y)\an7\1c&HFFFFFF&\3c&H000000&\bord2\shad0\alpha&H40&}text
+	// Using position at bottom-left with some margin, anchor point 7 (bottom-left)
+	var overlayText strings.Builder
+	for _, note := range nearbyNotes {
+		// Build note display: category, player/team, text
+		var parts []string
+		if note.Category != "" {
+			parts = append(parts, "["+note.Category+"]")
+		}
+		if note.Player != "" || note.Team != "" {
+			playerTeam := ""
+			if note.Player != "" && note.Team != "" {
+				playerTeam = note.Player + " (" + note.Team + ")"
+			} else if note.Player != "" {
+				playerTeam = note.Player
+			} else {
+				playerTeam = note.Team
+			}
+			parts = append(parts, playerTeam)
+		}
+		if note.Text != "" {
+			parts = append(parts, note.Text)
+		}
+
+		noteDisplay := strings.Join(parts, " - ")
+		if noteDisplay == "" {
+			noteDisplay = "(empty note)"
+		}
+
+		// ASS styling: position at bottom, semi-transparent box background
+		// \an1 = bottom-left alignment
+		// \pos(20, h-80) = position 20px from left, 80px from bottom (we'll use percent)
+		// \bord0 = no border
+		// \shad0 = no shadow
+		// \3c&H000000& = box color (black)
+		// \4c&H000000& = shadow color (black)
+		// \4a&H80& = shadow/box alpha (semi-transparent)
+		// \1c&HFFFFFF& = primary fill color (white)
+		// Using simple format with box enabled via \be1 (blur edges) and \bord
+		overlayText.WriteString(fmt.Sprintf("{\\an7\\pos(20,20)\\fs24\\1c&HFFFFFF&\\3c&H201a1a&\\bord3\\shad0}%s\\N", noteDisplay))
+	}
+
+	// Show the overlay
+	_ = m.client.ShowOverlay(overlayID, overlayText.String())
 }
 
 // updateStatusFromMpv polls mpv for current playback status and updates the status bar.

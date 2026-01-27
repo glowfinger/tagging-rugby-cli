@@ -246,6 +246,24 @@ func (c *Client) ClearABLoop() error {
 	return c.SetProperty("ab-loop-b", "no")
 }
 
+// ShowOverlay displays text on the mpv video using osd-overlay.
+// The overlayID identifies the overlay (use 1 for notes overlay).
+// The text is displayed with ASS formatting support for styling.
+func (c *Client) ShowOverlay(overlayID int, text string) error {
+	// osd-overlay command format: osd-overlay <id> <format> <data>
+	// format "ass-events" allows ASS styling
+	_, err := c.sendCommand("osd-overlay", overlayID, "ass-events", text)
+	return err
+}
+
+// HideOverlay removes a displayed overlay.
+// The overlayID must match the ID used in ShowOverlay.
+func (c *Client) HideOverlay(overlayID int) error {
+	// To hide an overlay, set data to empty string with "none" format
+	_, err := c.sendCommand("osd-overlay", overlayID, "none", "")
+	return err
+}
+
 // toFloat64 converts an interface{} to float64.
 // JSON numbers from mpv are typically decoded as float64.
 func toFloat64(v interface{}) (float64, error) {
