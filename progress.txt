@@ -356,3 +356,15 @@
   - Commands implemented: note (add/list/goto), clip (start/end/list/play/stop), tackle (add/list), pause/play, mute, seek, speed, quit, help
 
 ---
+## 2026-01-26 - US-032
+- What was implemented: TUI keybindings for playback control
+- Files changed: tui/tui.go
+- **Learnings for future iterations:**
+  - stepSizes package-level var defines the cycle values: 0.1, 0.5, 1, 2, 5, 10, 30 seconds
+  - Space key triggers TogglePause via msg.String() == " " (single space)
+  - Both lowercase and uppercase keys handled: "m", "M", "h", "H", "l", "L"
+  - findStepSizeIndex helper finds current step size in array (with fallback for non-exact values)
+  - decreaseStepSize/increaseStepSize cycle through stepSizes array with bounds checking
+  - Check m.client != nil && m.client.IsConnected() before calling mpv methods
+
+---
