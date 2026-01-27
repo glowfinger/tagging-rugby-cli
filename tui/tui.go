@@ -947,6 +947,11 @@ func (m *Model) loadNotesAndTackles() {
 
 // handleStatsViewInput handles key events when the stats view is active.
 func (m *Model) handleStatsViewInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle filter mode input first
+	if m.statsView.FilterMode {
+		return m.handleStatsFilterInput(msg)
+	}
+
 	switch msg.String() {
 	case "backspace":
 		// Return to main view
@@ -976,8 +981,52 @@ func (m *Model) handleStatsViewInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Show help overlay
 		m.showHelp = true
 		return m, nil
+	case "/":
+		// Enter filter mode
+		m.statsView.FilterMode = true
+		m.statsView.FilterInput = ""
+		return m, nil
+	case "escape":
+		// Clear all filters
+		m.statsView.ClearFilters()
+		return m, nil
 	}
 	return m, nil
+}
+
+// handleStatsFilterInput handles key events when in filter input mode.
+func (m *Model) handleStatsFilterInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "escape":
+		// Exit filter mode (but keep existing filters)
+		m.statsView.FilterMode = false
+		m.statsView.FilterInput = ""
+		return m, nil
+	case "enter":
+		// Apply filter and exit filter mode
+		if m.statsView.FilterInput != "" {
+			m.statsView.ToggleFilter(m.statsView.FilterInput)
+		}
+		m.statsView.FilterMode = false
+		m.statsView.FilterInput = ""
+		return m, nil
+	case "backspace":
+		// Delete last character
+		if len(m.statsView.FilterInput) > 0 {
+			m.statsView.FilterInput = m.statsView.FilterInput[:len(m.statsView.FilterInput)-1]
+		}
+		return m, nil
+	default:
+		// Add character to filter input
+		if len(msg.String()) == 1 {
+			m.statsView.FilterInput += msg.String()
+		} else if msg.Type == tea.KeyRunes {
+			for _, r := range msg.Runes {
+				m.statsView.FilterInput += string(r)
+			}
+		}
+		return m, nil
+	}
 }
 
 // loadTackleStats loads tackle statistics from the database.

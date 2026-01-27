@@ -526,9 +526,9 @@ func exportAllClips(format string, reencode bool) error {
 // buildFfmpegArgs builds the ffmpeg command arguments
 func buildFfmpegArgs(videoPath string, startSec, endSec float64, outputPath, format string, reencode bool) []string {
 	args := []string{
-		"-y",                               // Overwrite output
+		"-y",                                 // Overwrite output
 		"-ss", fmt.Sprintf("%.3f", startSec), // Start time (input seeking for faster seek)
-		"-i", videoPath,                    // Input file
+		"-i", videoPath, // Input file
 		"-to", fmt.Sprintf("%.3f", endSec-startSec), // Duration (relative to start)
 	}
 

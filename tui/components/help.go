@@ -54,6 +54,8 @@ func HelpOverlay(width, height int) string {
 				{"S", "Open stats view"},
 				{"O", "Toggle overlay on video"},
 				{"Backspace", "Return to main view"},
+				{"/ (stats)", "Filter players by name/initials"},
+				{"Esc (stats)", "Clear player filters"},
 			},
 		},
 		{
