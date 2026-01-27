@@ -3,6 +3,7 @@
 - Go binary is at `/home/node/go/bin/go` - use `export PATH="$PATH:/home/node/go/bin"` before Go commands
 - Database connection uses modernc.org/sqlite (pure Go implementation, no CGO)
 - Add new table migrations to the `migrate()` function in db/db.go - always use `CREATE TABLE IF NOT EXISTS`
+- Bubble Tea key strings: use "esc" (not "escape"), "enter", "tab", "backspace", "left", "right" for key handling
 
 ---
 
@@ -486,5 +487,15 @@
   - executeShorthandTackleCommand accepts positional args: :nt <player> <team> <attempt> <outcome>
   - Help screen has new "Shorthand Commands" group to document all shortcuts
   - Pattern: for commands that can either open a prompt or execute directly, use special return string values
+
+---
+
+## 2026-01-27 - US-042
+- What was implemented: Fixed escape key handling in TUI input prompts
+- Files changed: tui/tui.go
+- **Learnings for future iterations:**
+  - Bubble Tea uses "esc" for the escape key, not "escape" - always check key strings against Bubble Tea documentation
+  - tea.KeyMsg.String() returns specific key names: "esc", "enter", "tab", "backspace", "left", "right", etc.
+  - When handling keyboard input in Bubble Tea, test escape key functionality manually or refer to the bubbletea key.go source for correct key string names
 
 ---

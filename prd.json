@@ -661,6 +661,22 @@
       "priority": 41,
       "passes": true,
       "notes": "Implemented :nn, :nt, :cs, :ce shorthand commands in executeCommand switch. Added executeShorthandNoteCommand and executeShorthandTackleCommand methods. Special return values trigger opening input prompts. Help screen updated with new Shorthand Commands group."
+    },
+    {
+      "id": "US-042",
+      "title": "Fix escape key in input prompts",
+      "description": "As a coach, I want the escape key to cancel input prompts so that I can dismiss note/tackle input without saving.",
+      "acceptanceCriteria": [
+        "Escape key cancels note input prompt and returns to normal mode",
+        "Escape key cancels tackle input prompt and returns to normal mode",
+        "Escape key cancels command input mode",
+        "Escape key cancels stats view filter mode",
+        "All escape handlers use correct Bubble Tea key string",
+        "Typecheck/lint passes"
+      ],
+      "priority": 42,
+      "passes": true,
+      "notes": "Fixed escape key handling in TUI by changing 'escape' to 'esc' in all case statements in tui/tui.go. Updated handleCommandInput, handleNoteInput, handleTackleInput, handleStatsViewInput, and handleStatsFilterInput functions."
     }
   ]
 }
