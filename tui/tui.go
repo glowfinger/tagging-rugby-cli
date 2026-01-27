@@ -58,6 +58,8 @@ type Model struct {
 	clipStartTimestamp float64
 	// clipStartSet indicates if a clip start has been marked
 	clipStartSet bool
+	// showHelp indicates if the help overlay is visible
+	showHelp bool
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -105,6 +107,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Handle help overlay - any key dismisses it
+		if m.showHelp {
+			m.showHelp = false
+			return m, nil
+		}
+
 		// Handle command mode input
 		if m.commandInput.Active {
 			return m.handleCommandInput(msg)
@@ -112,6 +120,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Normal mode key handling
 		switch msg.String() {
+		case "?":
+			// Toggle help overlay
+			m.showHelp = true
+			return m, nil
 		case "q", "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
@@ -798,6 +810,11 @@ func (m *Model) View() string {
 
 	if m.err != nil {
 		return components.StatusBar(m.statusBar, m.width) + "\n\nError: " + m.err.Error() + "\n\nPress q to quit.\n"
+	}
+
+	// If help overlay is active, show it instead of normal view
+	if m.showHelp {
+		return components.HelpOverlay(m.width, m.height)
 	}
 
 	// Render status bar at top
