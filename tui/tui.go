@@ -1251,22 +1251,25 @@ func (m *Model) View() string {
 	// Render status bar at top
 	statusBar := components.StatusBar(m.statusBar, m.width)
 
+	// Render controls display
+	controlsDisplay := components.ControlsDisplay(m.width)
+
 	// Check if note input is active
 	if m.noteInput.Active {
 		// Show note input overlay instead of normal view
 		noteInput := components.NoteInput(m.noteInput, m.width, m.noteInput.Timestamp)
-		return statusBar + "\n" + noteInput
+		return statusBar + "\n" + controlsDisplay + "\n" + noteInput
 	}
 
 	// Check if tackle input is active
 	if m.tackleInput.Active {
 		// Show tackle input overlay instead of normal view
 		tackleInput := components.TackleInput(m.tackleInput, m.width, m.tackleInput.Timestamp)
-		return statusBar + "\n" + tackleInput
+		return statusBar + "\n" + controlsDisplay + "\n" + tackleInput
 	}
 
-	// Calculate available height for notes list (minus status bar and command input)
-	listHeight := m.height - 2 // 1 for status bar, 1 for command input
+	// Calculate available height for notes list (minus status bar, controls, and command input)
+	listHeight := m.height - 3 // 1 for status bar, 1 for controls, 1 for command input
 	if listHeight < 5 {
 		listHeight = 5
 	}
@@ -1277,7 +1280,7 @@ func (m *Model) View() string {
 	// Render command input at bottom
 	commandInput := components.CommandInput(m.commandInput, m.width)
 
-	return statusBar + "\n" + notesList + "\n" + commandInput
+	return statusBar + "\n" + controlsDisplay + "\n" + notesList + "\n" + commandInput
 }
 
 // Run starts the Bubbletea program with the given model.

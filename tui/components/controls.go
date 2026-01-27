@@ -1,0 +1,104 @@
+// Package components provides reusable TUI components.
+package components
+
+import (
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/user/tagging-rugby-cli/tui/styles"
+)
+
+// Control represents a single control with its display info.
+type Control struct {
+	Emoji    string
+	Name     string
+	Shortcut string
+}
+
+// ControlGroup represents a group of related controls.
+type ControlGroup struct {
+	Controls []Control
+}
+
+// GetControlGroups returns the control groups for display.
+func GetControlGroups() []ControlGroup {
+	return []ControlGroup{
+		// Playback controls
+		{
+			Controls: []Control{
+				{Emoji: "\u23ea", Name: "Back", Shortcut: "H"},
+				{Emoji: "\u23e9", Name: "Fwd", Shortcut: "L"},
+				{Emoji: "\u23ef\ufe0f", Name: "Play", Shortcut: "Space"},
+			},
+		},
+		// Navigation controls
+		{
+			Controls: []Control{
+				{Emoji: "\u23ee", Name: "Prev", Shortcut: "J"},
+				{Emoji: "\u23ed", Name: "Next", Shortcut: "K"},
+				{Emoji: "\U0001F507", Name: "Mute", Shortcut: "M"},
+			},
+		},
+		// Step/overlay controls
+		{
+			Controls: []Control{
+				{Emoji: "\u2796", Name: "Step-", Shortcut: "<"},
+				{Emoji: "\u2795", Name: "Step+", Shortcut: ">"},
+				{Emoji: "\U0001F4DD", Name: "Overlay", Shortcut: "O"},
+			},
+		},
+		// View controls
+		{
+			Controls: []Control{
+				{Emoji: "\U0001F4CA", Name: "Stats", Shortcut: "S"},
+				{Emoji: "\u2753", Name: "Help", Shortcut: "?"},
+				{Emoji: "\U0001F6AA", Name: "Quit", Shortcut: "q"},
+			},
+		},
+	}
+}
+
+// ControlsDisplay renders the controls display component.
+// It shows all available controls grouped by function with emoji, name, and shortcut key.
+func ControlsDisplay(width int) string {
+	groups := GetControlGroups()
+
+	// Style for control items
+	controlStyle := lipgloss.NewStyle().
+		Foreground(styles.LightLavender)
+
+	shortcutStyle := lipgloss.NewStyle().
+		Foreground(styles.Cyan).
+		Bold(true)
+
+	// Build control strings for each group
+	var groupStrings []string
+	for _, group := range groups {
+		var controlStrs []string
+		for _, ctrl := range group.Controls {
+			// Format: emoji Name [shortcut]
+			ctrlStr := ctrl.Emoji + " " + ctrl.Name + " " + shortcutStyle.Render("["+ctrl.Shortcut+"]")
+			controlStrs = append(controlStrs, controlStyle.Render(ctrlStr))
+		}
+		groupStrings = append(groupStrings, strings.Join(controlStrs, "  "))
+	}
+
+	// Join all groups with separator
+	allControls := strings.Join(groupStrings, "   ")
+
+	// Center the controls
+	controlsWidth := lipgloss.Width(allControls)
+	padding := (width - controlsWidth) / 2
+	if padding < 0 {
+		padding = 0
+	}
+
+	paddingStr := strings.Repeat(" ", padding)
+
+	// Container style
+	containerStyle := lipgloss.NewStyle().
+		Background(styles.DeepPurple).
+		Width(width)
+
+	return containerStyle.Render(paddingStr + allControls)
+}
