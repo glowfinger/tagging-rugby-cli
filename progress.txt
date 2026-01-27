@@ -459,3 +459,18 @@
   - openNoteInput captures timestamp at prompt open time, not at save time (matches user expectation)
 
 ---
+
+## 2026-01-27 - US-040
+- What was implemented: Quick tackle input in TUI with T key to open prompt
+- Files changed: tui/components/tackleinput.go (new), tui/tui.go, tui/components/help.go
+- **Learnings for future iterations:**
+  - TackleInputState struct follows same pattern as NoteInputState with Active, CurrentField, and data fields
+  - TackleInputField enum has 7 values: Player, Team, Attempt, Outcome, Followed, Notes, Zone (4 required, 3 optional)
+  - For selection fields (outcome), use separate OutcomeIndex to track selection and left/right arrows to cycle
+  - InsertChar only allows digits for Attempt field using range check (c >= '0' && c <= '9')
+  - Star toggle with * key (always works) or S key (only when in Outcome field to avoid conflicts with typing)
+  - ValidationError() method returns first missing required field, used before saving
+  - TackleInput component renders required fields with asterisk labels and separates optional fields visually
+  - Same overlay pattern: check m.tackleInput.Active in Update, render tackle input instead of notes list in View
+
+---
