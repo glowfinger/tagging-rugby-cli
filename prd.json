@@ -470,8 +470,8 @@
         "Typecheck passes"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": "Updated from scrollable list to fixed 10-row table at bottom. Needs implementation update."
+      "passes": true,
+      "notes": "Implemented fixed 10-row table with columns: ID (with star symbol), Timestamp, Category, Text. Auto-scrolls to current video timestamp. Selected row highlighted with BrightPurple."
     },
     {
       "id": "US-031",
