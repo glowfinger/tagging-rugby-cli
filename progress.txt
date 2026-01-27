@@ -474,3 +474,17 @@
   - Same overlay pattern: check m.tackleInput.Active in Update, render tackle input instead of notes list in View
 
 ---
+
+## 2026-01-27 - US-041
+- What was implemented: Shorthand commands in TUI (:nn, :nt, :cs, :ce)
+- Files changed: tui/tui.go, tui/components/help.go
+- **Learnings for future iterations:**
+  - Shorthand commands added to executeCommand switch: :nn, :nt, :cs, :ce
+  - :cs and :ce delegate to executeClipCommand with args transformation
+  - :nn and :nt use special return values ("OPEN_NOTE_INPUT", "OPEN_TACKLE_INPUT") to signal opening input prompts
+  - handleCommandInput checks for special return values and calls openNoteInput/openTackleInput accordingly
+  - executeShorthandTackleCommand accepts positional args: :nt <player> <team> <attempt> <outcome>
+  - Help screen has new "Shorthand Commands" group to document all shortcuts
+  - Pattern: for commands that can either open a prompt or execute directly, use special return string values
+
+---

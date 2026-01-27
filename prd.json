@@ -659,8 +659,8 @@
         "Typecheck/lint passes"
       ],
       "priority": 41,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented :nn, :nt, :cs, :ce shorthand commands in executeCommand switch. Added executeShorthandNoteCommand and executeShorthandTackleCommand methods. Special return values trigger opening input prompts. Help screen updated with new Shorthand Commands group."
     }
   ]
 }
