@@ -368,3 +368,14 @@
   - Check m.client != nil && m.client.IsConnected() before calling mpv methods
 
 ---
+## 2026-01-26 - US-033
+- What was implemented: TUI keybindings for list navigation (J/K to move selection, Enter to jump)
+- Files changed: tui/tui.go
+- **Learnings for future iterations:**
+  - J moves selection up (previous item), K moves selection down (next item) - follows vim-like navigation
+  - NotesListState already has MoveUp, MoveDown, GetSelectedItem helper methods from US-030
+  - jumpToSelectedItem method seeks mpv and displays item details briefly using existing commandInput.SetResult pattern
+  - Item details shown include type (note/tackle), ID, star symbol for starred items, and text/player/category info
+  - Uses resultDisplayDuration (3 seconds) for auto-dismissing the jump message
+
+---
