@@ -290,3 +290,16 @@
   - filepath.Ext() to check if output path already has extension
 
 ---
+## 2026-01-26 - US-027
+- What was implemented: Bubbletea TUI app structure
+- Files changed: tui/tui.go (new), cmd/root.go, go.mod, go.sum
+- **Learnings for future iterations:**
+  - Bubbletea uses tea.Model interface with Init(), Update(tea.Msg), View() methods
+  - tea.NewProgram creates the program, p.Run() blocks until exit
+  - tea.WithAltScreen() option uses alternate terminal screen (full-screen mode)
+  - tea.Quit command returned from Update triggers graceful shutdown
+  - tea.KeyMsg.String() returns key name for easy switch matching ("q", "ctrl+c", etc.)
+  - Model struct holds all state: mpv client, database, video path
+  - tui.Run() is the main entry point that creates Model and runs the program
+
+---
