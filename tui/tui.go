@@ -238,7 +238,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleCommandInput handles key events when in command mode.
 func (m *Model) handleCommandInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "escape":
+	case "esc":
 		// Cancel command mode
 		m.commandInput.Clear()
 		return m, nil
@@ -330,7 +330,7 @@ func (m *Model) openNoteInput() (tea.Model, tea.Cmd) {
 // handleNoteInput handles key events when in note input mode.
 func (m *Model) handleNoteInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "escape":
+	case "esc":
 		// Cancel note input
 		m.noteInput.Clear()
 		return m, nil
@@ -428,7 +428,7 @@ func (m *Model) openTackleInput() (tea.Model, tea.Cmd) {
 // handleTackleInput handles key events when in tackle input mode.
 func (m *Model) handleTackleInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "escape":
+	case "esc":
 		// Cancel tackle input
 		m.tackleInput.Clear()
 		return m, nil
@@ -1414,7 +1414,7 @@ func (m *Model) handleStatsViewInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.statsView.FilterMode = true
 		m.statsView.FilterInput = ""
 		return m, nil
-	case "escape":
+	case "esc":
 		// Clear all filters
 		m.statsView.ClearFilters()
 		return m, nil
@@ -1425,7 +1425,7 @@ func (m *Model) handleStatsViewInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // handleStatsFilterInput handles key events when in filter input mode.
 func (m *Model) handleStatsFilterInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "escape":
+	case "esc":
 		// Exit filter mode (but keep existing filters)
 		m.statsView.FilterMode = false
 		m.statsView.FilterInput = ""
