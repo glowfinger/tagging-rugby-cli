@@ -584,8 +584,8 @@
         "Typecheck passes"
       ],
       "priority": 37,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Uses mpv osd-overlay command with ASS formatting. ShowOverlay/HideOverlay methods in mpv/client.go. O key toggles overlay in TUI, updateOverlay method called during tick polling."
     },
     {
       "id": "US-038",

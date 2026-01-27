@@ -418,3 +418,16 @@
   - Helper matchesInitials uses strings.Builder to build initials from player name parts
 
 ---
+
+## 2026-01-26 - US-037
+- What was implemented: mpv overlay to display notes on video near current timestamp
+- Files changed: mpv/client.go, tui/tui.go
+- **Learnings for future iterations:**
+  - mpv `osd-overlay` command format: `osd-overlay <id> <format> <data>` where format is "ass-events" for ASS styling or "none" to hide
+  - ASS formatting uses backslash codes: `{\an7\pos(20,20)\fs24\1c&HFFFFFF&\3c&H201a1a&\bord3\shad0}` for positioning, alignment, font size, colors, border
+  - ShowOverlay/HideOverlay methods added to mpv/client.go for reusable overlay control
+  - Overlay updated during tick polling when overlayEnabled is true
+  - Notes shown when within overlayProximitySeconds (2.0 seconds) of current timestamp
+  - StatusBar.OverlayEnabled field tracks and displays overlay state with 📺 icon
+
+---
