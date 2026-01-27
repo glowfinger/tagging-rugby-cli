@@ -406,8 +406,8 @@
         "Typecheck passes"
       ],
       "priority": 26,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added clipExportCmd to cmd/clip.go with all required flags. Uses deps.CheckFfmpeg for dependency check. buildFfmpegArgs helper builds ffmpeg command with -ss (input seeking) and -to (duration) flags. Supports stream copy by default and re-encoding with --reencode flag."
     },
     {
       "id": "US-027",

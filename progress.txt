@@ -277,3 +277,16 @@
   - Pattern for exports: query counts first, then query details, write both to file
 
 ---
+## 2026-01-26 - US-026
+- What was implemented: Clip export command with ffmpeg integration
+- Files changed: cmd/clip.go
+- **Learnings for future iterations:**
+  - Use deps.CheckFfmpeg() before running ffmpeg commands (returns error with install URL)
+  - ffmpeg input seeking (-ss before -i) is faster than output seeking (-ss after -i)
+  - When using input seeking with -ss, use -to with duration (end - start) rather than absolute end time
+  - Stream copy (-c copy) is fast but may have keyframe issues; use --reencode for precision
+  - buildFfmpegArgs helper pattern keeps ffmpeg command construction reusable
+  - Use exec.Command with Stdout/Stderr set to os.Stdout/Stderr to show ffmpeg progress
+  - filepath.Ext() to check if output path already has extension
+
+---
