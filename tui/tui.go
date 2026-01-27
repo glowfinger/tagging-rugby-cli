@@ -60,6 +60,8 @@ type Model struct {
 	clipStartSet bool
 	// showHelp indicates if the help overlay is visible
 	showHelp bool
+	// statsView holds the state for the stats view
+	statsView components.StatsViewState
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -113,6 +115,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Handle stats view input
+		if m.statsView.Active {
+			return m.handleStatsViewInput(msg)
+		}
+
 		// Handle command mode input
 		if m.commandInput.Active {
 			return m.handleCommandInput(msg)
@@ -123,6 +130,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?":
 			// Toggle help overlay
 			m.showHelp = true
+			return m, nil
+		case "s", "S":
+			// Open stats view
+			m.loadTackleStats()
+			m.statsView.Active = true
 			return m, nil
 		case "q", "ctrl+c":
 			m.quitting = true
@@ -817,6 +829,11 @@ func (m *Model) View() string {
 		return components.HelpOverlay(m.width, m.height)
 	}
 
+	// If stats view is active, show it instead of normal view
+	if m.statsView.Active {
+		return components.StatsView(m.statsView, m.width, m.height)
+	}
+
 	// Render status bar at top
 	statusBar := components.StatusBar(m.statusBar, m.width)
 
@@ -926,4 +943,112 @@ func (m *Model) loadNotesAndTackles() {
 	m.notesList.Items = items
 	m.notesList.SelectedIndex = 0
 	m.notesList.ScrollOffset = 0
+}
+
+// handleStatsViewInput handles key events when the stats view is active.
+func (m *Model) handleStatsViewInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "backspace":
+		// Return to main view
+		m.statsView.Active = false
+		return m, nil
+	case "tab":
+		// Cycle sort column
+		m.statsView.NextSortColumn()
+		return m, nil
+	case "v", "V":
+		// Toggle between current video / all videos
+		m.statsView.AllVideos = !m.statsView.AllVideos
+		m.loadTackleStats()
+		return m, nil
+	case "j", "J":
+		// Move selection up
+		m.statsView.MoveUp()
+		return m, nil
+	case "k", "K":
+		// Move selection down
+		m.statsView.MoveDown()
+		return m, nil
+	case "q", "ctrl+c":
+		m.quitting = true
+		return m, tea.Quit
+	case "?":
+		// Show help overlay
+		m.showHelp = true
+		return m, nil
+	}
+	return m, nil
+}
+
+// loadTackleStats loads tackle statistics from the database.
+func (m *Model) loadTackleStats() {
+	if m.db == nil {
+		return
+	}
+
+	// Build query based on whether we want all videos or just current video
+	var query string
+	var args []interface{}
+
+	if m.statsView.AllVideos {
+		query = `
+			SELECT
+				player,
+				COUNT(*) as total,
+				SUM(CASE WHEN outcome = 'completed' THEN 1 ELSE 0 END) as completed,
+				SUM(CASE WHEN outcome = 'missed' THEN 1 ELSE 0 END) as missed,
+				SUM(CASE WHEN outcome = 'possible' THEN 1 ELSE 0 END) as possible,
+				SUM(CASE WHEN outcome = 'other' THEN 1 ELSE 0 END) as other,
+				SUM(CASE WHEN star = 1 THEN 1 ELSE 0 END) as starred
+			FROM tackles
+			GROUP BY player
+		`
+	} else {
+		query = `
+			SELECT
+				player,
+				COUNT(*) as total,
+				SUM(CASE WHEN outcome = 'completed' THEN 1 ELSE 0 END) as completed,
+				SUM(CASE WHEN outcome = 'missed' THEN 1 ELSE 0 END) as missed,
+				SUM(CASE WHEN outcome = 'possible' THEN 1 ELSE 0 END) as possible,
+				SUM(CASE WHEN outcome = 'other' THEN 1 ELSE 0 END) as other,
+				SUM(CASE WHEN star = 1 THEN 1 ELSE 0 END) as starred
+			FROM tackles
+			WHERE video_path = ?
+			GROUP BY player
+		`
+		args = append(args, m.videoPath)
+	}
+
+	rows, err := m.db.Query(query, args...)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	var stats []components.PlayerStats
+	for rows.Next() {
+		var stat components.PlayerStats
+		err := rows.Scan(
+			&stat.Player,
+			&stat.Total,
+			&stat.Completed,
+			&stat.Missed,
+			&stat.Possible,
+			&stat.Other,
+			&stat.Starred,
+		)
+		if err == nil {
+			// Calculate completion percentage
+			if stat.Completed+stat.Missed > 0 {
+				stat.Percentage = float64(stat.Completed) / float64(stat.Completed+stat.Missed) * 100
+			}
+			stats = append(stats, stat)
+		}
+	}
+
+	m.statsView.Stats = stats
+	m.statsView.SelectedIndex = 0
+	m.statsView.ScrollOffset = 0
+	m.statsView.SortStats()
 }
