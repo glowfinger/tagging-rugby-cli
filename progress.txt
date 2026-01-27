@@ -391,3 +391,17 @@
   - Panel centering: calculate marginLeft = (width - panelWidth) / 2, marginTop = (height - panelHeight) / 2
 
 ---
+## 2026-01-26 - US-035
+- What was implemented: TUI stats view for tackle statistics
+- Files changed: tui/components/statsview.go (new), tui/tui.go
+- **Learnings for future iterations:**
+  - Stats view follows same pattern as help overlay: boolean Active field in state struct, check before command mode in Update
+  - StatsViewState holds Stats slice, SortColumn, AllVideos toggle, SelectedIndex, ScrollOffset
+  - SortColumn enum with iota for type-safe column identification (0-6)
+  - NextSortColumn method cycles with modulo: `(s.SortColumn + 1) % 7`
+  - SQL aggregation pattern: `SUM(CASE WHEN outcome = 'completed' THEN 1 ELSE 0 END)`
+  - Completion percentage: Completed / (Completed + Missed) * 100, only if denominator > 0
+  - centerContent helper function reusable from help.go for consistent panel centering
+  - Column highlighting in header uses Underline(true) style for current sort column
+
+---

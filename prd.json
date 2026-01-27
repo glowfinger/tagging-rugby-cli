@@ -551,8 +551,8 @@
         "Typecheck passes"
       ],
       "priority": 35,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created tui/components/statsview.go with StatsViewState, PlayerStats structs, and StatsView render function. Added S key handler and loadTackleStats method in tui/tui.go. Supports Tab to cycle sort columns, V to toggle video scope, Backspace to return."
     },
     {
       "id": "US-036",
