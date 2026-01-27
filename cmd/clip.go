@@ -4,11 +4,14 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"sync"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 	"github.com/user/tagging-rugby-cli/db"
+	"github.com/user/tagging-rugby-cli/deps"
 	"github.com/user/tagging-rugby-cli/mpv"
 )
 
@@ -334,6 +337,223 @@ var clipStopCmd = &cobra.Command{
 	},
 }
 
+var clipExportCmd = &cobra.Command{
+	Use:   "export [clip-id]",
+	Short: "Export clips as video files using ffmpeg",
+	Long:  `Export a clip or all clips as video files using ffmpeg. By default uses stream copy (-c copy) for fast export.`,
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Check ffmpeg is installed
+		if err := deps.CheckFfmpeg(); err != nil {
+			return err
+		}
+
+		// Get flags
+		outputPath, _ := cmd.Flags().GetString("output")
+		format, _ := cmd.Flags().GetString("format")
+		reencode, _ := cmd.Flags().GetBool("reencode")
+		exportAll, _ := cmd.Flags().GetBool("all")
+
+		// Validate format
+		validFormats := map[string]bool{"mp4": true, "webm": true, "mkv": true}
+		if !validFormats[format] {
+			return fmt.Errorf("invalid format: %s (supported: mp4, webm, mkv)", format)
+		}
+
+		// If --all flag is set, export all clips for current video
+		if exportAll {
+			return exportAllClips(format, reencode)
+		}
+
+		// Otherwise, require clip ID
+		if len(args) == 0 {
+			return fmt.Errorf("clip ID required (or use --all to export all clips)")
+		}
+
+		var clipID int64
+		if _, err := fmt.Sscanf(args[0], "%d", &clipID); err != nil {
+			return fmt.Errorf("invalid clip ID: %s", args[0])
+		}
+
+		return exportClip(clipID, outputPath, format, reencode)
+	},
+}
+
+// exportClip exports a single clip to a video file
+func exportClip(clipID int64, outputPath, format string, reencode bool) error {
+	// Open database
+	database, err := db.Open()
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer database.Close()
+
+	// Query clip by ID
+	var videoPath string
+	var startSec, endSec float64
+	err = database.QueryRow(
+		`SELECT video_path, start_seconds, end_seconds FROM clips WHERE id = ?`,
+		clipID,
+	).Scan(&videoPath, &startSec, &endSec)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("clip not found: ID %d", clipID)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to query clip: %w", err)
+	}
+
+	// Determine output path
+	if outputPath == "" {
+		outputPath = fmt.Sprintf("clip-%d.%s", clipID, format)
+	}
+
+	// Build ffmpeg command
+	ffmpegArgs := buildFfmpegArgs(videoPath, startSec, endSec, outputPath, format, reencode)
+
+	fmt.Printf("Exporting clip %d to %s...\n", clipID, outputPath)
+
+	// Run ffmpeg
+	ffmpegCmd := exec.Command("ffmpeg", ffmpegArgs...)
+	ffmpegCmd.Stdout = os.Stdout
+	ffmpegCmd.Stderr = os.Stderr
+
+	if err := ffmpegCmd.Run(); err != nil {
+		return fmt.Errorf("ffmpeg export failed: %w", err)
+	}
+
+	// Get file size
+	fileInfo, err := os.Stat(outputPath)
+	if err == nil {
+		fmt.Printf("Exported clip %d to %s (%.2f MB)\n", clipID, outputPath, float64(fileInfo.Size())/(1024*1024))
+	} else {
+		fmt.Printf("Exported clip %d to %s\n", clipID, outputPath)
+	}
+
+	return nil
+}
+
+// exportAllClips exports all clips for the current video
+func exportAllClips(format string, reencode bool) error {
+	// Connect to mpv to get current video path
+	client := mpv.NewClient("")
+	if err := client.Connect(); err != nil {
+		return fmt.Errorf("failed to connect to mpv: %w\n(Is mpv running with a video open?)", err)
+	}
+	defer client.Close()
+
+	// Get video path from mpv
+	videoPathRaw, err := client.GetProperty("path")
+	if err != nil {
+		return fmt.Errorf("failed to get video path: %w", err)
+	}
+	videoPath, ok := videoPathRaw.(string)
+	if !ok {
+		return fmt.Errorf("unexpected video path type: %T", videoPathRaw)
+	}
+
+	// Open database
+	database, err := db.Open()
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer database.Close()
+
+	// Query all clips for this video
+	rows, err := database.Query(
+		`SELECT id, start_seconds, end_seconds FROM clips WHERE video_path = ? ORDER BY id ASC`,
+		videoPath,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to query clips: %w", err)
+	}
+	defer rows.Close()
+
+	var clips []struct {
+		id       int64
+		startSec float64
+		endSec   float64
+	}
+
+	for rows.Next() {
+		var clip struct {
+			id       int64
+			startSec float64
+			endSec   float64
+		}
+		if err := rows.Scan(&clip.id, &clip.startSec, &clip.endSec); err != nil {
+			return fmt.Errorf("failed to scan clip: %w", err)
+		}
+		clips = append(clips, clip)
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating clips: %w", err)
+	}
+
+	if len(clips) == 0 {
+		fmt.Println("No clips found for current video.")
+		return nil
+	}
+
+	fmt.Printf("Exporting %d clip(s)...\n\n", len(clips))
+
+	successCount := 0
+	for _, clip := range clips {
+		outputPath := fmt.Sprintf("clip-%d.%s", clip.id, format)
+
+		// Build ffmpeg command
+		ffmpegArgs := buildFfmpegArgs(videoPath, clip.startSec, clip.endSec, outputPath, format, reencode)
+
+		fmt.Printf("Exporting clip %d to %s...\n", clip.id, outputPath)
+
+		// Run ffmpeg
+		ffmpegCmd := exec.Command("ffmpeg", ffmpegArgs...)
+		ffmpegCmd.Stdout = os.Stdout
+		ffmpegCmd.Stderr = os.Stderr
+
+		if err := ffmpegCmd.Run(); err != nil {
+			fmt.Printf("Failed to export clip %d: %v\n", clip.id, err)
+			continue
+		}
+
+		successCount++
+	}
+
+	fmt.Printf("\nExported %d/%d clips successfully.\n", successCount, len(clips))
+	return nil
+}
+
+// buildFfmpegArgs builds the ffmpeg command arguments
+func buildFfmpegArgs(videoPath string, startSec, endSec float64, outputPath, format string, reencode bool) []string {
+	args := []string{
+		"-y",                               // Overwrite output
+		"-ss", fmt.Sprintf("%.3f", startSec), // Start time (input seeking for faster seek)
+		"-i", videoPath,                    // Input file
+		"-to", fmt.Sprintf("%.3f", endSec-startSec), // Duration (relative to start)
+	}
+
+	if reencode {
+		// Re-encode with appropriate codec for format
+		switch format {
+		case "webm":
+			args = append(args, "-c:v", "libvpx-vp9", "-c:a", "libopus")
+		case "mkv", "mp4":
+			args = append(args, "-c:v", "libx264", "-c:a", "aac")
+		}
+	} else {
+		// Stream copy (fast, no re-encoding)
+		args = append(args, "-c", "copy")
+	}
+
+	// Add output file with proper extension
+	if filepath.Ext(outputPath) == "" {
+		outputPath = outputPath + "." + format
+	}
+	args = append(args, outputPath)
+
+	return args
+}
+
 var clipListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all clips for the current video",
@@ -439,6 +659,12 @@ func init() {
 	clipAddCmd.Flags().StringP("player", "p", "", "Player name or number")
 	clipAddCmd.Flags().StringP("team", "t", "", "Team name")
 
+	// Add flags to clip export command
+	clipExportCmd.Flags().StringP("output", "o", "", "Custom output file path")
+	clipExportCmd.Flags().StringP("format", "f", "mp4", "Output format (mp4, webm, mkv)")
+	clipExportCmd.Flags().Bool("reencode", false, "Re-encode video instead of stream copy")
+	clipExportCmd.Flags().Bool("all", false, "Export all clips for current video")
+
 	// Build command tree
 	clipCmd.AddCommand(clipStartCmd)
 	clipCmd.AddCommand(clipEndCmd)
@@ -446,5 +672,6 @@ func init() {
 	clipCmd.AddCommand(clipListCmd)
 	clipCmd.AddCommand(clipPlayCmd)
 	clipCmd.AddCommand(clipStopCmd)
+	clipCmd.AddCommand(clipExportCmd)
 	rootCmd.AddCommand(clipCmd)
 }
