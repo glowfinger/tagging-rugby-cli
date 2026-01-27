@@ -405,3 +405,16 @@
   - Column highlighting in header uses Underline(true) style for current sort column
 
 ---
+
+## 2026-01-26 - US-036
+- What was implemented: TUI stats view player filtering with / key to enter filter mode, Enter to apply filter, Esc to clear filters
+- Files changed: tui/components/statsview.go, tui/tui.go, tui/components/help.go, cmd/clip.go (go fmt)
+- **Learnings for future iterations:**
+  - Filter state uses map[string]bool for O(1) player lookup: FilteredPlayers map
+  - ToggleFilter method handles both name substring matching and initials matching (e.g., "jd" matches "John Doe")
+  - GetSortedStats returns stats with filtered players at top using append(filtered, nonFiltered...) pattern
+  - Two-tier input handling: handleStatsViewInput checks FilterMode first, then delegates to handleStatsFilterInput
+  - Filter display: Cyan foreground for filtered players, Purple (greyed out) for non-filtered when filters active
+  - Helper matchesInitials uses strings.Builder to build initials from player name parts
+
+---

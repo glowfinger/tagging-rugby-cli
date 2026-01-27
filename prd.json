@@ -568,8 +568,8 @@
         "Typecheck passes"
       ],
       "priority": 36,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented filter mode with / key, ToggleFilter method for name/initials matching, GetSortedStats for filtered-first ordering, ClearFilters on Esc. Filtered players shown in Cyan, non-filtered in greyed Purple."
     },
     {
       "id": "US-037",
