@@ -252,6 +252,166 @@ func isValidOutcome(outcome string) bool {
 	return false
 }
 
+var tackleExportCmd = &cobra.Command{
+	Use:   "export",
+	Short: "Export player tackle statistics to a text file",
+	Long:  `Export detailed tackle statistics for a specific player to a text file. Includes total counts, completion percentage, and a list of all tackle events.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Get required --player flag
+		player, _ := cmd.Flags().GetString("player")
+		if player == "" {
+			return fmt.Errorf("--player is required")
+		}
+
+		// Get optional flags
+		outputPath, _ := cmd.Flags().GetString("output")
+		videoFilter, _ := cmd.Flags().GetString("video")
+
+		// Set default output path if not specified
+		if outputPath == "" {
+			outputPath = player + "-tackles.txt"
+		}
+
+		// Open database
+		database, err := db.Open()
+		if err != nil {
+			return fmt.Errorf("failed to open database: %w", err)
+		}
+		defer database.Close()
+
+		// Build query for tackle counts
+		countQuery := `SELECT
+			COUNT(*) as total,
+			SUM(CASE WHEN outcome = 'completed' THEN 1 ELSE 0 END) as completed,
+			SUM(CASE WHEN outcome = 'missed' THEN 1 ELSE 0 END) as missed,
+			SUM(CASE WHEN outcome = 'possible' THEN 1 ELSE 0 END) as possible,
+			SUM(CASE WHEN outcome = 'other' THEN 1 ELSE 0 END) as other
+			FROM tackles WHERE player = ?`
+		countArgs := []interface{}{player}
+
+		if videoFilter != "" {
+			countQuery += " AND video_path = ?"
+			countArgs = append(countArgs, videoFilter)
+		}
+
+		// Get counts
+		var total, completed, missed, possible, other int
+		err = database.QueryRow(countQuery, countArgs...).Scan(&total, &completed, &missed, &possible, &other)
+		if err != nil {
+			return fmt.Errorf("failed to query tackle counts: %w", err)
+		}
+
+		if total == 0 {
+			return fmt.Errorf("no tackles found for player '%s'", player)
+		}
+
+		// Calculate completion percentage
+		completionPct := 0.0
+		if total > 0 {
+			completionPct = float64(completed) / float64(total) * 100
+		}
+
+		// Build query for tackle details
+		detailQuery := `SELECT timestamp_seconds, video_path, team, attempt, outcome, followed, star, notes, zone, created_at
+			FROM tackles WHERE player = ?`
+		detailArgs := []interface{}{player}
+
+		if videoFilter != "" {
+			detailQuery += " AND video_path = ?"
+			detailArgs = append(detailArgs, videoFilter)
+		}
+		detailQuery += " ORDER BY created_at ASC, timestamp_seconds ASC"
+
+		// Query tackle details
+		rows, err := database.Query(detailQuery, detailArgs...)
+		if err != nil {
+			return fmt.Errorf("failed to query tackle details: %w", err)
+		}
+		defer rows.Close()
+
+		// Create output file
+		file, err := os.Create(outputPath)
+		if err != nil {
+			return fmt.Errorf("failed to create output file: %w", err)
+		}
+		defer file.Close()
+
+		// Write header
+		fmt.Fprintf(file, "Tackle Statistics for %s\n", player)
+		fmt.Fprintf(file, "================================\n\n")
+
+		// Write summary statistics
+		fmt.Fprintf(file, "Summary\n")
+		fmt.Fprintf(file, "-------\n")
+		fmt.Fprintf(file, "Total:      %d\n", total)
+		fmt.Fprintf(file, "Completed:  %d\n", completed)
+		fmt.Fprintf(file, "Missed:     %d\n", missed)
+		fmt.Fprintf(file, "Possible:   %d\n", possible)
+		fmt.Fprintf(file, "Other:      %d\n", other)
+		fmt.Fprintf(file, "Completion: %.1f%%\n\n", completionPct)
+
+		// Write tackle events header
+		fmt.Fprintf(file, "Tackle Events\n")
+		fmt.Fprintf(file, "-------------\n")
+
+		// Write each tackle event
+		eventNum := 1
+		for rows.Next() {
+			var timestamp float64
+			var attemptVal int
+			var starVal int
+			var videoPath, team, outcome sql.NullString
+			var followed, notes, zone sql.NullString
+			var createdAt sql.NullString
+
+			if err := rows.Scan(&timestamp, &videoPath, &team, &attemptVal, &outcome, &followed, &starVal, &notes, &zone, &createdAt); err != nil {
+				return fmt.Errorf("failed to scan tackle: %w", err)
+			}
+
+			// Format timestamp as MM:SS
+			minutes := int(timestamp) / 60
+			seconds := int(timestamp) % 60
+			timeStr := fmt.Sprintf("%d:%02d", minutes, seconds)
+
+			// Star symbol for starred tackles
+			starSymbol := ""
+			if starVal == 1 {
+				starSymbol = " ★"
+			}
+
+			// Write event line
+			fmt.Fprintf(file, "\n%d. [%s] %s - Attempt #%d%s\n",
+				eventNum, timeStr, nullStringValue(outcome), attemptVal, starSymbol)
+
+			// Write optional details
+			if team.Valid && team.String != "" {
+				fmt.Fprintf(file, "   Team: %s\n", team.String)
+			}
+			if followed.Valid && followed.String != "" {
+				fmt.Fprintf(file, "   Followed by: %s\n", followed.String)
+			}
+			if zone.Valid && zone.String != "" {
+				fmt.Fprintf(file, "   Zone: %s\n", zone.String)
+			}
+			if notes.Valid && notes.String != "" {
+				fmt.Fprintf(file, "   Notes: %s\n", notes.String)
+			}
+			if videoPath.Valid && videoPath.String != "" {
+				fmt.Fprintf(file, "   Video: %s\n", videoPath.String)
+			}
+
+			eventNum++
+		}
+
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("error iterating tackles: %w", err)
+		}
+
+		fmt.Printf("Exported %d tackles for %s to %s\n", total, player, outputPath)
+		return nil
+	},
+}
+
 func init() {
 	// Add required flags to tackle add command
 	tackleAddCmd.Flags().StringP("player", "p", "", "Player name or number (required)")
@@ -270,8 +430,14 @@ func init() {
 	tackleListCmd.Flags().StringP("outcome", "o", "", "Filter by outcome: missed, completed, possible, other")
 	tackleListCmd.Flags().BoolP("star", "s", false, "Filter to show only starred tackles")
 
+	// Add flags to tackle export command
+	tackleExportCmd.Flags().StringP("player", "p", "", "Player name or number to export (required)")
+	tackleExportCmd.Flags().StringP("output", "o", "", "Output file path (default: <player>-tackles.txt)")
+	tackleExportCmd.Flags().StringP("video", "v", "", "Filter to specific video path")
+
 	// Build command tree
 	tackleCmd.AddCommand(tackleAddCmd)
 	tackleCmd.AddCommand(tackleListCmd)
+	tackleCmd.AddCommand(tackleExportCmd)
 	rootCmd.AddCommand(tackleCmd)
 }
