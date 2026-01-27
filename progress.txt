@@ -499,3 +499,14 @@
   - When handling keyboard input in Bubble Tea, test escape key functionality manually or refer to the bubbletea key.go source for correct key string names
 
 ---
+
+## 2026-01-27 - US-043
+- What was implemented: Controls display on home screen showing keybindings with emojis
+- Files changed: tui/components/controls.go (new), tui/tui.go
+- **Learnings for future iterations:**
+  - Create component struct types (Control, ControlGroup) for organizing related UI data
+  - Use Go unicode escapes for emojis in code: "\u23ea" for ⏪, "\U0001F507" for 🔇 (4-byte unicode needs uppercase \U)
+  - ControlsDisplay is rendered between status bar and notes list in View() method
+  - Adjust listHeight calculation when adding new rows to the layout (subtract additional row from height)
+
+---

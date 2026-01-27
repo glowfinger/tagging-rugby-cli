@@ -345,7 +345,8 @@
       "description": "As a coach, I want to record tackle events.",
       "acceptanceCriteria": [
         "Add 'tackle add' subcommand",
-        "Required flags: --player, --team, --attempt, --outcome (missed|completed|possible|other)",
+        "Required flags: --player, --attempt, --outcome (missed|completed|possible|other)",
+        "Optional flag: --team for team name",
         "Optional flags: --followed, --star, --notes, --zone",
         "Get timestamp from mpv, store in database",
         "Add 'tackle list' subcommand showing all tackles as table",
@@ -457,19 +458,20 @@
     },
     {
       "id": "US-030",
-      "title": "Bubbletea TUI - notes list panel",
-      "description": "As a user, I want to see notes in the main panel.",
+      "title": "Bubbletea TUI - notes table",
+      "description": "As a user, I want to see notes in a table at the bottom of the interface.",
       "acceptanceCriteria": [
-        "Create scrollable list showing notes and tackles for current video",
-        "Each row shows: timestamp, type badge [note]/[tackle], text preview",
+        "Create fixed 10-row table at the bottom of the interface",
+        "Table columns: ID, Timestamp, Category, Text (truncated)",
+        "Table scrolls to show notes near current video timestamp",
         "Starred items show star symbol",
         "Selected row highlighted with BrightPurple",
         "List sorted by timestamp",
         "Typecheck passes"
       ],
       "priority": 30,
-      "passes": true,
-      "notes": "Created tui/components/noteslist.go with ListItem struct, NotesListState, and NotesList render function. Updated tui/tui.go to load notes and tackles from database and display in scrollable list."
+      "passes": false,
+      "notes": "Updated from scrollable list to fixed 10-row table at bottom. Needs implementation update."
     },
     {
       "id": "US-031",
@@ -677,6 +679,25 @@
       "priority": 42,
       "passes": true,
       "notes": "Fixed escape key handling in TUI by changing 'escape' to 'esc' in all case statements in tui/tui.go. Updated handleCommandInput, handleNoteInput, handleTackleInput, handleStatsViewInput, and handleStatsFilterInput functions."
+    },
+    {
+      "id": "US-043",
+      "title": "Controls display on home screen",
+      "description": "As a user, I want to see available controls on the home screen so that I can quickly learn and reference keybindings.",
+      "acceptanceCriteria": [
+        "Controls display shown between status bar and command input",
+        "Each control shows: emoji, name, shortcut key in brackets",
+        "Controls grouped by function (playback, navigation, views)",
+        "Controls include: ⏪ Back [H], ⏩ Fwd [L], ⏯️ Play [Space]",
+        "Controls include: ⏮️ Prev [J], ⏭️ Next [K], 🔇 Mute [M]",
+        "Controls include: ➖ Step- [<], ➕ Step+ [>], 📝 Overlay [O]",
+        "Controls include: 📊 Stats [S], ❓ Help [?], 🚪 Quit [q]",
+        "Controls styled consistently with palette colors",
+        "Typecheck/lint passes"
+      ],
+      "priority": 43,
+      "passes": true,
+      "notes": "Created tui/components/controls.go with Control struct, ControlGroup struct, and ControlsDisplay render function. Controls grouped by function (playback, navigation, step/overlay, views). Added controlsDisplay to View() in tui/tui.go between status bar and notes list."
     }
   ]
 }
