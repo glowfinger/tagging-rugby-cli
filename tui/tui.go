@@ -8,9 +8,11 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/mpv"
 	"github.com/user/tagging-rugby-cli/tui/components"
+	"github.com/user/tagging-rugby-cli/tui/styles"
 )
 
 const (
@@ -111,6 +113,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.overlayEnabled {
 			m.updateOverlay()
 		}
+		// Refresh stats for column 3 periodically (every tick is fine, query is fast)
+		m.loadTackleStatsForPanel()
 		// Continue ticking
 		return m, tickCmd()
 
@@ -1229,6 +1233,9 @@ func (m *Model) updateStatusFromMpv() {
 	}
 }
 
+// minTerminalWidth is the minimum terminal width for the three-column layout.
+const minTerminalWidth = 80
+
 // View renders the current state of the model as a string.
 func (m *Model) View() string {
 	if m.quitting {
@@ -1249,37 +1256,266 @@ func (m *Model) View() string {
 		return components.StatsView(m.statsView, m.width, m.height)
 	}
 
-	// Render status bar at top
+	// Minimum width warning
+	if m.width > 0 && m.width < minTerminalWidth {
+		warningStyle := lipgloss.NewStyle().
+			Foreground(styles.Pink).
+			Bold(true)
+		hintStyle := lipgloss.NewStyle().
+			Foreground(styles.Lavender).
+			Italic(true)
+		return warningStyle.Render(fmt.Sprintf("Terminal too narrow (%d cols)", m.width)) + "\n" +
+			hintStyle.Render(fmt.Sprintf("Minimum width: %d columns", minTerminalWidth)) + "\n" +
+			hintStyle.Render("Please resize your terminal.")
+	}
+
+	// Render status bar at top (full width)
 	statusBar := components.StatusBar(m.statusBar, m.width)
 
-	// Render controls display
-	controlsDisplay := components.ControlsDisplay(m.width)
-
-	// Check if note input is active
+	// Check if note input is active — show as single-column overlay
 	if m.noteInput.Active {
-		// Show note input overlay instead of normal view
+		controlsDisplay := components.ControlsDisplay(m.width)
 		noteInput := components.NoteInput(m.noteInput, m.width, m.noteInput.Timestamp)
 		return statusBar + "\n" + controlsDisplay + "\n" + noteInput
 	}
 
-	// Check if tackle input is active
+	// Check if tackle input is active — show as single-column overlay
 	if m.tackleInput.Active {
-		// Show tackle input overlay instead of normal view
+		controlsDisplay := components.ControlsDisplay(m.width)
 		tackleInput := components.TackleInput(m.tackleInput, m.width, m.tackleInput.Timestamp)
 		return statusBar + "\n" + controlsDisplay + "\n" + tackleInput
 	}
 
-	// Fixed height for notes table (10 rows + 1 header = 11 lines)
-	// The table is always 10 rows, regardless of terminal height
-	listHeight := 11
+	// --- Three-column layout ---
+	// Compute column widths (equal thirds)
+	// Account for 2 vertical border characters between columns
+	usableWidth := m.width - 2
+	colWidth := usableWidth / 3
+	col3Width := usableWidth - colWidth*2 // last column gets remainder
 
-	// Render notes list (pass current time position for auto-scroll)
-	notesList := components.NotesList(m.notesList, m.width, listHeight, m.statusBar.TimePos)
+	// Available height for columns (total height minus status bar line and command input line)
+	colHeight := m.height - 3
+	if colHeight < 5 {
+		colHeight = 5
+	}
 
-	// Render command input at bottom
+	// Column 1: Controls, playback status, current tag detail card, command input
+	col1Content := m.renderColumn1(colWidth, colHeight)
+
+	// Column 2: Scrollable list of all tags/events
+	col2Content := m.renderColumn2(colWidth, colHeight)
+
+	// Column 3: Live stats summary, bar graph, top players leaderboard
+	col3Content := m.renderColumn3(col3Width, colHeight)
+
+	// Border style for vertical separators
+	borderStr := lipgloss.NewStyle().
+		Foreground(styles.Purple).
+		Render("│")
+
+	// Join columns horizontally with borders
+	// Build each row by combining column lines side by side
+	col1Lines := strings.Split(col1Content, "\n")
+	col2Lines := strings.Split(col2Content, "\n")
+	col3Lines := strings.Split(col3Content, "\n")
+
+	// Pad all columns to the same height
+	for len(col1Lines) < colHeight {
+		col1Lines = append(col1Lines, "")
+	}
+	for len(col2Lines) < colHeight {
+		col2Lines = append(col2Lines, "")
+	}
+	for len(col3Lines) < colHeight {
+		col3Lines = append(col3Lines, "")
+	}
+
+	var rows []string
+	for i := 0; i < colHeight; i++ {
+		c1 := padToWidth(col1Lines[i], colWidth)
+		c2 := padToWidth(col2Lines[i], colWidth)
+		c3 := padToWidth(col3Lines[i], col3Width)
+		rows = append(rows, c1+borderStr+c2+borderStr+c3)
+	}
+
+	columnsView := strings.Join(rows, "\n")
+
+	// Render command input at bottom (full width)
 	commandInput := components.CommandInput(m.commandInput, m.width)
 
-	return statusBar + "\n" + controlsDisplay + "\n" + notesList + "\n" + commandInput
+	return statusBar + "\n" + columnsView + "\n" + commandInput
+}
+
+// padToWidth pads a string with spaces to the specified width.
+// If the string is wider (due to ANSI sequences), it is returned as-is.
+func padToWidth(s string, width int) string {
+	currentWidth := lipgloss.Width(s)
+	if currentWidth >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-currentWidth)
+}
+
+// renderColumn1 renders Column 1: Controls, playback status, tag detail card.
+func (m *Model) renderColumn1(width, height int) string {
+	var lines []string
+
+	// Section header
+	headerStyle := lipgloss.NewStyle().
+		Foreground(styles.Cyan).
+		Bold(true)
+	lines = append(lines, headerStyle.Render(" Controls"))
+	lines = append(lines, "")
+
+	// Compact controls display (vertical list for column)
+	shortcutStyle := lipgloss.NewStyle().
+		Foreground(styles.Cyan).
+		Bold(true)
+	nameStyle := lipgloss.NewStyle().
+		Foreground(styles.LightLavender)
+
+	controls := []struct {
+		emoji, name, key string
+	}{
+		{"\u23ef\ufe0f", "Play/Pause", "Space"},
+		{"\u23ea", "Back", "H"},
+		{"\u23e9", "Forward", "L"},
+		{"\u23ee", "Prev Item", "J"},
+		{"\u23ed", "Next Item", "K"},
+		{"\U0001F507", "Mute", "M"},
+		{"\u2796", "Step-", "<"},
+		{"\u2795", "Step+", ">"},
+		{"\U0001F4DD", "Overlay", "O"},
+		{"\U0001F4CA", "Stats", "S"},
+		{"\u2753", "Help", "?"},
+		{"\U0001F6AA", "Quit", "q"},
+	}
+
+	for _, c := range controls {
+		line := fmt.Sprintf(" %s %s %s",
+			c.emoji,
+			nameStyle.Render(fmt.Sprintf("%-10s", c.name)),
+			shortcutStyle.Render("["+c.key+"]"))
+		lines = append(lines, line)
+	}
+	lines = append(lines, "")
+
+	// Playback status card
+	statusHeader := lipgloss.NewStyle().
+		Foreground(styles.Pink).
+		Bold(true)
+	lines = append(lines, statusHeader.Render(" Playback"))
+
+	infoStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
+
+	playState := "▶ Playing"
+	if m.statusBar.Paused {
+		playState = "⏸ Paused"
+	}
+	lines = append(lines, infoStyle.Render(" "+playState))
+	lines = append(lines, infoStyle.Render(fmt.Sprintf(" Time: %s / %s",
+		formatTimeString(m.statusBar.TimePos),
+		formatTimeString(m.statusBar.Duration))))
+	lines = append(lines, infoStyle.Render(fmt.Sprintf(" Step: %s", formatStepSize(m.statusBar.StepSize))))
+
+	if m.statusBar.Muted {
+		lines = append(lines, infoStyle.Render(" 🔇 Muted"))
+	}
+	if m.statusBar.OverlayEnabled {
+		lines = append(lines, infoStyle.Render(" 📺 Overlay On"))
+	}
+	lines = append(lines, "")
+
+	// Current tag detail card (selected item)
+	item := m.notesList.GetSelectedItem()
+	if item != nil {
+		detailHeader := lipgloss.NewStyle().
+			Foreground(styles.Pink).
+			Bold(true)
+		lines = append(lines, detailHeader.Render(" Selected Tag"))
+
+		detailStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
+		dimStyle := lipgloss.NewStyle().Foreground(styles.Lavender)
+
+		typeStr := "Note"
+		if item.Type == components.ItemTypeTackle {
+			typeStr = "Tackle"
+		}
+		starStr := ""
+		if item.Starred {
+			starStr = " ★"
+		}
+		lines = append(lines, detailStyle.Render(fmt.Sprintf(" #%d %s%s", item.ID, typeStr, starStr)))
+		lines = append(lines, dimStyle.Render(fmt.Sprintf(" @ %s", formatTimeString(item.TimestampSeconds))))
+		if item.Category != "" {
+			lines = append(lines, dimStyle.Render(fmt.Sprintf(" [%s]", item.Category)))
+		}
+		if item.Player != "" {
+			lines = append(lines, dimStyle.Render(fmt.Sprintf(" Player: %s", item.Player)))
+		}
+		if item.Team != "" {
+			lines = append(lines, dimStyle.Render(fmt.Sprintf(" Team: %s", item.Team)))
+		}
+		if item.Text != "" {
+			text := item.Text
+			maxTextW := width - 3
+			if maxTextW < 10 {
+				maxTextW = 10
+			}
+			if len(text) > maxTextW {
+				text = text[:maxTextW-3] + "..."
+			}
+			lines = append(lines, detailStyle.Render(" "+text))
+		}
+	}
+
+	content := strings.Join(lines, "\n")
+
+	// Apply column style
+	colStyle := lipgloss.NewStyle().
+		Width(width).
+		Height(height).
+		Background(styles.DeepPurple)
+
+	return colStyle.Render(content)
+}
+
+// renderColumn2 renders Column 2: Scrollable list of all tags/events.
+func (m *Model) renderColumn2(width, height int) string {
+	// Use a taller list that fills the column
+	listHeight := height
+	if listHeight < 3 {
+		listHeight = 3
+	}
+
+	notesList := components.NotesList(m.notesList, width, listHeight, m.statusBar.TimePos)
+
+	colStyle := lipgloss.NewStyle().
+		Width(width).
+		Height(height).
+		Background(styles.DeepPurple)
+
+	return colStyle.Render(notesList)
+}
+
+// renderColumn3 renders Column 3: Live stats summary, bar graph, top players leaderboard.
+func (m *Model) renderColumn3(width, height int) string {
+	content := components.StatsPanel(m.statsView.Stats, m.notesList.Items, width, height)
+
+	colStyle := lipgloss.NewStyle().
+		Width(width).
+		Height(height).
+		Background(styles.DeepPurple)
+
+	return colStyle.Render(content)
+}
+
+// formatStepSize formats the step size for display.
+func formatStepSize(stepSize float64) string {
+	if stepSize < 1 {
+		return fmt.Sprintf("%.1fs", stepSize)
+	}
+	return fmt.Sprintf("%.0fs", stepSize)
 }
 
 // Run starts the Bubbletea program with the given model.
@@ -1497,4 +1733,44 @@ func (m *Model) loadTackleStats() {
 	m.statsView.SelectedIndex = 0
 	m.statsView.ScrollOffset = 0
 	m.statsView.SortStats()
+}
+
+// loadTackleStatsForPanel refreshes tackle stats for the live stats panel (column 3).
+// Unlike loadTackleStats, this does not reset selection/scroll state.
+func (m *Model) loadTackleStatsForPanel() {
+	if m.db == nil {
+		return
+	}
+
+	// Always load stats for current video for the panel
+	rows, err := m.db.Query(db.SelectTackleStatsByVideoSQL, m.videoPath)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	var stats []components.PlayerStats
+	for rows.Next() {
+		var stat components.PlayerStats
+		err := rows.Scan(
+			&stat.Player,
+			&stat.Total,
+			&stat.Completed,
+			&stat.Missed,
+			&stat.Possible,
+			&stat.Other,
+			&stat.Starred,
+		)
+		if err == nil {
+			if stat.Completed+stat.Missed > 0 {
+				stat.Percentage = float64(stat.Completed) / float64(stat.Completed+stat.Missed) * 100
+			}
+			stats = append(stats, stat)
+		}
+	}
+
+	// Only update stats if the stats view is not actively being used (to avoid interfering)
+	if !m.statsView.Active {
+		m.statsView.Stats = stats
+	}
 }

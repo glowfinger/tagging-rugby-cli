@@ -6,6 +6,9 @@
 - Bubble Tea key strings: use "esc" (not "escape"), "enter", "tab", "backspace", "left", "right" for key handling
 - SQL queries live in `db/sql/*.sql` files, embedded via `go:embed` in `db/queries.go` — reference as `db.InsertNoteSQL` etc.
 - go:embed can only access files within the same package directory or subdirectories (no `../` paths)
+- Three-column TUI layout uses padToWidth helper + manual row-by-row assembly (split lines, pad, join with border chars)
+- lipgloss.Width() accounts for ANSI escape sequences when measuring rendered string width
+- Column 3 live stats use loadTackleStatsForPanel() on tick — only updates when stats view is not active to avoid conflicts
 
 ---
 
@@ -535,5 +538,19 @@
   - Dynamic SQL filter clauses (WHERE additions, ORDER BY) remain in Go code — only base queries are externalized
   - create_tables.sql contains all CREATE TABLE statements together — SQLite Exec handles multi-statement strings
   - File naming convention: <action>_<entity>.sql (e.g., insert_note.sql, select_tackles_by_video.sql)
+
+---
+
+## 2026-01-28 - US-045
+- What was implemented: Three-column TUI layout with controls/playback (Col 1), events list (Col 2), and live stats panel (Col 3)
+- Files changed: tui/tui.go (major View() rewrite + renderColumn1/2/3 + padToWidth helper + loadTackleStatsForPanel), tui/components/statspanel.go (new)
+- **Learnings for future iterations:**
+  - lipgloss JoinHorizontal doesn't handle row-by-row alignment well — manual line splitting, padding, and joining with border chars works better
+  - padToWidth helper uses lipgloss.Width() to correctly measure ANSI-styled strings and pads with spaces
+  - Column widths: usableWidth = totalWidth - 2 (for border chars), then colWidth = usableWidth/3, col3Width gets remainder
+  - Note/tackle input overlays fall back to single-column view (not three-column) for simplicity
+  - loadTackleStatsForPanel runs on tick but only updates m.statsView.Stats when stats view is not active (avoids interfering with user interactions)
+  - StatsPanel component is independent from StatsView — StatsPanel is always-visible column 3 summary, StatsView is the full-screen overlay
+  - Minimum width warning at 80 columns — shows resize message instead of broken layout
 
 ---
