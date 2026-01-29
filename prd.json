@@ -698,6 +698,61 @@
       "priority": 43,
       "passes": true,
       "notes": "Created tui/components/controls.go with Control struct, ControlGroup struct, and ControlsDisplay render function. Controls grouped by function (playback, navigation, step/overlay, views). Added controlsDisplay to View() in tui/tui.go between status bar and notes list."
+    },
+    {
+      "id": "US-044",
+      "title": "Embed SQL from named files",
+      "description": "As a developer, I want SQL queries stored in separate .sql files and embedded into the Go binary so that SQL is readable, maintainable, and syntax-highlighted in editors.",
+      "acceptanceCriteria": [
+        "All SQL queries stored in .sql files under a sql/ directory (e.g., sql/create_tables.sql, sql/insert_note.sql)",
+        "SQL files embedded into Go binary using go:embed directives",
+        "Each SQL file contains a single named query or migration",
+        "File naming convention: <action>_<entity>.sql (e.g., create_tables.sql, select_notes_by_video.sql, insert_tackle.sql)",
+        "No inline SQL strings in Go source files — all SQL referenced via embedded file variables",
+        "SQL files are valid standalone SQL that can be run directly against SQLite for testing",
+        "Typecheck/lint passes"
+      ],
+      "priority": 44,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-045",
+      "title": "Three-column TUI layout",
+      "description": "As a coach, I want a multi-column layout so that I can see controls, events, and stats simultaneously without switching views.",
+      "acceptanceCriteria": [
+        "TUI displays three equal-width columns side by side",
+        "Column 1: Controls, playback status, current tag detail card, and command input",
+        "Column 2: Scrollable list of all tags/events for the current video",
+        "Column 3: Live stats summary, bar graph of event distribution, and top players leaderboard",
+        "Columns separated by vertical borders using Lipgloss styling",
+        "Columns resize proportionally when terminal is resized",
+        "Minimum terminal width enforced — displays warning if too narrow",
+        "Layout built with Bubbletea and Lipgloss JoinHorizontal",
+        "Typecheck/lint passes"
+      ],
+      "priority": 45,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-046",
+      "title": "Timeline progress bar",
+      "description": "As a coach, I want a visual timeline bar at the bottom of the screen so that I can see playback progress and where notes are located in the video.",
+      "acceptanceCriteria": [
+        "Progress bar spans full terminal width, pinned below the three columns",
+        "Bar shows filled and unfilled segments for playback position",
+        "Current and total timestamps displayed to the right of the bar",
+        "Note/event markers shown as dots at their timestamps along the bar",
+        "Current position indicator displayed below the bar",
+        "Bar updates in real-time during playback",
+        "Bar resizes dynamically with terminal width",
+        "Always visible at the bottom of the screen regardless of scrolling",
+        "Typecheck/lint passes"
+      ],
+      "priority": 46,
+      "passes": false,
+      "notes": ""
     }
   ]
 }

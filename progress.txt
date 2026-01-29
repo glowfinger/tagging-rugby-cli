@@ -4,6 +4,8 @@
 - Database connection uses modernc.org/sqlite (pure Go implementation, no CGO)
 - Add new table migrations to the `migrate()` function in db/db.go - always use `CREATE TABLE IF NOT EXISTS`
 - Bubble Tea key strings: use "esc" (not "escape"), "enter", "tab", "backspace", "left", "right" for key handling
+- SQL queries live in `db/sql/*.sql` files, embedded via `go:embed` in `db/queries.go` — reference as `db.InsertNoteSQL` etc.
+- go:embed can only access files within the same package directory or subdirectories (no `../` paths)
 
 ---
 
@@ -521,5 +523,17 @@
   - Auto-scroll using scrollToCurrentTime method positions nearest item in upper third of table
   - Star symbol (★) prefixed to ID column for starred items
   - Uses renderTableRow helper for consistent column alignment with fmt.Sprintf("%-*s", width, value)
+
+---
+
+## 2026-01-28 - US-044
+- What was implemented: Extracted all inline SQL into named .sql files under db/sql/, embedded via go:embed in db/queries.go
+- Files changed: db/queries.go (new), db/sql/*.sql (30 new files), db/db.go, cmd/note.go, cmd/category.go, cmd/clip.go, cmd/tackle.go, cmd/root.go, tui/tui.go
+- **Learnings for future iterations:**
+  - go:embed directive cannot reference parent directories (../sql/) — SQL files must be under the package directory (db/sql/)
+  - Exported string vars in db/queries.go (e.g., db.InsertNoteSQL) allow all packages to reference SQL
+  - Dynamic SQL filter clauses (WHERE additions, ORDER BY) remain in Go code — only base queries are externalized
+  - create_tables.sql contains all CREATE TABLE statements together — SQLite Exec handles multi-statement strings
+  - File naming convention: <action>_<entity>.sql (e.g., insert_note.sql, select_tackles_by_video.sql)
 
 ---
