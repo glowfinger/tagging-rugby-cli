@@ -149,12 +149,12 @@ A Go CLI tool for rugby coaches and analysts to review game footage. The tool co
 
 **Acceptance Criteria:**
 - [ ] Command `tagging-rugby-cli open <video-file>` launches Bubbletea TUI
-- [ ] TUI displays: status bar at top, controls display, command input, notes table at bottom
+- [ ] TUI displays three-column layout with timeline bar pinned to bottom (see US-025, US-026)
+- [ ] Column 1: controls, status, current tag detail, command input
+- [ ] Column 2: scrollable tags/events list
+- [ ] Column 3: stats, graphs, top players
 - [ ] Controls display shows all keybindings with emoji, name, and shortcut key in brackets
 - [ ] Controls grouped by function (playback, navigation, views)
-- [ ] Notes displayed in a fixed 10-row table at the bottom of the interface
-- [ ] Notes table columns: ID, Timestamp, Category, Text (truncated)
-- [ ] Notes table scrolls to show notes near current video timestamp
 - [ ] Commands can be typed in command input area
 - [ ] `:` enters command mode for text commands
 - [ ] `q` or `Ctrl+C` gracefully exits TUI
@@ -322,6 +322,46 @@ A Go CLI tool for rugby coaches and analysts to review game footage. The tool co
 - [ ] Lists the technology stack (Go, Cobra, Bubbletea, SQLite, mpv IPC)
 - [ ] Typecheck/lint passes
 
+### US-025: Three-column TUI layout
+**Description:** As a coach, I want a multi-column layout so that I can see controls, events, and stats simultaneously without switching views.
+
+**Acceptance Criteria:**
+- [ ] TUI displays three equal-width columns side by side
+- [ ] Column 1: Controls, playback status, current tag detail card, and command input
+- [ ] Column 2: Scrollable list of all tags/events for the current video
+- [ ] Column 3: Live stats summary, bar graph of event distribution, and top players leaderboard
+- [ ] Columns separated by vertical borders using Lipgloss styling
+- [ ] Columns resize proportionally when terminal is resized
+- [ ] Minimum terminal width enforced — displays warning if too narrow
+- [ ] Layout built with Bubbletea and Lipgloss `JoinHorizontal`
+- [ ] Typecheck/lint passes
+
+### US-026: Timeline progress bar
+**Description:** As a coach, I want a visual timeline bar at the bottom of the screen so that I can see playback progress and where notes are located in the video.
+
+**Acceptance Criteria:**
+- [ ] Progress bar spans full terminal width, pinned below the three columns
+- [ ] Bar shows filled (▓) and unfilled (░) segments for playback position
+- [ ] Current and total timestamps displayed to the right of the bar
+- [ ] Note/event markers shown as dots (·) at their timestamps along the bar
+- [ ] Current position indicator (▲) displayed below the bar
+- [ ] Bar updates in real-time during playback
+- [ ] Bar resizes dynamically with terminal width
+- [ ] Always visible at the bottom of the screen regardless of scrolling
+- [ ] Typecheck/lint passes
+
+### US-024: Embed SQL from named files
+**Description:** As a developer, I want SQL queries stored in separate `.sql` files and embedded into the Go binary so that SQL is readable, maintainable, and syntax-highlighted in editors.
+
+**Acceptance Criteria:**
+- [ ] All SQL queries stored in `.sql` files under a `sql/` directory (e.g., `sql/create_tables.sql`, `sql/insert_note.sql`)
+- [ ] SQL files embedded into Go binary using `go:embed` directives
+- [ ] Each SQL file contains a single named query or migration
+- [ ] File naming convention: `<action>_<entity>.sql` (e.g., `create_tables.sql`, `select_notes_by_video.sql`, `insert_tackle.sql`)
+- [ ] No inline SQL strings in Go source files — all SQL referenced via embedded file variables
+- [ ] SQL files are valid standalone SQL that can be run directly against SQLite for testing
+- [ ] Typecheck/lint passes
+
 ## Functional Requirements
 
 - FR-1: The CLI must communicate with mpv via JSON IPC protocol over Unix socket
@@ -355,36 +395,73 @@ Retro purple 8-color palette for terminal UI:
 | Cyan | `#64dfdf` | Success, timestamps, counts |
 
 ### UI Layout
+Three-column layout inspired by [superfile](https://github.com/yorukot/superfile), with a full-width timeline pinned to the bottom.
+
 ```
-┌──────────────────────────────────────────────────┐
-│ ▶ 12:34 / 45:00   Step: 1s   [M] [O]   tagging   │  <- Status bar
-├──────────────────────────────────────────────────┤
-│  Controls                                        │  <- Controls display
-│  ⏪ Back [H]   ⏩ Fwd [L]   ⏯️ Play [Space]       │
-│  ⏮️ Prev [J]   ⏭️ Next [K]  🔇 Mute [M]          │
-│  ➖ Step- [<]  ➕ Step+ [>] 📝 Overlay [O]       │
-│  📊 Stats [S]  ❓ Help [?]  🚪 Quit [q]          │
-├──────────────────────────────────────────────────┤
-│ : command input                                  │  <- Command input
-├──────────────────────────────────────────────────┤
-│  Notes Table (10 rows, fixed height)             │  <- Notes table
-│  ┌────┬────────┬──────────┬────────────────────┐ │
-│  │ ID │ Time   │ Category │ Text               │ │
-│  ├────┼────────┼──────────┼────────────────────┤ │
-│  │ 1  │ 02:15  │ tackle   │ Player A - compl...│ │
-│  │ 2  │ 05:32  │ note     │ Good defensive l...│ │
-│  │ 3  │ 12:30  │ tackle   │ Player B - missed ★│ │  <- Selected
-│  │ .. │ ..     │ ..       │ ..                 │ │
-│  └────┴────────┴──────────┴────────────────────┘ │
-└──────────────────────────────────────────────────┘
+┌─────────────────┬──────────────────┬──────────────────┐
+│  COLUMN 1       │  COLUMN 2        │  COLUMN 3        │
+│  Controls &     │  Tags & Events   │  Stats & Graphs  │
+│  Status         │                  │                  │
+│                 │                  │                  │
+│  ▶ 12:34/45:00 │  ┌────┬────┬───┐ │  Tackles: 24     │
+│  Step: 1s      │  │ ID │Time│Cat│ │  Completed: 18   │
+│  Speed: 1.0x   │  ├────┼────┼───┤ │  Missed: 4       │
+│                 │  │ 1  │2:15│tck│ │  Possible: 2     │
+│  Controls      │  │ 2  │5:32│not│ │  Rate: 75%       │
+│  ⏪ Back [H]    │  │ 3  │12:3│tck│ │                  │
+│  ⏩ Fwd  [L]    │  │ 4  │15:1│pen│ │  ┌────────────┐  │
+│  ⏯️ Play [Space]│  │ 5  │18:4│try│ │  │ ██          │  │
+│  ⏮️ Prev [J]    │  │ .. │ .. │.. │ │  │ ████        │  │
+│  ⏭️ Next [K]    │  └────┴────┴───┘ │  │ ██████      │  │
+│  🔇 Mute [M]    │                  │  │ ████████    │  │
+│  📝 Overlay [O] │                  │  └────────────┘  │
+│  📊 Stats [S]   │                  │                  │
+│  ❓ Help  [?]   │                  │  Top Players:    │
+│  🚪 Quit  [q]   │                  │  1. Smith  - 8   │
+│                 │                  │  2. Jones  - 6   │
+│  Current Tag   │                  │  3. Davies - 5   │
+│  ┌────────────┐│                  │                  │
+│  │ #3 tackle  ││                  │                  │
+│  │ 12:30      ││                  │                  │
+│  │ Player B   ││                  │                  │
+│  │ missed ★   ││                  │                  │
+│  └────────────┘│                  │                  │
+│                 │                  │                  │
+│ : command input │                  │                  │
+├─────────────────┴──────────────────┴──────────────────┤
+│  ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░  12:34 / 45:00  │  <- Timeline
+│  ·  ·    · ·  ▲  ·       ·    ·  ·   ·               │  <- Note markers
+└───────────────────────────────────────────────────────┘
 ```
 
-- Controls display shows emoji, name, and shortcut key in brackets
-- Controls grouped by function (playback, navigation, views)
-- Notes table is fixed at 10 rows at the bottom of the interface
-- Table scrolls to show notes near current timestamp
-- Selected/current note highlighted
+#### Column 1: Controls & Status
+- Playback status (play/pause icon, timestamp, duration)
+- Current step size and playback speed
+- All keybinding controls with emoji, name, and shortcut key
+- Current tag/note detail card (shows selected note info, or empty if none)
+- Command input at bottom of column
+
+#### Column 2: Tags & Events
+- Scrollable list of all notes, tackles, and events for the current video
 - Columns: ID, Timestamp, Category, Text (truncated)
+- Scrolls to show notes near current video timestamp
+- Selected/current note highlighted
+- Events sorted by timestamp ascending
+
+#### Column 3: Stats & Graphs
+- Summary statistics (tackle counts, completion rates)
+- Bar graph visualization of tackle outcomes or event distribution
+- Top players leaderboard
+- Stats update live as new events are added
+
+#### Timeline Bar (Full Width, Pinned Bottom)
+- Progress bar spanning full terminal width below the three columns
+- Shows current playback position with filled/unfilled segments
+- Note markers displayed as dots/ticks at their timestamps on the bar
+- Current position indicator (▲)
+- Timestamp display (current / total)
+- Resizes dynamically with terminal width
+- Pinned to bottom of screen, always visible
 
 ## Non-Goals
 
