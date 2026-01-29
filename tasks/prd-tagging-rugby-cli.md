@@ -149,7 +149,12 @@ A Go CLI tool for rugby coaches and analysts to review game footage. The tool co
 
 **Acceptance Criteria:**
 - [ ] Command `tagging-rugby-cli open <video-file>` launches Bubbletea TUI
-- [ ] TUI displays: status bar, command input, notes list panel
+- [ ] TUI displays: status bar at top, controls display, command input, notes table at bottom
+- [ ] Controls display shows all keybindings with emoji, name, and shortcut key in brackets
+- [ ] Controls grouped by function (playback, navigation, views)
+- [ ] Notes displayed in a fixed 10-row table at the bottom of the interface
+- [ ] Notes table columns: ID, Timestamp, Category, Text (truncated)
+- [ ] Notes table scrolls to show notes near current video timestamp
 - [ ] Commands can be typed in command input area
 - [ ] `:` enters command mode for text commands
 - [ ] `q` or `Ctrl+C` gracefully exits TUI
@@ -223,8 +228,8 @@ A Go CLI tool for rugby coaches and analysts to review game footage. The tool co
 **Acceptance Criteria:**
 - [ ] Command `tackle add` creates a tackle event at current timestamp
 - [ ] Required field: `--player <name>` - player making the tackle
-- [ ] Required field: `--team <name>` - team name
 - [ ] Required field: `--attempt <number>` - attempt number
+- [ ] Optional field: `--team <name>` - team name
 - [ ] Required field: `--outcome <type>` - one of: missed, completed, possible, other
 - [ ] Optional field: `--followed <event>` - event that followed the tackle (e.g., turnover, penalty, ruck)
 - [ ] Optional field: `--star` - boolean flag to mark as notable
@@ -354,16 +359,32 @@ Retro purple 8-color palette for terminal UI:
 ┌──────────────────────────────────────────────────┐
 │ ▶ 12:34 / 45:00   Step: 1s   [M] [O]   tagging   │  <- Status bar
 ├──────────────────────────────────────────────────┤
-│                                                  │
-│  Notes/Tackles List                              │  <- Main panel
-│  - 02:15 [tackle] Player A - completed           │
-│  - 05:32 [note] Good defensive line              │
-│  > 12:30 [tackle] Player B - missed      ★      │  <- Selected
-│                                                  │
+│  Controls                                        │  <- Controls display
+│  ⏪ Back [H]   ⏩ Fwd [L]   ⏯️ Play [Space]       │
+│  ⏮️ Prev [J]   ⏭️ Next [K]  🔇 Mute [M]          │
+│  ➖ Step- [<]  ➕ Step+ [>] 📝 Overlay [O]       │
+│  📊 Stats [S]  ❓ Help [?]  🚪 Quit [q]          │
 ├──────────────────────────────────────────────────┤
 │ : command input                                  │  <- Command input
+├──────────────────────────────────────────────────┤
+│  Notes Table (10 rows, fixed height)             │  <- Notes table
+│  ┌────┬────────┬──────────┬────────────────────┐ │
+│  │ ID │ Time   │ Category │ Text               │ │
+│  ├────┼────────┼──────────┼────────────────────┤ │
+│  │ 1  │ 02:15  │ tackle   │ Player A - compl...│ │
+│  │ 2  │ 05:32  │ note     │ Good defensive l...│ │
+│  │ 3  │ 12:30  │ tackle   │ Player B - missed ★│ │  <- Selected
+│  │ .. │ ..     │ ..       │ ..                 │ │
+│  └────┴────────┴──────────┴────────────────────┘ │
 └──────────────────────────────────────────────────┘
 ```
+
+- Controls display shows emoji, name, and shortcut key in brackets
+- Controls grouped by function (playback, navigation, views)
+- Notes table is fixed at 10 rows at the bottom of the interface
+- Table scrolls to show notes near current timestamp
+- Selected/current note highlighted
+- Columns: ID, Timestamp, Category, Text (truncated)
 
 ## Non-Goals
 

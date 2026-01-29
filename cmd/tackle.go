@@ -94,7 +94,7 @@ var tackleAddCmd = &cobra.Command{
 
 		// Insert tackle
 		result, err := database.Exec(
-			`INSERT INTO tackles (video_path, timestamp_seconds, player, team, attempt, outcome, followed, star, notes, zone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			db.InsertTackleSQL,
 			videoPath, timestamp, player, team, attempt, outcome, followed, starInt, notes, zone,
 		)
 		if err != nil {
@@ -155,7 +155,7 @@ var tackleListCmd = &cobra.Command{
 		defer database.Close()
 
 		// Build dynamic query with filters
-		query := `SELECT id, timestamp_seconds, player, team, attempt, outcome, followed, star, notes, zone FROM tackles WHERE video_path = ?`
+		query := db.SelectTacklesByVideoSQL
 		queryArgs := []interface{}{videoPath}
 
 		if playerFilter != "" {
@@ -280,13 +280,7 @@ var tackleExportCmd = &cobra.Command{
 		defer database.Close()
 
 		// Build query for tackle counts
-		countQuery := `SELECT
-			COUNT(*) as total,
-			SUM(CASE WHEN outcome = 'completed' THEN 1 ELSE 0 END) as completed,
-			SUM(CASE WHEN outcome = 'missed' THEN 1 ELSE 0 END) as missed,
-			SUM(CASE WHEN outcome = 'possible' THEN 1 ELSE 0 END) as possible,
-			SUM(CASE WHEN outcome = 'other' THEN 1 ELSE 0 END) as other
-			FROM tackles WHERE player = ?`
+		countQuery := db.SelectTackleCountsSQL
 		countArgs := []interface{}{player}
 
 		if videoFilter != "" {
@@ -312,8 +306,7 @@ var tackleExportCmd = &cobra.Command{
 		}
 
 		// Build query for tackle details
-		detailQuery := `SELECT timestamp_seconds, video_path, team, attempt, outcome, followed, star, notes, zone, created_at
-			FROM tackles WHERE player = ?`
+		detailQuery := db.SelectTackleDetailsSQL
 		detailArgs := []interface{}{player}
 
 		if videoFilter != "" {

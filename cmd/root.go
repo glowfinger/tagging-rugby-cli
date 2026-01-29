@@ -101,15 +101,15 @@ var openCmd = &cobra.Command{
 		var noteCount, clipCount, tackleCount int
 		if database != nil {
 			// Count notes
-			row := database.QueryRow("SELECT COUNT(*) FROM notes WHERE video_path = ?", absPath)
+			row := database.QueryRow(db.CountNotesByVideoSQL, absPath)
 			row.Scan(&noteCount)
 
 			// Count clips
-			row = database.QueryRow("SELECT COUNT(*) FROM clips WHERE video_path = ?", absPath)
+			row = database.QueryRow(db.CountClipsByVideoSQL, absPath)
 			row.Scan(&clipCount)
 
 			// Count tackles
-			row = database.QueryRow("SELECT COUNT(*) FROM tackles WHERE video_path = ?", absPath)
+			row = database.QueryRow(db.CountTacklesByVideoSQL, absPath)
 			row.Scan(&tackleCount)
 		}
 

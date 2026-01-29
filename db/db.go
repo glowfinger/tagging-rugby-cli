@@ -47,49 +47,8 @@ func Open() (*sql.DB, error) {
 // migrate runs all database migrations.
 // Migrations are idempotent (safe to run multiple times).
 func migrate(db *sql.DB) error {
-	// Create notes table
-	_, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS notes (
-			id INTEGER PRIMARY KEY,
-			video_path TEXT,
-			timestamp_seconds REAL,
-			text TEXT,
-			category TEXT,
-			player TEXT,
-			team TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)
-	`)
-	if err != nil {
-		return err
-	}
-
-	// Create clips table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS clips (
-			id INTEGER PRIMARY KEY,
-			video_path TEXT,
-			start_seconds REAL,
-			end_seconds REAL,
-			description TEXT,
-			category TEXT,
-			player TEXT,
-			team TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)
-	`)
-	if err != nil {
-		return err
-	}
-
-	// Create categories table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS categories (
-			id INTEGER PRIMARY KEY,
-			name TEXT UNIQUE,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)
-	`)
+	// Create all tables
+	_, err := db.Exec(CreateTablesSQL)
 	if err != nil {
 		return err
 	}
@@ -97,31 +56,10 @@ func migrate(db *sql.DB) error {
 	// Seed default categories (INSERT OR IGNORE for idempotency)
 	defaultCategories := []string{"try", "tackle", "turnover", "lineout", "scrum", "penalty", "kick"}
 	for _, cat := range defaultCategories {
-		_, err = db.Exec(`INSERT OR IGNORE INTO categories (name) VALUES (?)`, cat)
+		_, err = db.Exec(SeedCategoriesSQL, cat)
 		if err != nil {
 			return err
 		}
-	}
-
-	// Create tackles table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS tackles (
-			id INTEGER PRIMARY KEY,
-			video_path TEXT,
-			timestamp_seconds REAL,
-			player TEXT,
-			team TEXT,
-			attempt INTEGER,
-			outcome TEXT CHECK(outcome IN ('missed', 'completed', 'possible', 'other')),
-			followed TEXT,
-			star INTEGER DEFAULT 0,
-			notes TEXT,
-			zone TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)
-	`)
-	if err != nil {
-		return err
 	}
 
 	return nil

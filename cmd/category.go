@@ -28,7 +28,7 @@ var categoryListCmd = &cobra.Command{
 		defer database.Close()
 
 		// Query categories
-		rows, err := database.Query(`SELECT id, name FROM categories ORDER BY name ASC`)
+		rows, err := database.Query(db.SelectCategoriesSQL)
 		if err != nil {
 			return fmt.Errorf("failed to query categories: %w", err)
 		}
@@ -84,7 +84,7 @@ var categoryAddCmd = &cobra.Command{
 		defer database.Close()
 
 		// Insert category
-		result, err := database.Exec(`INSERT INTO categories (name) VALUES (?)`, name)
+		result, err := database.Exec(db.InsertCategorySQL, name)
 		if err != nil {
 			// Check if it's a unique constraint violation
 			if isUniqueConstraintError(err) {
@@ -119,7 +119,7 @@ var categoryDeleteCmd = &cobra.Command{
 		defer database.Close()
 
 		// Delete category
-		result, err := database.Exec(`DELETE FROM categories WHERE name = ?`, name)
+		result, err := database.Exec(db.DeleteCategorySQL, name)
 		if err != nil {
 			return fmt.Errorf("failed to delete category: %w", err)
 		}

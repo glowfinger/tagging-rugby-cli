@@ -143,7 +143,7 @@ var clipEndCmd = &cobra.Command{
 
 		// Insert clip
 		result, err := database.Exec(
-			`INSERT INTO clips (video_path, start_seconds, end_seconds, description, category, player, team) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			db.InsertClipSQL,
 			videoPath, startTimestamp, endTimestamp, description, category, player, team,
 		)
 		if err != nil {
@@ -223,7 +223,7 @@ var clipAddCmd = &cobra.Command{
 
 		// Insert clip
 		result, err := database.Exec(
-			`INSERT INTO clips (video_path, start_seconds, end_seconds, description, category, player, team) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			db.InsertClipSQL,
 			videoPath, startTimestamp, endTimestamp, description, category, player, team,
 		)
 		if err != nil {
@@ -269,7 +269,7 @@ var clipPlayCmd = &cobra.Command{
 		var startSec, endSec float64
 		var description sql.NullString
 		err = database.QueryRow(
-			`SELECT start_seconds, end_seconds, description FROM clips WHERE id = ?`,
+			db.SelectClipPlaySQL,
 			clipID,
 		).Scan(&startSec, &endSec, &description)
 		if err == sql.ErrNoRows {
@@ -392,7 +392,7 @@ func exportClip(clipID int64, outputPath, format string, reencode bool) error {
 	var videoPath string
 	var startSec, endSec float64
 	err = database.QueryRow(
-		`SELECT video_path, start_seconds, end_seconds FROM clips WHERE id = ?`,
+		db.SelectClipExportSQL,
 		clipID,
 	).Scan(&videoPath, &startSec, &endSec)
 	if err == sql.ErrNoRows {
@@ -460,7 +460,7 @@ func exportAllClips(format string, reencode bool) error {
 
 	// Query all clips for this video
 	rows, err := database.Query(
-		`SELECT id, start_seconds, end_seconds FROM clips WHERE video_path = ? ORDER BY id ASC`,
+		db.SelectClipsByVideoForExportSQL,
 		videoPath,
 	)
 	if err != nil {
@@ -585,7 +585,7 @@ var clipListCmd = &cobra.Command{
 
 		// Query clips
 		rows, err := database.Query(
-			`SELECT id, start_seconds, end_seconds, category, description FROM clips WHERE video_path = ? ORDER BY start_seconds ASC`,
+			db.SelectClipsByVideoSQL,
 			videoPath,
 		)
 		if err != nil {

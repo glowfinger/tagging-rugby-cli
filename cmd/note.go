@@ -62,7 +62,7 @@ var noteAddCmd = &cobra.Command{
 
 		// Insert note
 		result, err := database.Exec(
-			`INSERT INTO notes (video_path, timestamp_seconds, text, category, player, team) VALUES (?, ?, ?, ?, ?, ?)`,
+			db.InsertNoteSQL,
 			videoPath, timestamp, text, category, player, team,
 		)
 		if err != nil {
@@ -120,7 +120,7 @@ var noteListCmd = &cobra.Command{
 		defer database.Close()
 
 		// Build dynamic query with filters
-		query := `SELECT id, timestamp_seconds, category, player, team, text FROM notes WHERE video_path = ?`
+		query := db.SelectNotesByVideoSQL
 		queryArgs := []interface{}{videoPath}
 
 		if categoryFilter != "" {
@@ -241,7 +241,7 @@ var noteEditCmd = &cobra.Command{
 
 		// Check if note exists
 		var existingID int64
-		err = database.QueryRow(`SELECT id FROM notes WHERE id = ?`, noteID).Scan(&existingID)
+		err = database.QueryRow(db.SelectNoteIDSQL, noteID).Scan(&existingID)
 		if err == sql.ErrNoRows {
 			return fmt.Errorf("note with ID %d not found", noteID)
 		} else if err != nil {
@@ -294,7 +294,7 @@ var noteEditCmd = &cobra.Command{
 		var timestamp float64
 		var categoryVal, playerVal, teamVal, textVal sql.NullString
 		err = database.QueryRow(
-			`SELECT timestamp_seconds, category, player, team, text FROM notes WHERE id = ?`,
+			db.SelectNoteDetailsSQL,
 			noteID,
 		).Scan(&timestamp, &categoryVal, &playerVal, &teamVal, &textVal)
 		if err != nil {
@@ -344,7 +344,7 @@ var noteGotoCmd = &cobra.Command{
 		var timestamp float64
 		var categoryVal, playerVal, teamVal, textVal sql.NullString
 		err = database.QueryRow(
-			`SELECT timestamp_seconds, category, player, team, text FROM notes WHERE id = ?`,
+			db.SelectNoteDetailsSQL,
 			noteID,
 		).Scan(&timestamp, &categoryVal, &playerVal, &teamVal, &textVal)
 		if err == sql.ErrNoRows {
@@ -410,7 +410,7 @@ var noteDeleteCmd = &cobra.Command{
 		var timestamp float64
 		var textVal sql.NullString
 		err = database.QueryRow(
-			`SELECT timestamp_seconds, text FROM notes WHERE id = ?`,
+			db.SelectNoteBriefSQL,
 			noteID,
 		).Scan(&timestamp, &textVal)
 		if err == sql.ErrNoRows {
@@ -438,7 +438,7 @@ var noteDeleteCmd = &cobra.Command{
 		}
 
 		// Delete the note
-		result, err := database.Exec(`DELETE FROM notes WHERE id = ?`, noteID)
+		result, err := database.Exec(db.DeleteNoteSQL, noteID)
 		if err != nil {
 			return fmt.Errorf("failed to delete note: %w", err)
 		}

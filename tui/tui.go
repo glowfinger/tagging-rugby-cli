@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/mpv"
 	"github.com/user/tagging-rugby-cli/tui/components"
 )
@@ -347,7 +348,7 @@ func (m *Model) handleNoteInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		// Save note to database
 		result, err := m.db.Exec(
-			`INSERT INTO notes (video_path, timestamp_seconds, text, category, player, team) VALUES (?, ?, ?, ?, ?, ?)`,
+			db.InsertNoteSQL,
 			m.videoPath, timestamp, text, category, player, team,
 		)
 		if err != nil {
@@ -456,7 +457,7 @@ func (m *Model) handleTackleInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 		result, err := m.db.Exec(
-			`INSERT INTO tackles (video_path, timestamp_seconds, player, team, attempt, outcome, followed, notes, zone, star) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			db.InsertTackleWithExtrasSQL,
 			m.videoPath, timestamp, player, team, attempt, outcome, followed, notes, zone, starInt,
 		)
 		if err != nil {
@@ -850,7 +851,7 @@ func (m *Model) addNote(text, category, player, team string) (string, error) {
 	}
 
 	result, err := m.db.Exec(
-		`INSERT INTO notes (video_path, timestamp_seconds, text, category, player, team) VALUES (?, ?, ?, ?, ?, ?)`,
+		db.InsertNoteSQL,
 		m.videoPath, timestamp, text, category, player, team,
 	)
 	if err != nil {
@@ -868,7 +869,7 @@ func (m *Model) addNote(text, category, player, team string) (string, error) {
 // countNotes counts notes for the current video.
 func (m *Model) countNotes() (int, error) {
 	var count int
-	err := m.db.QueryRow(`SELECT COUNT(*) FROM notes WHERE video_path = ?`, m.videoPath).Scan(&count)
+	err := m.db.QueryRow(db.CountNotesByVideoSQL, m.videoPath).Scan(&count)
 	return count, err
 }
 
@@ -877,7 +878,7 @@ func (m *Model) gotoNote(noteID int64) (string, error) {
 	var timestamp float64
 	var text sql.NullString
 	err := m.db.QueryRow(
-		`SELECT timestamp_seconds, text FROM notes WHERE id = ?`,
+		db.SelectNoteBriefSQL,
 		noteID,
 	).Scan(&timestamp, &text)
 	if err == sql.ErrNoRows {
@@ -905,7 +906,7 @@ func (m *Model) gotoNote(noteID int64) (string, error) {
 // addClip adds a clip to the database.
 func (m *Model) addClip(start, end float64, description string) (int64, error) {
 	result, err := m.db.Exec(
-		`INSERT INTO clips (video_path, start_seconds, end_seconds, description) VALUES (?, ?, ?, ?)`,
+		db.InsertClipBasicSQL,
 		m.videoPath, start, end, description,
 	)
 	if err != nil {
@@ -917,7 +918,7 @@ func (m *Model) addClip(start, end float64, description string) (int64, error) {
 // countClips counts clips for the current video.
 func (m *Model) countClips() (int, error) {
 	var count int
-	err := m.db.QueryRow(`SELECT COUNT(*) FROM clips WHERE video_path = ?`, m.videoPath).Scan(&count)
+	err := m.db.QueryRow(db.CountClipsByVideoSQL, m.videoPath).Scan(&count)
 	return count, err
 }
 
@@ -926,7 +927,7 @@ func (m *Model) playClip(clipID int64) (string, error) {
 	var startSec, endSec float64
 	var description sql.NullString
 	err := m.db.QueryRow(
-		`SELECT start_seconds, end_seconds, description FROM clips WHERE id = ?`,
+		db.SelectClipPlaySQL,
 		clipID,
 	).Scan(&startSec, &endSec, &description)
 	if err == sql.ErrNoRows {
@@ -961,7 +962,7 @@ func (m *Model) addTackle(player, team string, attempt int, outcome string) (str
 	}
 
 	result, err := m.db.Exec(
-		`INSERT INTO tackles (video_path, timestamp_seconds, player, team, attempt, outcome) VALUES (?, ?, ?, ?, ?, ?)`,
+		db.InsertTackleBasicSQL,
 		m.videoPath, timestamp, player, team, attempt, outcome,
 	)
 	if err != nil {
@@ -979,7 +980,7 @@ func (m *Model) addTackle(player, team string, attempt int, outcome string) (str
 // countTackles counts tackles for the current video.
 func (m *Model) countTackles() (int, error) {
 	var count int
-	err := m.db.QueryRow(`SELECT COUNT(*) FROM tackles WHERE video_path = ?`, m.videoPath).Scan(&count)
+	err := m.db.QueryRow(db.CountTacklesByVideoSQL, m.videoPath).Scan(&count)
 	return count, err
 }
 
@@ -1301,12 +1302,7 @@ func (m *Model) loadNotesAndTackles() {
 	var items []components.ListItem
 
 	// Load notes
-	rows, err := m.db.Query(`
-		SELECT id, timestamp_seconds, text, category, player, team
-		FROM notes
-		WHERE video_path = ?
-		ORDER BY timestamp_seconds ASC
-	`, m.videoPath)
+	rows, err := m.db.Query(db.SelectNotesForTUISQL, m.videoPath)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -1325,12 +1321,7 @@ func (m *Model) loadNotesAndTackles() {
 	}
 
 	// Load tackles
-	tackleRows, err := m.db.Query(`
-		SELECT id, timestamp_seconds, player, team, outcome, notes, star
-		FROM tackles
-		WHERE video_path = ?
-		ORDER BY timestamp_seconds ASC
-	`, m.videoPath)
+	tackleRows, err := m.db.Query(db.SelectTacklesForTUISQL, m.videoPath)
 	if err == nil {
 		defer tackleRows.Close()
 		for tackleRows.Next() {
@@ -1469,32 +1460,9 @@ func (m *Model) loadTackleStats() {
 	var args []interface{}
 
 	if m.statsView.AllVideos {
-		query = `
-			SELECT
-				player,
-				COUNT(*) as total,
-				SUM(CASE WHEN outcome = 'completed' THEN 1 ELSE 0 END) as completed,
-				SUM(CASE WHEN outcome = 'missed' THEN 1 ELSE 0 END) as missed,
-				SUM(CASE WHEN outcome = 'possible' THEN 1 ELSE 0 END) as possible,
-				SUM(CASE WHEN outcome = 'other' THEN 1 ELSE 0 END) as other,
-				SUM(CASE WHEN star = 1 THEN 1 ELSE 0 END) as starred
-			FROM tackles
-			GROUP BY player
-		`
+		query = db.SelectTackleStatsAllSQL
 	} else {
-		query = `
-			SELECT
-				player,
-				COUNT(*) as total,
-				SUM(CASE WHEN outcome = 'completed' THEN 1 ELSE 0 END) as completed,
-				SUM(CASE WHEN outcome = 'missed' THEN 1 ELSE 0 END) as missed,
-				SUM(CASE WHEN outcome = 'possible' THEN 1 ELSE 0 END) as possible,
-				SUM(CASE WHEN outcome = 'other' THEN 1 ELSE 0 END) as other,
-				SUM(CASE WHEN star = 1 THEN 1 ELSE 0 END) as starred
-			FROM tackles
-			WHERE video_path = ?
-			GROUP BY player
-		`
+		query = db.SelectTackleStatsByVideoSQL
 		args = append(args, m.videoPath)
 	}
 
