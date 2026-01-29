@@ -1293,8 +1293,8 @@ func (m *Model) View() string {
 	colWidth := usableWidth / 3
 	col3Width := usableWidth - colWidth*2 // last column gets remainder
 
-	// Available height for columns (total height minus status bar line and command input line)
-	colHeight := m.height - 3
+	// Available height for columns (total height minus status bar line, timeline 2 lines, and command input line)
+	colHeight := m.height - 5
 	if colHeight < 5 {
 		colHeight = 5
 	}
@@ -1340,10 +1340,13 @@ func (m *Model) View() string {
 
 	columnsView := strings.Join(rows, "\n")
 
+	// Render timeline progress bar below columns (full width)
+	timeline := components.Timeline(m.statusBar.TimePos, m.statusBar.Duration, m.notesList.Items, m.width)
+
 	// Render command input at bottom (full width)
 	commandInput := components.CommandInput(m.commandInput, m.width)
 
-	return statusBar + "\n" + columnsView + "\n" + commandInput
+	return statusBar + "\n" + columnsView + "\n" + timeline + "\n" + commandInput
 }
 
 // padToWidth pads a string with spaces to the specified width.

@@ -554,3 +554,16 @@
   - Minimum width warning at 80 columns — shows resize message instead of broken layout
 
 ---
+
+## 2026-01-29 - US-046
+- What was implemented: Timeline progress bar spanning full terminal width, pinned below the three columns
+- Files changed: tui/components/timeline.go (new), tui/tui.go (View layout update, colHeight adjustment)
+- **Learnings for future iterations:**
+  - Timeline renders two lines: bar line + position indicator line — colHeight must subtract 2 extra rows (from 3 to 5 total overhead)
+  - Bar characters: ━ (filled), ╸ (current position head), ─ (unfilled), ◆ (event marker)
+  - Event markers placed by mapping item.TimestampSeconds / duration to bar position using math.Round
+  - Per-character styling needed for mixed colors in a single line — build string char-by-char with lipgloss
+  - Position indicator (▲) placed below bar at same horizontal position as playback head
+  - bgStyle with Width(width) ensures consistent background across entire terminal width
+
+---
