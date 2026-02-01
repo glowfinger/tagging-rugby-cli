@@ -9,9 +9,6 @@ import (
 //go:embed sql/create_tables.sql
 var CreateTablesSQL string
 
-//go:embed sql/seed_categories.sql
-var SeedCategoriesSQL string
-
 // Notes queries
 
 //go:embed sql/insert_note.sql
