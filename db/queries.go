@@ -35,13 +35,30 @@ var SelectNotesForTUISQL string
 //go:embed sql/count_notes_by_video.sql
 var CountNotesByVideoSQL string
 
-// Clips queries
+// Note child table insert queries
 
-//go:embed sql/insert_clip.sql
-var InsertClipSQL string
+//go:embed sql/insert_note_video.sql
+var InsertNoteVideoSQL string
 
-//go:embed sql/insert_clip_basic.sql
-var InsertClipBasicSQL string
+//go:embed sql/insert_note_clip.sql
+var InsertNoteClipSQL string
+
+//go:embed sql/insert_note_timing.sql
+var InsertNoteTimingSQL string
+
+//go:embed sql/insert_note_tackle.sql
+var InsertNoteTackleSQL string
+
+//go:embed sql/insert_note_zone.sql
+var InsertNoteZoneSQL string
+
+//go:embed sql/insert_note_detail.sql
+var InsertNoteDetailSQL string
+
+//go:embed sql/insert_note_highlight.sql
+var InsertNoteHighlightSQL string
+
+// Clips queries (legacy - to be removed in US-050)
 
 //go:embed sql/select_clip_play.sql
 var SelectClipPlaySQL string
@@ -58,27 +75,15 @@ var SelectClipsByVideoSQL string
 //go:embed sql/count_clips_by_video.sql
 var CountClipsByVideoSQL string
 
-// Categories queries
+// Categories queries (legacy - to be removed in US-050)
 
 //go:embed sql/select_categories.sql
 var SelectCategoriesSQL string
 
-//go:embed sql/insert_category.sql
-var InsertCategorySQL string
-
 //go:embed sql/delete_category.sql
 var DeleteCategorySQL string
 
-// Tackles queries
-
-//go:embed sql/insert_tackle.sql
-var InsertTackleSQL string
-
-//go:embed sql/insert_tackle_basic.sql
-var InsertTackleBasicSQL string
-
-//go:embed sql/insert_tackle_with_extras.sql
-var InsertTackleWithExtrasSQL string
+// Tackles queries (legacy - to be removed in US-050)
 
 //go:embed sql/select_tackles_by_video.sql
 var SelectTacklesByVideoSQL string
@@ -102,3 +107,12 @@ var SelectTackleStatsAllSQL string
 
 //go:embed sql/select_tackle_stats_by_video.sql
 var SelectTackleStatsByVideoSQL string
+
+// Legacy insert variables (SQL files removed - stubs for compilation until US-052/US-053 update callers)
+
+var InsertClipSQL = ""
+var InsertClipBasicSQL = ""
+var InsertTackleSQL = ""
+var InsertTackleBasicSQL = ""
+var InsertTackleWithExtrasSQL = ""
+var InsertCategorySQL = ""

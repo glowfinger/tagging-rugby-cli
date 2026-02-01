@@ -567,3 +567,23 @@
   - bgStyle with Width(width) ensures consistent background across entire terminal width
 
 ---
+
+## 2026-02-01 - US-047
+- What was implemented: New normalized database schema replacing flat tables with central notes table and child tables
+- Files changed: db/sql/create_tables.sql (rewrote with 8 normalized tables + 3 indexes), db/db.go (added PRAGMA foreign_keys = ON, removed category seeding), db/queries.go (removed SeedCategoriesSQL embed), db/sql/seed_categories.sql (deleted)
+- **Learnings for future iterations:**
+  - The create_tables.sql now has 8 tables: notes, note_videos, note_clips, note_timing, note_tackles, note_zones, note_details, note_highlights
+  - All child tables have ON DELETE CASCADE foreign keys to notes(id)
+  - PRAGMA foreign_keys = ON must be set per connection (not persisted in SQLite)
+  - Categories are no longer seeded - category is just a TEXT field on notes
+  - Indexes on notes.category, note_details.type, note_highlights.type for query performance
+---
+
+## 2026-02-01 - US-048
+- What was implemented: SQL insert files for all 8 normalized child tables, removed old insert SQL files
+- Files changed: db/sql/insert_note.sql (updated), db/sql/insert_note_video.sql (new), db/sql/insert_note_clip.sql (new), db/sql/insert_note_timing.sql (new), db/sql/insert_note_tackle.sql (new), db/sql/insert_note_zone.sql (new), db/sql/insert_note_detail.sql (new), db/sql/insert_note_highlight.sql (new), db/queries.go (updated), db/sql/insert_clip.sql (deleted), db/sql/insert_clip_basic.sql (deleted), db/sql/insert_tackle.sql (deleted), db/sql/insert_tackle_basic.sql (deleted), db/sql/insert_tackle_with_extras.sql (deleted), db/sql/insert_category.sql (deleted)
+- **Learnings for future iterations:**
+  - When removing SQL files that are still referenced by other Go files, keep stub variables (empty strings) in queries.go to maintain compilation
+  - Legacy stub pattern: `var InsertClipSQL = ""` (no embed directive) allows downstream code to compile until it's updated in later stories
+  - New insert SQL naming convention: insert_note_<child>.sql (e.g., insert_note_video.sql, insert_note_tackle.sql)
+---
