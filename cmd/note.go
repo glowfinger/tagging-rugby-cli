@@ -14,21 +14,17 @@ import (
 var noteCmd = &cobra.Command{
 	Use:   "note",
 	Short: "Manage timestamped notes",
-	Long:  `Add, list, edit, and delete timestamped notes for video analysis.`,
+	Long:  `Add, list, and delete timestamped notes for video analysis.`,
 }
 
 var noteAddCmd = &cobra.Command{
-	Use:   "add <text>",
+	Use:   "add",
 	Short: "Add a note at the current timestamp",
-	Long:  `Add a timestamped note at the current video position. The note is associated with the current video file.`,
-	Args:  cobra.ExactArgs(1),
+	Long:  `Add a timestamped note at the current video position. Creates a note with timing and video child records.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		text := args[0]
-
 		// Get flags
 		category, _ := cmd.Flags().GetString("category")
-		player, _ := cmd.Flags().GetString("player")
-		team, _ := cmd.Flags().GetString("team")
+		text, _ := cmd.Flags().GetString("text")
 
 		// Connect to mpv to get current timestamp and video path
 		client := mpv.NewClient("")
@@ -53,6 +49,9 @@ var noteAddCmd = &cobra.Command{
 			return fmt.Errorf("unexpected video path type: %T", videoPathRaw)
 		}
 
+		// Get video duration
+		duration, _ := client.GetDuration()
+
 		// Open database
 		database, err := db.Open()
 		if err != nil {
@@ -60,18 +59,27 @@ var noteAddCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		// Insert note
-		result, err := database.Exec(
-			db.InsertNoteSQL,
-			videoPath, timestamp, text, category, player, team,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to insert note: %w", err)
+		// Build children
+		children := db.NoteChildren{
+			Timings: []db.NoteTiming{
+				{Start: timestamp, End: timestamp},
+			},
+			Videos: []db.NoteVideo{
+				{Path: videoPath, Duration: duration, StoppedAt: timestamp},
+			},
 		}
 
-		noteID, err := result.LastInsertId()
+		// Add detail if text was provided
+		if text != "" {
+			children.Details = []db.NoteDetail{
+				{Type: "text", Note: text},
+			}
+		}
+
+		// Insert note with children
+		noteID, err := db.InsertNoteWithChildren(database, category, children)
 		if err != nil {
-			return fmt.Errorf("failed to get note ID: %w", err)
+			return fmt.Errorf("failed to insert note: %w", err)
 		}
 
 		// Format timestamp as MM:SS
@@ -86,15 +94,8 @@ var noteAddCmd = &cobra.Command{
 var noteListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all notes for the current video",
-	Long:  `Display all notes for the current video as a table, sorted by timestamp. Supports filtering by category, player, team, and time range.`,
+	Long:  `Display all notes for the current video as a table, sorted by timestamp.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Get filter flags
-		categoryFilter, _ := cmd.Flags().GetString("category")
-		playerFilter, _ := cmd.Flags().GetString("player")
-		teamFilter, _ := cmd.Flags().GetString("team")
-		fromFilter, _ := cmd.Flags().GetString("from")
-		toFilter, _ := cmd.Flags().GetString("to")
-
 		// Connect to mpv to get current video path
 		client := mpv.NewClient("")
 		if err := client.Connect(); err != nil {
@@ -119,45 +120,14 @@ var noteListCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		// Build dynamic query with filters
-		query := db.SelectNotesByVideoSQL
-		queryArgs := []interface{}{videoPath}
-
-		if categoryFilter != "" {
-			query += " AND category = ?"
-			queryArgs = append(queryArgs, categoryFilter)
-		}
-		if playerFilter != "" {
-			query += " AND player = ?"
-			queryArgs = append(queryArgs, playerFilter)
-		}
-		if teamFilter != "" {
-			query += " AND team = ?"
-			queryArgs = append(queryArgs, teamFilter)
-		}
-
-		// Parse and apply time range filters
-		if fromFilter != "" {
-			fromSeconds, err := parseTimeToSeconds(fromFilter)
-			if err != nil {
-				return fmt.Errorf("invalid --from time format: %w", err)
-			}
-			query += " AND timestamp_seconds >= ?"
-			queryArgs = append(queryArgs, fromSeconds)
-		}
-		if toFilter != "" {
-			toSeconds, err := parseTimeToSeconds(toFilter)
-			if err != nil {
-				return fmt.Errorf("invalid --to time format: %w", err)
-			}
-			query += " AND timestamp_seconds <= ?"
-			queryArgs = append(queryArgs, toSeconds)
-		}
-
-		query += " ORDER BY timestamp_seconds ASC"
-
-		// Query notes
-		rows, err := database.Query(query, queryArgs...)
+		// Query notes with video join to filter by current video, plus timing
+		rows, err := database.Query(
+			`SELECT n.id, n.category, COALESCE(nt.start, 0) as start_time
+			 FROM notes n
+			 INNER JOIN note_videos nv ON nv.note_id = n.id
+			 LEFT JOIN note_timing nt ON nt.note_id = n.id
+			 WHERE nv.path = ?
+			 ORDER BY start_time ASC`, videoPath)
 		if err != nil {
 			return fmt.Errorf("failed to query notes: %w", err)
 		}
@@ -165,36 +135,27 @@ var noteListCmd = &cobra.Command{
 
 		// Create table writer
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tTime\tCategory\tPlayer\tTeam\tText")
-		fmt.Fprintln(w, "--\t----\t--------\t------\t----\t----")
+		fmt.Fprintln(w, "ID\tTime\tCategory")
+		fmt.Fprintln(w, "--\t----\t--------")
 
 		count := 0
 		for rows.Next() {
 			var id int64
-			var timestamp float64
-			var category, player, team, text sql.NullString
+			var category sql.NullString
+			var startTime float64
 
-			if err := rows.Scan(&id, &timestamp, &category, &player, &team, &text); err != nil {
+			if err := rows.Scan(&id, &category, &startTime); err != nil {
 				return fmt.Errorf("failed to scan note: %w", err)
 			}
 
 			// Format timestamp as MM:SS
-			minutes := int(timestamp) / 60
-			seconds := int(timestamp) % 60
+			minutes := int(startTime) / 60
+			seconds := int(startTime) % 60
 			timeStr := fmt.Sprintf("%d:%02d", minutes, seconds)
 
-			// Handle NULL values
 			catStr := nullStringValue(category)
-			playerStr := nullStringValue(player)
-			teamStr := nullStringValue(team)
-			textStr := nullStringValue(text)
 
-			// Truncate text if too long
-			if len(textStr) > 40 {
-				textStr = textStr[:37] + "..."
-			}
-
-			fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\n", id, timeStr, catStr, playerStr, teamStr, textStr)
+			fmt.Fprintf(w, "%d\t%s\t%s\n", id, timeStr, catStr)
 			count++
 		}
 
@@ -208,114 +169,6 @@ var noteListCmd = &cobra.Command{
 			fmt.Println("\nNo matching notes found.")
 		} else {
 			fmt.Printf("\n%d note(s) found.\n", count)
-		}
-
-		return nil
-	},
-}
-
-var noteEditCmd = &cobra.Command{
-	Use:   "edit <id> <text>",
-	Short: "Edit a note's text and/or metadata",
-	Long:  `Edit an existing note by ID. Update the text, category, player, team, or timestamp.`,
-	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		var noteID int64
-		if _, err := fmt.Sscanf(args[0], "%d", &noteID); err != nil {
-			return fmt.Errorf("invalid note ID: %s", args[0])
-		}
-		newText := args[1]
-
-		// Get flags
-		category, _ := cmd.Flags().GetString("category")
-		player, _ := cmd.Flags().GetString("player")
-		team, _ := cmd.Flags().GetString("team")
-		updateTimestamp, _ := cmd.Flags().GetBool("timestamp")
-
-		// Open database
-		database, err := db.Open()
-		if err != nil {
-			return fmt.Errorf("failed to open database: %w", err)
-		}
-		defer database.Close()
-
-		// Check if note exists
-		var existingID int64
-		err = database.QueryRow(db.SelectNoteIDSQL, noteID).Scan(&existingID)
-		if err == sql.ErrNoRows {
-			return fmt.Errorf("note with ID %d not found", noteID)
-		} else if err != nil {
-			return fmt.Errorf("failed to check note: %w", err)
-		}
-
-		// Build the update query dynamically based on which flags were set
-		updateFields := []string{"text = ?"}
-		updateArgs := []interface{}{newText}
-
-		if cmd.Flags().Changed("category") {
-			updateFields = append(updateFields, "category = ?")
-			updateArgs = append(updateArgs, category)
-		}
-		if cmd.Flags().Changed("player") {
-			updateFields = append(updateFields, "player = ?")
-			updateArgs = append(updateArgs, player)
-		}
-		if cmd.Flags().Changed("team") {
-			updateFields = append(updateFields, "team = ?")
-			updateArgs = append(updateArgs, team)
-		}
-
-		// If --timestamp flag is set, get current position from mpv
-		if updateTimestamp {
-			client := mpv.NewClient("")
-			if err := client.Connect(); err != nil {
-				return fmt.Errorf("failed to connect to mpv: %w\n(Is mpv running with a video open?)", err)
-			}
-			defer client.Close()
-
-			timestamp, err := client.GetTimePos()
-			if err != nil {
-				return fmt.Errorf("failed to get current timestamp: %w", err)
-			}
-			updateFields = append(updateFields, "timestamp_seconds = ?")
-			updateArgs = append(updateArgs, timestamp)
-		}
-
-		// Build and execute the update query
-		query := fmt.Sprintf("UPDATE notes SET %s WHERE id = ?", joinStrings(updateFields, ", "))
-		updateArgs = append(updateArgs, noteID)
-
-		_, err = database.Exec(query, updateArgs...)
-		if err != nil {
-			return fmt.Errorf("failed to update note: %w", err)
-		}
-
-		// Fetch and display the updated note
-		var timestamp float64
-		var categoryVal, playerVal, teamVal, textVal sql.NullString
-		err = database.QueryRow(
-			db.SelectNoteDetailsSQL,
-			noteID,
-		).Scan(&timestamp, &categoryVal, &playerVal, &teamVal, &textVal)
-		if err != nil {
-			return fmt.Errorf("failed to fetch updated note: %w", err)
-		}
-
-		// Format and display
-		minutes := int(timestamp) / 60
-		seconds := int(timestamp) % 60
-
-		fmt.Printf("Note %d updated:\n", noteID)
-		fmt.Printf("  Time:     %d:%02d\n", minutes, seconds)
-		fmt.Printf("  Text:     %s\n", nullStringValue(textVal))
-		if categoryVal.Valid && categoryVal.String != "" {
-			fmt.Printf("  Category: %s\n", categoryVal.String)
-		}
-		if playerVal.Valid && playerVal.String != "" {
-			fmt.Printf("  Player:   %s\n", playerVal.String)
-		}
-		if teamVal.Valid && teamVal.String != "" {
-			fmt.Printf("  Team:     %s\n", teamVal.String)
 		}
 
 		return nil
@@ -341,16 +194,22 @@ var noteGotoCmd = &cobra.Command{
 		defer database.Close()
 
 		// Fetch the note
-		var timestamp float64
-		var categoryVal, playerVal, teamVal, textVal sql.NullString
-		err = database.QueryRow(
-			db.SelectNoteDetailsSQL,
-			noteID,
-		).Scan(&timestamp, &categoryVal, &playerVal, &teamVal, &textVal)
+		note, err := db.SelectNoteByID(database, noteID)
 		if err == sql.ErrNoRows {
 			return fmt.Errorf("note with ID %d not found", noteID)
 		} else if err != nil {
 			return fmt.Errorf("failed to fetch note: %w", err)
+		}
+
+		// Get timing for seek position
+		timings, err := db.SelectNoteTimingByNote(database, noteID)
+		if err != nil {
+			return fmt.Errorf("failed to fetch note timing: %w", err)
+		}
+
+		var seekPos float64
+		if len(timings) > 0 {
+			seekPos = timings[0].Start
 		}
 
 		// Connect to mpv
@@ -361,25 +220,17 @@ var noteGotoCmd = &cobra.Command{
 		defer client.Close()
 
 		// Seek to the note's timestamp
-		if err := client.Seek(timestamp); err != nil {
+		if err := client.Seek(seekPos); err != nil {
 			return fmt.Errorf("failed to seek to timestamp: %w", err)
 		}
 
 		// Format timestamp
-		minutes := int(timestamp) / 60
-		seconds := int(timestamp) % 60
+		minutes := int(seekPos) / 60
+		seconds := int(seekPos) % 60
 
-		// Display note details
 		fmt.Printf("Jumped to note %d at %d:%02d\n", noteID, minutes, seconds)
-		fmt.Printf("  Text:     %s\n", nullStringValue(textVal))
-		if categoryVal.Valid && categoryVal.String != "" {
-			fmt.Printf("  Category: %s\n", categoryVal.String)
-		}
-		if playerVal.Valid && playerVal.String != "" {
-			fmt.Printf("  Player:   %s\n", playerVal.String)
-		}
-		if teamVal.Valid && teamVal.String != "" {
-			fmt.Printf("  Team:     %s\n", teamVal.String)
+		if note.Category != "" {
+			fmt.Printf("  Category: %s\n", note.Category)
 		}
 
 		return nil
@@ -389,7 +240,7 @@ var noteGotoCmd = &cobra.Command{
 var noteDeleteCmd = &cobra.Command{
 	Use:   "delete <id>",
 	Short: "Delete a note",
-	Long:  `Delete an existing note by ID. Prompts for confirmation unless --force is used.`,
+	Long:  `Delete an existing note by ID. Cascade deletes all child records. Prompts for confirmation unless --force is used.`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var noteID int64
@@ -407,24 +258,15 @@ var noteDeleteCmd = &cobra.Command{
 		defer database.Close()
 
 		// Fetch the note to display before deletion
-		var timestamp float64
-		var textVal sql.NullString
-		err = database.QueryRow(
-			db.SelectNoteBriefSQL,
-			noteID,
-		).Scan(&timestamp, &textVal)
+		note, err := db.SelectNoteByID(database, noteID)
 		if err == sql.ErrNoRows {
 			return fmt.Errorf("note with ID %d not found", noteID)
 		} else if err != nil {
 			return fmt.Errorf("failed to fetch note: %w", err)
 		}
 
-		// Format timestamp
-		minutes := int(timestamp) / 60
-		seconds := int(timestamp) % 60
-
 		// Display note info
-		fmt.Printf("Note %d at %d:%02d: %s\n", noteID, minutes, seconds, nullStringValue(textVal))
+		fmt.Printf("Note %d (category: %s)\n", note.ID, note.Category)
 
 		// Prompt for confirmation unless --force
 		if !force {
@@ -437,15 +279,9 @@ var noteDeleteCmd = &cobra.Command{
 			}
 		}
 
-		// Delete the note
-		result, err := database.Exec(db.DeleteNoteSQL, noteID)
-		if err != nil {
+		// Delete the note (cascade handles children)
+		if err := db.DeleteNote(database, noteID); err != nil {
 			return fmt.Errorf("failed to delete note: %w", err)
-		}
-
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected == 0 {
-			return fmt.Errorf("note with ID %d not found", noteID)
 		}
 
 		fmt.Printf("Note %d deleted.\n", noteID)
@@ -492,22 +328,8 @@ func parseTimeToSeconds(timeStr string) (float64, error) {
 
 func init() {
 	// Add flags to note add command
-	noteAddCmd.Flags().StringP("category", "c", "", "Note category (e.g., try, tackle, turnover)")
-	noteAddCmd.Flags().StringP("player", "p", "", "Player name or number")
-	noteAddCmd.Flags().StringP("team", "t", "", "Team name")
-
-	// Add flags to note list command for filtering
-	noteListCmd.Flags().StringP("category", "c", "", "Filter by category")
-	noteListCmd.Flags().StringP("player", "p", "", "Filter by player")
-	noteListCmd.Flags().StringP("team", "t", "", "Filter by team")
-	noteListCmd.Flags().String("from", "", "Filter notes from this time (MM:SS or seconds)")
-	noteListCmd.Flags().String("to", "", "Filter notes up to this time (MM:SS or seconds)")
-
-	// Add flags to note edit command
-	noteEditCmd.Flags().StringP("category", "c", "", "Update note category")
-	noteEditCmd.Flags().StringP("player", "p", "", "Update player name or number")
-	noteEditCmd.Flags().StringP("team", "t", "", "Update team name")
-	noteEditCmd.Flags().Bool("timestamp", false, "Update timestamp to current mpv position")
+	noteAddCmd.Flags().StringP("category", "c", "", "Note category")
+	noteAddCmd.Flags().StringP("text", "x", "", "Note text")
 
 	// Add flags to note delete command
 	noteDeleteCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompt")
@@ -515,7 +337,6 @@ func init() {
 	// Build command tree
 	noteCmd.AddCommand(noteAddCmd)
 	noteCmd.AddCommand(noteListCmd)
-	noteCmd.AddCommand(noteEditCmd)
 	noteCmd.AddCommand(noteDeleteCmd)
 	noteCmd.AddCommand(noteGotoCmd)
 	rootCmd.AddCommand(noteCmd)

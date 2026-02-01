@@ -1,13 +1,13 @@
 package cmd
 
 import (
-	"database/sql"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
 	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/user/tagging-rugby-cli/db"
@@ -70,23 +70,18 @@ var clipStartCmd = &cobra.Command{
 		seconds := int(timestamp) % 60
 
 		fmt.Printf("Clip start marked at %d:%02d\n", minutes, seconds)
-		fmt.Println("Use 'clip end <description>' to complete the clip.")
+		fmt.Println("Use 'clip end <name>' to complete the clip.")
 		return nil
 	},
 }
 
 var clipEndCmd = &cobra.Command{
-	Use:   "end <description>",
+	Use:   "end <name>",
 	Short: "Mark the end of a clip and save it",
 	Long:  `Mark the end point of a clip at the current video position and save it to the database.`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		description := args[0]
-
-		// Get flags
-		category, _ := cmd.Flags().GetString("category")
-		player, _ := cmd.Flags().GetString("player")
-		team, _ := cmd.Flags().GetString("team")
+		clipName := args[0]
 
 		// Check if start was marked
 		clipStartState.mu.Lock()
@@ -141,18 +136,25 @@ var clipEndCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		// Insert clip
-		result, err := database.Exec(
-			db.InsertClipSQL,
-			videoPath, startTimestamp, endTimestamp, description, category, player, team,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to insert clip: %w", err)
+		duration := endTimestamp - startTimestamp
+		now := time.Now()
+
+		// Insert note with clip and timing child rows
+		children := db.NoteChildren{
+			Clips: []db.NoteClip{
+				{Name: clipName, Duration: duration, StartedAt: &now, FinishedAt: &now},
+			},
+			Timings: []db.NoteTiming{
+				{Start: startTimestamp, End: endTimestamp},
+			},
+			Videos: []db.NoteVideo{
+				{Path: videoPath, StoppedAt: startTimestamp},
+			},
 		}
 
-		clipID, err := result.LastInsertId()
+		noteID, err := db.InsertNoteWithChildren(database, "clip", children)
 		if err != nil {
-			return fmt.Errorf("failed to get clip ID: %w", err)
+			return fmt.Errorf("failed to insert clip: %w", err)
 		}
 
 		// Format timestamps
@@ -160,44 +162,18 @@ var clipEndCmd = &cobra.Command{
 		startSec := int(startTimestamp) % 60
 		endMin := int(endTimestamp) / 60
 		endSec := int(endTimestamp) % 60
-		duration := endTimestamp - startTimestamp
 
-		fmt.Printf("Clip saved: ID %d (%d:%02d - %d:%02d, %.1fs)\n", clipID, startMin, startSec, endMin, endSec, duration)
+		fmt.Printf("Clip saved: Note ID %d (%d:%02d - %d:%02d, %.1fs)\n", noteID, startMin, startSec, endMin, endSec, duration)
 		return nil
 	},
 }
 
-var clipAddCmd = &cobra.Command{
-	Use:   "add <start> <end> <description>",
-	Short: "Add a clip with specified start and end times",
-	Long:  `Add a video clip with manually specified start and end times. Times can be in MM:SS or seconds format.`,
-	Args:  cobra.ExactArgs(3),
+var clipListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List all clips for the current video",
+	Long:  `Display all clips for the current video as a table, sorted by start time.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Parse start time
-		startTimestamp, err := parseTimeToSeconds(args[0])
-		if err != nil {
-			return fmt.Errorf("invalid start time: %w", err)
-		}
-
-		// Parse end time
-		endTimestamp, err := parseTimeToSeconds(args[1])
-		if err != nil {
-			return fmt.Errorf("invalid end time: %w", err)
-		}
-
-		description := args[2]
-
-		// Get flags
-		category, _ := cmd.Flags().GetString("category")
-		player, _ := cmd.Flags().GetString("player")
-		team, _ := cmd.Flags().GetString("team")
-
-		// Validate start < end
-		if startTimestamp >= endTimestamp {
-			return fmt.Errorf("clip end time must be after start time")
-		}
-
-		// Connect to mpv to get video path
+		// Connect to mpv to get current video path
 		client := mpv.NewClient("")
 		if err := client.Connect(); err != nil {
 			return fmt.Errorf("failed to connect to mpv: %w\n(Is mpv running with a video open?)", err)
@@ -221,41 +197,79 @@ var clipAddCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		// Insert clip
-		result, err := database.Exec(
-			db.InsertClipSQL,
-			videoPath, startTimestamp, endTimestamp, description, category, player, team,
-		)
+		// Query clips joined with timing and video tables
+		rows, err := database.Query(
+			`SELECT n.id, nc.name, nc.duration, COALESCE(nt.start, 0), COALESCE(nt.end, 0)
+			 FROM notes n
+			 INNER JOIN note_clips nc ON nc.note_id = n.id
+			 INNER JOIN note_videos nv ON nv.note_id = n.id
+			 LEFT JOIN note_timing nt ON nt.note_id = n.id
+			 WHERE nv.path = ?
+			 ORDER BY nt.start ASC`, videoPath)
 		if err != nil {
-			return fmt.Errorf("failed to insert clip: %w", err)
+			return fmt.Errorf("failed to query clips: %w", err)
+		}
+		defer rows.Close()
+
+		// Create table writer
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "NoteID\tName\tStart\tEnd\tDuration")
+		fmt.Fprintln(w, "------\t----\t-----\t---\t--------")
+
+		count := 0
+		for rows.Next() {
+			var noteID int64
+			var name string
+			var duration, startSec, endSec float64
+
+			if err := rows.Scan(&noteID, &name, &duration, &startSec, &endSec); err != nil {
+				return fmt.Errorf("failed to scan clip: %w", err)
+			}
+
+			// Format timestamps
+			startMin := int(startSec) / 60
+			startSecInt := int(startSec) % 60
+			endMin := int(endSec) / 60
+			endSecInt := int(endSec) % 60
+
+			startStr := fmt.Sprintf("%d:%02d", startMin, startSecInt)
+			endStr := fmt.Sprintf("%d:%02d", endMin, endSecInt)
+			durationStr := fmt.Sprintf("%.1fs", duration)
+
+			// Truncate name if too long
+			if len(name) > 40 {
+				name = name[:37] + "..."
+			}
+
+			fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\n", noteID, name, startStr, endStr, durationStr)
+			count++
 		}
 
-		clipID, err := result.LastInsertId()
-		if err != nil {
-			return fmt.Errorf("failed to get clip ID: %w", err)
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("error iterating clips: %w", err)
 		}
 
-		// Format timestamps
-		startMin := int(startTimestamp) / 60
-		startSec := int(startTimestamp) % 60
-		endMin := int(endTimestamp) / 60
-		endSec := int(endTimestamp) % 60
-		duration := endTimestamp - startTimestamp
+		w.Flush()
 
-		fmt.Printf("Clip added: ID %d (%d:%02d - %d:%02d, %.1fs)\n", clipID, startMin, startSec, endMin, endSec, duration)
+		if count == 0 {
+			fmt.Println("\nNo clips found for this video.")
+		} else {
+			fmt.Printf("\n%d clip(s) found.\n", count)
+		}
+
 		return nil
 	},
 }
 
 var clipPlayCmd = &cobra.Command{
-	Use:   "play <id>",
+	Use:   "play <note-id>",
 	Short: "Play a clip with A-B loop",
 	Long:  `Seek to a clip's start timestamp and set mpv A-B loop to loop the clip continuously.`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var clipID int64
-		if _, err := fmt.Sscanf(args[0], "%d", &clipID); err != nil {
-			return fmt.Errorf("invalid clip ID: %s", args[0])
+		var noteID int64
+		if _, err := fmt.Sscanf(args[0], "%d", &noteID); err != nil {
+			return fmt.Errorf("invalid note ID: %s", args[0])
 		}
 
 		// Open database
@@ -265,18 +279,26 @@ var clipPlayCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		// Query clip by ID
-		var startSec, endSec float64
-		var description sql.NullString
-		err = database.QueryRow(
-			db.SelectClipPlaySQL,
-			clipID,
-		).Scan(&startSec, &endSec, &description)
-		if err == sql.ErrNoRows {
-			return fmt.Errorf("clip not found: ID %d", clipID)
+		// Get timing for this note
+		timings, err := db.SelectNoteTimingByNote(database, noteID)
+		if err != nil {
+			return fmt.Errorf("failed to query timing: %w", err)
 		}
+		if len(timings) == 0 {
+			return fmt.Errorf("no timing found for note ID %d", noteID)
+		}
+
+		startSec := timings[0].Start
+		endSec := timings[0].End
+
+		// Get clip name
+		clips, err := db.SelectNoteClipsByNote(database, noteID)
 		if err != nil {
 			return fmt.Errorf("failed to query clip: %w", err)
+		}
+		clipName := "(no name)"
+		if len(clips) > 0 && clips[0].Name != "" {
+			clipName = clips[0].Name
 		}
 
 		// Connect to mpv
@@ -303,12 +325,7 @@ var clipPlayCmd = &cobra.Command{
 		endSecInt := int(endSec) % 60
 		duration := endSec - startSec
 
-		descStr := nullStringValue(description)
-		if descStr == "" {
-			descStr = "(no description)"
-		}
-
-		fmt.Printf("Playing clip %d: %s\n", clipID, descStr)
+		fmt.Printf("Playing clip (note %d): %s\n", noteID, clipName)
 		fmt.Printf("Looping %d:%02d - %d:%02d (%.1fs)\n", startMin, startSecInt, endMin, endSecInt, duration)
 		fmt.Println("Use 'clip stop' to clear the loop.")
 		return nil
@@ -338,21 +355,25 @@ var clipStopCmd = &cobra.Command{
 }
 
 var clipExportCmd = &cobra.Command{
-	Use:   "export [clip-id]",
-	Short: "Export clips as video files using ffmpeg",
-	Long:  `Export a clip or all clips as video files using ffmpeg. By default uses stream copy (-c copy) for fast export.`,
-	Args:  cobra.MaximumNArgs(1),
+	Use:   "export <note-id>",
+	Short: "Export a clip as a video file using ffmpeg",
+	Long:  `Export a clip as a video file using ffmpeg. By default uses stream copy (-c copy) for fast export.`,
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Check ffmpeg is installed
 		if err := deps.CheckFfmpeg(); err != nil {
 			return err
 		}
 
+		var noteID int64
+		if _, err := fmt.Sscanf(args[0], "%d", &noteID); err != nil {
+			return fmt.Errorf("invalid note ID: %s", args[0])
+		}
+
 		// Get flags
 		outputPath, _ := cmd.Flags().GetString("output")
 		format, _ := cmd.Flags().GetString("format")
 		reencode, _ := cmd.Flags().GetBool("reencode")
-		exportAll, _ := cmd.Flags().GetBool("all")
 
 		// Validate format
 		validFormats := map[string]bool{"mp4": true, "webm": true, "mkv": true}
@@ -360,151 +381,37 @@ var clipExportCmd = &cobra.Command{
 			return fmt.Errorf("invalid format: %s (supported: mp4, webm, mkv)", format)
 		}
 
-		// If --all flag is set, export all clips for current video
-		if exportAll {
-			return exportAllClips(format, reencode)
+		// Open database
+		database, err := db.Open()
+		if err != nil {
+			return fmt.Errorf("failed to open database: %w", err)
 		}
+		defer database.Close()
 
-		// Otherwise, require clip ID
-		if len(args) == 0 {
-			return fmt.Errorf("clip ID required (or use --all to export all clips)")
+		// Get video path
+		videos, err := db.SelectNoteVideosByNote(database, noteID)
+		if err != nil || len(videos) == 0 {
+			return fmt.Errorf("no video found for note ID %d", noteID)
 		}
+		videoPath := videos[0].Path
 
-		var clipID int64
-		if _, err := fmt.Sscanf(args[0], "%d", &clipID); err != nil {
-			return fmt.Errorf("invalid clip ID: %s", args[0])
+		// Get timing
+		timings, err := db.SelectNoteTimingByNote(database, noteID)
+		if err != nil || len(timings) == 0 {
+			return fmt.Errorf("no timing found for note ID %d", noteID)
 		}
+		startSec := timings[0].Start
+		endSec := timings[0].End
 
-		return exportClip(clipID, outputPath, format, reencode)
-	},
-}
-
-// exportClip exports a single clip to a video file
-func exportClip(clipID int64, outputPath, format string, reencode bool) error {
-	// Open database
-	database, err := db.Open()
-	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
-	}
-	defer database.Close()
-
-	// Query clip by ID
-	var videoPath string
-	var startSec, endSec float64
-	err = database.QueryRow(
-		db.SelectClipExportSQL,
-		clipID,
-	).Scan(&videoPath, &startSec, &endSec)
-	if err == sql.ErrNoRows {
-		return fmt.Errorf("clip not found: ID %d", clipID)
-	}
-	if err != nil {
-		return fmt.Errorf("failed to query clip: %w", err)
-	}
-
-	// Determine output path
-	if outputPath == "" {
-		outputPath = fmt.Sprintf("clip-%d.%s", clipID, format)
-	}
-
-	// Build ffmpeg command
-	ffmpegArgs := buildFfmpegArgs(videoPath, startSec, endSec, outputPath, format, reencode)
-
-	fmt.Printf("Exporting clip %d to %s...\n", clipID, outputPath)
-
-	// Run ffmpeg
-	ffmpegCmd := exec.Command("ffmpeg", ffmpegArgs...)
-	ffmpegCmd.Stdout = os.Stdout
-	ffmpegCmd.Stderr = os.Stderr
-
-	if err := ffmpegCmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg export failed: %w", err)
-	}
-
-	// Get file size
-	fileInfo, err := os.Stat(outputPath)
-	if err == nil {
-		fmt.Printf("Exported clip %d to %s (%.2f MB)\n", clipID, outputPath, float64(fileInfo.Size())/(1024*1024))
-	} else {
-		fmt.Printf("Exported clip %d to %s\n", clipID, outputPath)
-	}
-
-	return nil
-}
-
-// exportAllClips exports all clips for the current video
-func exportAllClips(format string, reencode bool) error {
-	// Connect to mpv to get current video path
-	client := mpv.NewClient("")
-	if err := client.Connect(); err != nil {
-		return fmt.Errorf("failed to connect to mpv: %w\n(Is mpv running with a video open?)", err)
-	}
-	defer client.Close()
-
-	// Get video path from mpv
-	videoPathRaw, err := client.GetProperty("path")
-	if err != nil {
-		return fmt.Errorf("failed to get video path: %w", err)
-	}
-	videoPath, ok := videoPathRaw.(string)
-	if !ok {
-		return fmt.Errorf("unexpected video path type: %T", videoPathRaw)
-	}
-
-	// Open database
-	database, err := db.Open()
-	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
-	}
-	defer database.Close()
-
-	// Query all clips for this video
-	rows, err := database.Query(
-		db.SelectClipsByVideoForExportSQL,
-		videoPath,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to query clips: %w", err)
-	}
-	defer rows.Close()
-
-	var clips []struct {
-		id       int64
-		startSec float64
-		endSec   float64
-	}
-
-	for rows.Next() {
-		var clip struct {
-			id       int64
-			startSec float64
-			endSec   float64
+		// Determine output path
+		if outputPath == "" {
+			outputPath = fmt.Sprintf("clip-%d.%s", noteID, format)
 		}
-		if err := rows.Scan(&clip.id, &clip.startSec, &clip.endSec); err != nil {
-			return fmt.Errorf("failed to scan clip: %w", err)
-		}
-		clips = append(clips, clip)
-	}
-
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating clips: %w", err)
-	}
-
-	if len(clips) == 0 {
-		fmt.Println("No clips found for current video.")
-		return nil
-	}
-
-	fmt.Printf("Exporting %d clip(s)...\n\n", len(clips))
-
-	successCount := 0
-	for _, clip := range clips {
-		outputPath := fmt.Sprintf("clip-%d.%s", clip.id, format)
 
 		// Build ffmpeg command
-		ffmpegArgs := buildFfmpegArgs(videoPath, clip.startSec, clip.endSec, outputPath, format, reencode)
+		ffmpegArgs := buildFfmpegArgs(videoPath, startSec, endSec, outputPath, format, reencode)
 
-		fmt.Printf("Exporting clip %d to %s...\n", clip.id, outputPath)
+		fmt.Printf("Exporting clip (note %d) to %s...\n", noteID, outputPath)
 
 		// Run ffmpeg
 		ffmpegCmd := exec.Command("ffmpeg", ffmpegArgs...)
@@ -512,15 +419,19 @@ func exportAllClips(format string, reencode bool) error {
 		ffmpegCmd.Stderr = os.Stderr
 
 		if err := ffmpegCmd.Run(); err != nil {
-			fmt.Printf("Failed to export clip %d: %v\n", clip.id, err)
-			continue
+			return fmt.Errorf("ffmpeg export failed: %w", err)
 		}
 
-		successCount++
-	}
+		// Get file size
+		fileInfo, err := os.Stat(outputPath)
+		if err == nil {
+			fmt.Printf("Exported clip (note %d) to %s (%.2f MB)\n", noteID, outputPath, float64(fileInfo.Size())/(1024*1024))
+		} else {
+			fmt.Printf("Exported clip (note %d) to %s\n", noteID, outputPath)
+		}
 
-	fmt.Printf("\nExported %d/%d clips successfully.\n", successCount, len(clips))
-	return nil
+		return nil
+	},
 }
 
 // buildFfmpegArgs builds the ffmpeg command arguments
@@ -554,121 +465,15 @@ func buildFfmpegArgs(videoPath string, startSec, endSec float64, outputPath, for
 	return args
 }
 
-var clipListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all clips for the current video",
-	Long:  `Display all clips for the current video as a table, sorted by start time.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		// Connect to mpv to get current video path
-		client := mpv.NewClient("")
-		if err := client.Connect(); err != nil {
-			return fmt.Errorf("failed to connect to mpv: %w\n(Is mpv running with a video open?)", err)
-		}
-		defer client.Close()
-
-		// Get video path from mpv
-		videoPathRaw, err := client.GetProperty("path")
-		if err != nil {
-			return fmt.Errorf("failed to get video path: %w", err)
-		}
-		videoPath, ok := videoPathRaw.(string)
-		if !ok {
-			return fmt.Errorf("unexpected video path type: %T", videoPathRaw)
-		}
-
-		// Open database
-		database, err := db.Open()
-		if err != nil {
-			return fmt.Errorf("failed to open database: %w", err)
-		}
-		defer database.Close()
-
-		// Query clips
-		rows, err := database.Query(
-			db.SelectClipsByVideoSQL,
-			videoPath,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to query clips: %w", err)
-		}
-		defer rows.Close()
-
-		// Create table writer
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tStart\tEnd\tDuration\tCategory\tDescription")
-		fmt.Fprintln(w, "--\t-----\t---\t--------\t--------\t-----------")
-
-		count := 0
-		for rows.Next() {
-			var id int64
-			var startSec, endSec float64
-			var category, description sql.NullString
-
-			if err := rows.Scan(&id, &startSec, &endSec, &category, &description); err != nil {
-				return fmt.Errorf("failed to scan clip: %w", err)
-			}
-
-			// Format timestamps
-			startMin := int(startSec) / 60
-			startSecInt := int(startSec) % 60
-			endMin := int(endSec) / 60
-			endSecInt := int(endSec) % 60
-			duration := endSec - startSec
-
-			startStr := fmt.Sprintf("%d:%02d", startMin, startSecInt)
-			endStr := fmt.Sprintf("%d:%02d", endMin, endSecInt)
-			durationStr := fmt.Sprintf("%.1fs", duration)
-
-			// Handle NULL values
-			catStr := nullStringValue(category)
-			descStr := nullStringValue(description)
-
-			// Truncate description if too long
-			if len(descStr) > 40 {
-				descStr = descStr[:37] + "..."
-			}
-
-			fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\n", id, startStr, endStr, durationStr, catStr, descStr)
-			count++
-		}
-
-		if err := rows.Err(); err != nil {
-			return fmt.Errorf("error iterating clips: %w", err)
-		}
-
-		w.Flush()
-
-		if count == 0 {
-			fmt.Println("\nNo clips found for this video.")
-		} else {
-			fmt.Printf("\n%d clip(s) found.\n", count)
-		}
-
-		return nil
-	},
-}
-
 func init() {
-	// Add flags to clip end command
-	clipEndCmd.Flags().StringP("category", "c", "", "Clip category (e.g., try, tackle, turnover)")
-	clipEndCmd.Flags().StringP("player", "p", "", "Player name or number")
-	clipEndCmd.Flags().StringP("team", "t", "", "Team name")
-
-	// Add flags to clip add command
-	clipAddCmd.Flags().StringP("category", "c", "", "Clip category (e.g., try, tackle, turnover)")
-	clipAddCmd.Flags().StringP("player", "p", "", "Player name or number")
-	clipAddCmd.Flags().StringP("team", "t", "", "Team name")
-
 	// Add flags to clip export command
 	clipExportCmd.Flags().StringP("output", "o", "", "Custom output file path")
 	clipExportCmd.Flags().StringP("format", "f", "mp4", "Output format (mp4, webm, mkv)")
 	clipExportCmd.Flags().Bool("reencode", false, "Re-encode video instead of stream copy")
-	clipExportCmd.Flags().Bool("all", false, "Export all clips for current video")
 
 	// Build command tree
 	clipCmd.AddCommand(clipStartCmd)
 	clipCmd.AddCommand(clipEndCmd)
-	clipCmd.AddCommand(clipAddCmd)
 	clipCmd.AddCommand(clipListCmd)
 	clipCmd.AddCommand(clipPlayCmd)
 	clipCmd.AddCommand(clipStopCmd)

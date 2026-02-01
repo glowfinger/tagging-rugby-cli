@@ -9,6 +9,9 @@
 - Three-column TUI layout uses padToWidth helper + manual row-by-row assembly (split lines, pad, join with border chars)
 - lipgloss.Width() accounts for ANSI escape sequences when measuring rendered string width
 - Column 3 live stats use loadTackleStatsForPanel() on tick — only updates when stats view is not active to avoid conflicts
+- Go structs for all tables in db/models.go; database functions (insert/select/delete) in db/functions.go
+- Use `db.InsertNoteWithChildren(database, category, db.NoteChildren{...})` for transactional insert of note + child records
+- CLI commands create notes with category field ("clip", "tackle", or user-provided) plus child rows for timing, video, and type-specific data
 
 ---
 
@@ -586,4 +589,31 @@
   - When removing SQL files that are still referenced by other Go files, keep stub variables (empty strings) in queries.go to maintain compilation
   - Legacy stub pattern: `var InsertClipSQL = ""` (no embed directive) allows downstream code to compile until it's updated in later stories
   - New insert SQL naming convention: insert_note_<child>.sql (e.g., insert_note_video.sql, insert_note_tackle.sql)
+---
+
+## 2026-02-01 - US-051
+- What was implemented: Go structs and database helper functions for all 8 normalized tables
+- Files changed: db/models.go (new), db/functions.go (new), prd.json (marked US-049, US-050, US-051 as passing)
+- **Learnings for future iterations:**
+  - db/models.go contains struct types: Note, NoteVideo, NoteClip, NoteTiming, NoteTackle, NoteZone, NoteDetail, NoteHighlight
+  - db/functions.go contains InsertNote, InsertNote<Child>, InsertNoteWithChildren (transactional), Select<Table>ByNote, SelectNotes, SelectNoteByID, DeleteNote
+  - InsertNoteWithChildren uses NoteChildren struct to pass optional child records in a single transaction
+  - NoteClip uses *time.Time for nullable datetime fields (StartedAt, FinishedAt, ErrorAt)
+  - InsertNoteClip accepts interface{} for nullable time params to allow nil values
+  - DeleteNote returns sql.ErrNoRows when no rows affected (note not found)
+  - US-049 and US-050 were already committed in previous iterations but PRD wasn't updated — marked as passing
+---
+
+## 2026-02-01 - US-052
+- What was implemented: Updated all CLI commands for new normalized data model
+- Files changed: cmd/category.go (deleted), cmd/note.go (rewritten), cmd/clip.go (rewritten), cmd/tackle.go (rewritten), cmd/root.go (session resume updated), db/queries.go (removed unused legacy stubs), prd.json
+- **Learnings for future iterations:**
+  - CLI commands now use `db.InsertNoteWithChildren()` for transactional insert of note + child records
+  - Note add creates note + note_timing + note_videos children; text goes into note_details child
+  - Clip end creates note with category "clip" + note_clips + note_timing + note_videos children
+  - Tackle add creates note with category "tackle" + note_tackles + note_timing + note_videos children
+  - Session resume in root.go counts notes via JOIN with note_videos filtered by video path
+  - Legacy SQL stubs still needed for TUI code compilation — will be removed in US-053/US-054
+  - Note edit command removed since old columns (text, player, team, timestamp_seconds) no longer exist on notes table
+  - Category command removed entirely — categories are now just a TEXT field on notes table
 ---

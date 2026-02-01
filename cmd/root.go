@@ -97,20 +97,14 @@ var openCmd = &cobra.Command{
 			database = nil
 		}
 
-		// Check for existing notes, clips, and tackles for this video
-		var noteCount, clipCount, tackleCount int
+		// Check for existing notes for this video using new normalized tables
+		var noteCount int
 		if database != nil {
-			// Count notes
-			row := database.QueryRow(db.CountNotesByVideoSQL, absPath)
+			row := database.QueryRow(
+				`SELECT COUNT(DISTINCT n.id) FROM notes n
+				 INNER JOIN note_videos nv ON nv.note_id = n.id
+				 WHERE nv.path = ?`, absPath)
 			row.Scan(&noteCount)
-
-			// Count clips
-			row = database.QueryRow(db.CountClipsByVideoSQL, absPath)
-			row.Scan(&clipCount)
-
-			// Count tackles
-			row = database.QueryRow(db.CountTacklesByVideoSQL, absPath)
-			row.Scan(&tackleCount)
 		}
 
 		// Get duration and print confirmation
@@ -123,9 +117,8 @@ var openCmd = &cobra.Command{
 		}
 
 		// Print session info
-		totalItems := noteCount + clipCount + tackleCount
-		if totalItems > 0 {
-			fmt.Printf("Resuming session: %d notes, %d clips, %d tackles\n", noteCount, clipCount, tackleCount)
+		if noteCount > 0 {
+			fmt.Printf("Resuming session: %d notes\n", noteCount)
 			fmt.Printf("Video: %s%s\n", filepath.Base(absPath), durationStr)
 		} else {
 			fmt.Printf("Video session started: %s%s\n", filepath.Base(absPath), durationStr)
