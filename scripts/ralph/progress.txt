@@ -7,6 +7,8 @@ Started: Mon Jan 26 15:12:42 PST 2026
 - Use `export PATH=$HOME/go/bin:$PATH` before running go commands - Go is installed in home directory
 - Dependencies are added with `go get` and pruned by `go mod tidy` if not directly imported
 - Run quality checks with `CGO_ENABLED=0 go vet ./...`
+- When removing old SQL files, convert their `//go:embed` directives in queries.go to empty string var stubs to keep compilation working until callers are updated in later stories
+- All SQL files live in `db/sql/`, embedded via `db/queries.go`
 
 ---
 
@@ -29,4 +31,40 @@ Started: Mon Jan 26 15:12:42 PST 2026
   - Go was installed to $HOME/go from tarball, need to add to PATH
   - modernc.org/sqlite is CGO-free SQLite but won't be in go.mod until imported
   - viper dependency will be added when configuration features are needed
+---
+
+## 2026-02-01 - US-049
+- What was implemented:
+  - Created 9 new SQL select files for normalized child tables (select_notes.sql, select_note_by_id.sql, select_note_videos_by_note.sql, select_note_clips_by_note.sql, select_note_timing_by_note.sql, select_note_tackles_by_note.sql, select_note_zones_by_note.sql, select_note_details_by_note.sql, select_note_highlights_by_note.sql)
+  - Removed 20 old SQL files referencing dropped tables (clips, tackles, categories, old notes schema)
+  - Updated db/queries.go: new embeds for all select files, old embeds converted to empty string stubs
+  - Also marked US-047 and US-048 as passing (already implemented in previous commits)
+- Files changed:
+  - db/sql/ (9 new files, 20 deleted)
+  - db/queries.go (rewritten with new embeds + legacy stubs)
+  - scripts/ralph/prd.json (US-047, US-048, US-049 marked passes:true)
+- **Learnings for future iterations:**
+  - US-047 and US-048 were already implemented but not marked as passing - always verify before starting
+  - When removing SQL files that are still referenced by Go code, use empty string var stubs (e.g., `var FooSQL = ""`) to maintain compilation
+  - The old notes table had columns like video_path, timestamp_seconds, text, player, team - these are now split across child tables
+---
+
+## 2026-02-01 - US-050
+- What was implemented:
+  - Created select_notes_with_timing.sql: LEFT JOIN notes with note_timing, ordered by start time
+  - Created select_notes_with_video.sql: INNER JOIN notes with note_videos, filtered by video path
+  - Created select_tackle_stats.sql: aggregate query on note_tackles grouped by player with outcome counts
+  - Added 3 new embed directives in db/queries.go (SelectNotesWithTimingSQL, SelectNotesWithVideoSQL, SelectTackleStatsSQL)
+  - Verified no references to old table names (clips, tackles, categories) remain in db/sql/
+  - Legacy stubs kept in queries.go for callers that will be updated in US-051/052/053/054
+- Files changed:
+  - db/sql/select_notes_with_timing.sql (new)
+  - db/sql/select_notes_with_video.sql (new)
+  - db/sql/select_tackle_stats.sql (new)
+  - db/queries.go (added 3 new embeds)
+  - scripts/ralph/prd.json (US-050 marked passes:true)
+- **Learnings for future iterations:**
+  - All old SQL files were already removed in US-049; US-050 only needed to add new joined queries
+  - Legacy stubs in queries.go are still referenced by tui/tui.go, cmd/root.go, cmd/category.go, cmd/note.go, cmd/clip.go, cmd/tackle.go - these get cleaned up in US-051 through US-054
+  - The tackle stats query uses outcome values: success, missed, dominant, passive
 ---

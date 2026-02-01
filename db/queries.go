@@ -69,6 +69,17 @@ var SelectNoteDetailsByNoteSQL string
 //go:embed sql/select_note_highlights_by_note.sql
 var SelectNoteHighlightsByNoteSQL string
 
+// Joined queries for TUI views
+
+//go:embed sql/select_notes_with_timing.sql
+var SelectNotesWithTimingSQL string
+
+//go:embed sql/select_notes_with_video.sql
+var SelectNotesWithVideoSQL string
+
+//go:embed sql/select_tackle_stats.sql
+var SelectTackleStatsSQL string
+
 // Legacy query variables (SQL files removed - stubs for compilation until later stories update callers)
 
 var SelectNotesByVideoSQL = ""
