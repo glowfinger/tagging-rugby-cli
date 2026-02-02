@@ -12,6 +12,10 @@
 - Go structs for all tables in db/models.go; database functions (insert/select/delete) in db/functions.go
 - Use `db.InsertNoteWithChildren(database, category, db.NoteChildren{...})` for transactional insert of note + child records
 - CLI commands create notes with category field ("clip", "tackle", or user-provided) plus child rows for timing, video, and type-specific data
+- TUI note/tackle/clip creation also uses `db.InsertNoteWithChildren()` — same pattern as CLI commands
+- Tackle stats in TUI use inline SQL queries joining note_tackles, notes, note_videos, and note_highlights (not embedded SQL files)
+- loadNotesAndTackles() uses inline SQL joining notes, note_videos, note_timing, then loads child details/tackles/highlights per note
+- Star highlights are stored as note_highlights rows with type="star", not as a column on notes
 
 ---
 
@@ -616,4 +620,33 @@
   - Legacy SQL stubs still needed for TUI code compilation — will be removed in US-053/US-054
   - Note edit command removed since old columns (text, player, team, timestamp_seconds) no longer exist on notes table
   - Category command removed entirely — categories are now just a TEXT field on notes table
+---
+
+## 2026-02-01 - US-053
+- What was implemented: Updated all TUI note, tackle, and clip creation to use the new normalized data model with InsertNoteWithChildren
+- Files changed: tui/tui.go (major rewrite of note/tackle/clip creation, loadNotesAndTackles, tackle stats queries, gotoNote, playClip), db/queries.go (removed all legacy SQL stubs), prd.json
+- **Learnings for future iterations:**
+  - TUI note/tackle/clip creation now mirrors CLI pattern: `db.InsertNoteWithChildren(m.db, category, children)`
+  - Quick note input (N key) creates note with category "note" + note_timing + note_videos + note_details children
+  - Quick tackle input (T key) creates note with category "tackle" + note_tackles + note_timing + note_videos children; star stored as note_highlights with type="star"
+  - Command mode :nn, :nt, :cs/:ce all use the same InsertNoteWithChildren pattern
+  - loadNotesAndTackles uses inline SQL joining notes → note_videos → note_timing, then loads child details/tackles/highlights per-note
+  - Tackle stats queries are inline constants in tui.go joining note_tackles, notes, note_videos, note_highlights for aggregate stats
+  - All 12 legacy SQL stub variables removed from queries.go — no more backwards-compatibility shims
+  - gotoNote and playClip now use db.SelectNoteByID + db.SelectNoteTimingByNote instead of old flat queries
+---
+
+## 2026-02-01 - US-054
+- What was implemented: Verified all TUI display views correctly read from new normalized tables (no code changes needed — display views were already updated in US-053)
+- Verified components:
+  - Notes list (column 2): loadNotesAndTackles() joins notes + note_videos + note_timing, loads note_details/note_tackles/note_highlights per note
+  - Stats panel (column 3): loadTackleStatsForPanel() uses inline SQL joining note_tackles, notes, note_videos, note_highlights
+  - Stats view (S key): loadTackleStats() uses tackleStatsAllVideosQuery and tackleStatsByVideoQuery with same joins
+  - Timeline: uses notesList.Items which get TimestampSeconds from note_timing join
+  - mpv overlay: updateOverlay() uses notesList.Items and filters by proximity to current timestamp
+  - loadNotesAndTackles: fully uses new schema with inline SQL joining normalized tables
+- Files changed: prd.json (marked US-054 as passing)
+- **Learnings for future iterations:**
+  - When TUI data loading is updated in one story, display components that consume that data may already satisfy a later story's criteria
+  - All TUI display components (NotesList, StatsPanel, StatsView, Timeline, overlay) consume data from loadNotesAndTackles() and loadTackleStats() — updating those two functions propagates changes to all views
 ---
