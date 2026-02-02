@@ -80,17 +80,3 @@ var SelectNotesWithVideoSQL string
 //go:embed sql/select_tackle_stats.sql
 var SelectTackleStatsSQL string
 
-// Legacy query variables (stubs for TUI compilation until US-053/US-054 update TUI callers)
-
-var SelectNoteBriefSQL = ""
-var SelectNotesForTUISQL = ""
-var CountNotesByVideoSQL = ""
-var SelectClipPlaySQL = ""
-var CountClipsByVideoSQL = ""
-var SelectTacklesForTUISQL = ""
-var CountTacklesByVideoSQL = ""
-var SelectTackleStatsAllSQL = ""
-var SelectTackleStatsByVideoSQL = ""
-var InsertClipBasicSQL = ""
-var InsertTackleBasicSQL = ""
-var InsertTackleWithExtrasSQL = ""

@@ -3,7 +3,6 @@ package tui
 import (
 	"database/sql"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -342,7 +341,7 @@ func (m *Model) handleNoteInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "enter":
 		// Save note if text is not empty
-		text, category, player, team, timestamp := m.noteInput.GetNote()
+		text, category, _, _, timestamp := m.noteInput.GetNote()
 		if text == "" {
 			m.commandInput.SetResult("Note text cannot be empty", true)
 			return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
@@ -350,11 +349,29 @@ func (m *Model) handleNoteInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			})
 		}
 
-		// Save note to database
-		result, err := m.db.Exec(
-			db.InsertNoteSQL,
-			m.videoPath, timestamp, text, category, player, team,
-		)
+		// Get video duration for video child record
+		duration, _ := m.client.GetDuration()
+
+		// Build children
+		children := db.NoteChildren{
+			Timings: []db.NoteTiming{
+				{Start: timestamp, End: timestamp},
+			},
+			Videos: []db.NoteVideo{
+				{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
+			},
+			Details: []db.NoteDetail{
+				{Type: "text", Note: text},
+			},
+		}
+
+		// Use category from input, default to empty
+		if category == "" {
+			category = "note"
+		}
+
+		// Save note with children
+		noteID, err := db.InsertNoteWithChildren(m.db, category, children)
 		if err != nil {
 			m.noteInput.Clear()
 			m.commandInput.SetResult("Error: "+err.Error(), true)
@@ -362,8 +379,6 @@ func (m *Model) handleNoteInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return clearResultMsg{}
 			})
 		}
-
-		noteID, _ := result.LastInsertId()
 
 		// Clear note input and reload list
 		m.noteInput.Clear()
@@ -448,22 +463,43 @@ func (m *Model) handleTackleInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 		// Save tackle to database
-		player, team, attemptStr, outcome, followed, notes, zone, star, timestamp := m.tackleInput.GetTackle()
+		player, _, attemptStr, outcome, _, notes, _, star, timestamp := m.tackleInput.GetTackle()
 
 		// Parse attempt as integer
 		var attempt int
 		fmt.Sscanf(attemptStr, "%d", &attempt)
 
-		// Convert star bool to int
-		starInt := 0
-		if star {
-			starInt = 1
+		// Get video duration for video child record
+		duration, _ := m.client.GetDuration()
+
+		// Build children
+		children := db.NoteChildren{
+			Timings: []db.NoteTiming{
+				{Start: timestamp, End: timestamp},
+			},
+			Videos: []db.NoteVideo{
+				{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
+			},
+			Tackles: []db.NoteTackle{
+				{Player: player, Attempt: attempt, Outcome: outcome},
+			},
 		}
 
-		result, err := m.db.Exec(
-			db.InsertTackleWithExtrasSQL,
-			m.videoPath, timestamp, player, team, attempt, outcome, followed, notes, zone, starInt,
-		)
+		// Add detail if notes were provided
+		if notes != "" {
+			children.Details = []db.NoteDetail{
+				{Type: "text", Note: notes},
+			}
+		}
+
+		// Add highlight if starred
+		if star {
+			children.Highlights = []db.NoteHighlight{
+				{Type: "star"},
+			}
+		}
+
+		noteID, err := db.InsertNoteWithChildren(m.db, "tackle", children)
 		if err != nil {
 			m.tackleInput.Clear()
 			m.commandInput.SetResult("Error: "+err.Error(), true)
@@ -471,8 +507,6 @@ func (m *Model) handleTackleInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return clearResultMsg{}
 			})
 		}
-
-		tackleID, _ := result.LastInsertId()
 
 		// Clear tackle input and reload list
 		m.tackleInput.Clear()
@@ -483,7 +517,7 @@ func (m *Model) handleTackleInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if star {
 			starSymbol = " ★"
 		}
-		m.commandInput.SetResult(fmt.Sprintf("Tackle %d recorded: %s %s%s", tackleID, player, outcome, starSymbol), false)
+		m.commandInput.SetResult(fmt.Sprintf("Tackle %d recorded: %s %s%s", noteID, player, outcome, starSymbol), false)
 		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
 			return clearResultMsg{}
 		})
@@ -848,21 +882,37 @@ func (m *Model) executeShorthandTackleCommand(args []string) (string, error) {
 }
 
 // addNote adds a note at the current timestamp.
-func (m *Model) addNote(text, category, player, team string) (string, error) {
+func (m *Model) addNote(text, category, _, _ string) (string, error) {
 	timestamp, err := m.client.GetTimePos()
 	if err != nil {
 		return "", fmt.Errorf("failed to get timestamp: %w", err)
 	}
 
-	result, err := m.db.Exec(
-		db.InsertNoteSQL,
-		m.videoPath, timestamp, text, category, player, team,
-	)
+	duration, _ := m.client.GetDuration()
+
+	children := db.NoteChildren{
+		Timings: []db.NoteTiming{
+			{Start: timestamp, End: timestamp},
+		},
+		Videos: []db.NoteVideo{
+			{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
+		},
+	}
+
+	if text != "" {
+		children.Details = []db.NoteDetail{
+			{Type: "text", Note: text},
+		}
+	}
+
+	if category == "" {
+		category = "note"
+	}
+
+	noteID, err := db.InsertNoteWithChildren(m.db, category, children)
 	if err != nil {
 		return "", fmt.Errorf("failed to insert note: %w", err)
 	}
-
-	noteID, _ := result.LastInsertId()
 
 	// Reload notes list
 	m.loadNotesAndTackles()
@@ -872,19 +922,22 @@ func (m *Model) addNote(text, category, player, team string) (string, error) {
 
 // countNotes counts notes for the current video.
 func (m *Model) countNotes() (int, error) {
-	var count int
-	err := m.db.QueryRow(db.CountNotesByVideoSQL, m.videoPath).Scan(&count)
-	return count, err
+	rows, err := m.db.Query(db.SelectNotesWithVideoSQL, m.videoPath)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		count++
+	}
+	return count, rows.Err()
 }
 
 // gotoNote seeks to a note's timestamp.
 func (m *Model) gotoNote(noteID int64) (string, error) {
-	var timestamp float64
-	var text sql.NullString
-	err := m.db.QueryRow(
-		db.SelectNoteBriefSQL,
-		noteID,
-	).Scan(&timestamp, &text)
+	// Check note exists
+	note, err := db.SelectNoteByID(m.db, noteID)
 	if err == sql.ErrNoRows {
 		return "", fmt.Errorf("note %d not found", noteID)
 	}
@@ -892,54 +945,85 @@ func (m *Model) gotoNote(noteID int64) (string, error) {
 		return "", err
 	}
 
+	// Get timing for the note
+	timings, err := db.SelectNoteTimingByNote(m.db, noteID)
+	if err != nil || len(timings) == 0 {
+		return "", fmt.Errorf("note %d has no timing data", noteID)
+	}
+
+	timestamp := timings[0].Start
 	if err := m.client.Seek(timestamp); err != nil {
 		return "", err
 	}
 
+	// Get detail text if available
+	details, _ := db.SelectNoteDetailsByNote(m.db, noteID)
 	textStr := ""
-	if text.Valid {
-		textStr = text.String
+	if len(details) > 0 {
+		textStr = details[0].Note
 		if len(textStr) > 30 {
 			textStr = textStr[:27] + "..."
 		}
 	}
 
-	return fmt.Sprintf("Jumped to note %d: %s", noteID, textStr), nil
+	return fmt.Sprintf("Jumped to note %d [%s]: %s", note.ID, note.Category, textStr), nil
 }
 
 // addClip adds a clip to the database.
 func (m *Model) addClip(start, end float64, description string) (int64, error) {
-	result, err := m.db.Exec(
-		db.InsertClipBasicSQL,
-		m.videoPath, start, end, description,
+	clipDuration := end - start
+
+	children := db.NoteChildren{
+		Timings: []db.NoteTiming{
+			{Start: start, End: end},
+		},
+		Videos: []db.NoteVideo{
+			{Path: m.videoPath, StoppedAt: start},
+		},
+		Clips: []db.NoteClip{
+			{Name: description, Duration: clipDuration},
+		},
+	}
+
+	return db.InsertNoteWithChildren(m.db, "clip", children)
+}
+
+// countClips counts clip notes for the current video.
+func (m *Model) countClips() (int, error) {
+	rows, err := m.db.Query(
+		"SELECT n.id FROM notes n INNER JOIN note_videos nv ON nv.note_id = n.id WHERE nv.path = ? AND n.category = 'clip'",
+		m.videoPath,
 	)
 	if err != nil {
 		return 0, err
 	}
-	return result.LastInsertId()
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		count++
+	}
+	return count, rows.Err()
 }
 
-// countClips counts clips for the current video.
-func (m *Model) countClips() (int, error) {
-	var count int
-	err := m.db.QueryRow(db.CountClipsByVideoSQL, m.videoPath).Scan(&count)
-	return count, err
-}
-
-// playClip seeks to a clip and sets A-B loop.
-func (m *Model) playClip(clipID int64) (string, error) {
-	var startSec, endSec float64
-	var description sql.NullString
-	err := m.db.QueryRow(
-		db.SelectClipPlaySQL,
-		clipID,
-	).Scan(&startSec, &endSec, &description)
+// playClip seeks to a clip note and sets A-B loop using its timing.
+func (m *Model) playClip(noteID int64) (string, error) {
+	// Check note exists
+	_, err := db.SelectNoteByID(m.db, noteID)
 	if err == sql.ErrNoRows {
-		return "", fmt.Errorf("clip %d not found", clipID)
+		return "", fmt.Errorf("note %d not found", noteID)
 	}
 	if err != nil {
 		return "", err
 	}
+
+	// Get timing for the clip
+	timings, err := db.SelectNoteTimingByNote(m.db, noteID)
+	if err != nil || len(timings) == 0 {
+		return "", fmt.Errorf("note %d has no timing data", noteID)
+	}
+
+	startSec := timings[0].Start
+	endSec := timings[0].End
 
 	if err := m.client.Seek(startSec); err != nil {
 		return "", err
@@ -949,11 +1033,11 @@ func (m *Model) playClip(clipID int64) (string, error) {
 	}
 
 	duration := endSec - startSec
-	return fmt.Sprintf("Playing clip %d (%.1fs loop)", clipID, duration), nil
+	return fmt.Sprintf("Playing clip %d (%.1fs loop)", noteID, duration), nil
 }
 
 // addTackle adds a tackle at the current timestamp.
-func (m *Model) addTackle(player, team string, attempt int, outcome string) (string, error) {
+func (m *Model) addTackle(player, _ string, attempt int, outcome string) (string, error) {
 	// Validate outcome
 	validOutcomes := map[string]bool{"missed": true, "completed": true, "possible": true, "other": true}
 	if !validOutcomes[outcome] {
@@ -965,27 +1049,46 @@ func (m *Model) addTackle(player, team string, attempt int, outcome string) (str
 		return "", fmt.Errorf("failed to get timestamp: %w", err)
 	}
 
-	result, err := m.db.Exec(
-		db.InsertTackleBasicSQL,
-		m.videoPath, timestamp, player, team, attempt, outcome,
-	)
+	duration, _ := m.client.GetDuration()
+
+	children := db.NoteChildren{
+		Timings: []db.NoteTiming{
+			{Start: timestamp, End: timestamp},
+		},
+		Videos: []db.NoteVideo{
+			{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
+		},
+		Tackles: []db.NoteTackle{
+			{Player: player, Attempt: attempt, Outcome: outcome},
+		},
+	}
+
+	noteID, err := db.InsertNoteWithChildren(m.db, "tackle", children)
 	if err != nil {
 		return "", fmt.Errorf("failed to insert tackle: %w", err)
 	}
 
-	tackleID, _ := result.LastInsertId()
-
 	// Reload notes list
 	m.loadNotesAndTackles()
 
-	return fmt.Sprintf("Tackle %d recorded: %s %s", tackleID, player, outcome), nil
+	return fmt.Sprintf("Tackle %d recorded: %s %s", noteID, player, outcome), nil
 }
 
-// countTackles counts tackles for the current video.
+// countTackles counts tackle notes for the current video.
 func (m *Model) countTackles() (int, error) {
-	var count int
-	err := m.db.QueryRow(db.CountTacklesByVideoSQL, m.videoPath).Scan(&count)
-	return count, err
+	rows, err := m.db.Query(
+		"SELECT n.id FROM notes n INNER JOIN note_videos nv ON nv.note_id = n.id WHERE nv.path = ? AND n.category = 'tackle'",
+		m.videoPath,
+	)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		count++
+	}
+	return count, rows.Err()
 }
 
 // jumpToSelectedItem seeks mpv to the selected item's timestamp and displays details.
@@ -1533,6 +1636,7 @@ func Run(client *mpv.Client, db *sql.DB, videoPath string) error {
 }
 
 // loadNotesAndTackles loads notes and tackles from the database for the current video.
+// Uses the normalized schema: queries notes joined with note_videos, note_timing, note_details, note_tackles, note_highlights.
 func (m *Model) loadNotesAndTackles() {
 	if m.db == nil {
 		return
@@ -1540,64 +1644,74 @@ func (m *Model) loadNotesAndTackles() {
 
 	var items []components.ListItem
 
-	// Load notes
-	rows, err := m.db.Query(db.SelectNotesForTUISQL, m.videoPath)
-	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var item components.ListItem
-			var text, category, player, team sql.NullString
-			err := rows.Scan(&item.ID, &item.TimestampSeconds, &text, &category, &player, &team)
-			if err == nil {
-				item.Type = components.ItemTypeNote
-				item.Text = text.String
-				item.Category = category.String
-				item.Player = player.String
-				item.Team = team.String
-				items = append(items, item)
+	// Query all notes for this video with timing info
+	rows, err := m.db.Query(`
+		SELECT n.id, n.category, COALESCE(nt.start, 0)
+		FROM notes n
+		INNER JOIN note_videos nv ON nv.note_id = n.id
+		LEFT JOIN note_timing nt ON nt.note_id = n.id
+		WHERE nv.path = ?
+		ORDER BY nt.start ASC`, m.videoPath)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var noteID int64
+		var category string
+		var timestamp float64
+		if err := rows.Scan(&noteID, &category, &timestamp); err != nil {
+			continue
+		}
+
+		item := components.ListItem{
+			ID:               noteID,
+			TimestampSeconds: timestamp,
+			Category:         category,
+		}
+
+		// Determine type based on category
+		if category == "tackle" {
+			item.Type = components.ItemTypeTackle
+			// Load tackle details
+			tackles, err := db.SelectNoteTacklesByNote(m.db, noteID)
+			if err == nil && len(tackles) > 0 {
+				t := tackles[0]
+				item.Player = t.Player
+				item.Text = t.Player
+				if t.Outcome != "" {
+					item.Text += " - " + t.Outcome
+				}
+			}
+		} else {
+			item.Type = components.ItemTypeNote
+		}
+
+		// Load detail text
+		details, err := db.SelectNoteDetailsByNote(m.db, noteID)
+		if err == nil && len(details) > 0 {
+			if item.Type == components.ItemTypeTackle && item.Text != "" {
+				// Append detail text to tackle display
+				item.Text += ": " + details[0].Note
+			} else {
+				item.Text = details[0].Note
 			}
 		}
-	}
 
-	// Load tackles
-	tackleRows, err := m.db.Query(db.SelectTacklesForTUISQL, m.videoPath)
-	if err == nil {
-		defer tackleRows.Close()
-		for tackleRows.Next() {
-			var item components.ListItem
-			var player, team, outcome, notes sql.NullString
-			var star int
-			err := tackleRows.Scan(&item.ID, &item.TimestampSeconds, &player, &team, &outcome, &notes, &star)
-			if err == nil {
-				item.Type = components.ItemTypeTackle
-				item.Player = player.String
-				item.Team = team.String
-				item.Starred = star == 1
-				// Build text from player, outcome, and notes
-				if player.Valid && player.String != "" {
-					item.Text = player.String
-					if outcome.Valid && outcome.String != "" {
-						item.Text += " - " + outcome.String
-					}
-				} else if outcome.Valid && outcome.String != "" {
-					item.Text = outcome.String
+		// Check for star highlights
+		highlights, err := db.SelectNoteHighlightsByNote(m.db, noteID)
+		if err == nil {
+			for _, h := range highlights {
+				if h.Type == "star" {
+					item.Starred = true
+					break
 				}
-				if notes.Valid && notes.String != "" {
-					if item.Text != "" {
-						item.Text += ": " + notes.String
-					} else {
-						item.Text = notes.String
-					}
-				}
-				items = append(items, item)
 			}
 		}
-	}
 
-	// Sort all items by timestamp
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].TimestampSeconds < items[j].TimestampSeconds
-	})
+		items = append(items, item)
+	}
 
 	m.notesList.Items = items
 	m.notesList.SelectedIndex = 0
@@ -1688,20 +1802,53 @@ func (m *Model) handleStatsFilterInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+// tackleStatsAllVideosQuery aggregates tackle stats across all videos.
+const tackleStatsAllVideosQuery = `
+SELECT
+    ntk.player,
+    COUNT(*) AS total,
+    SUM(CASE WHEN ntk.outcome = 'completed' THEN 1 ELSE 0 END) AS completed,
+    SUM(CASE WHEN ntk.outcome = 'missed' THEN 1 ELSE 0 END) AS missed,
+    SUM(CASE WHEN ntk.outcome = 'possible' THEN 1 ELSE 0 END) AS possible,
+    SUM(CASE WHEN ntk.outcome = 'other' THEN 1 ELSE 0 END) AS other,
+    SUM(CASE WHEN nh.type = 'star' THEN 1 ELSE 0 END) AS starred
+FROM note_tackles ntk
+INNER JOIN notes n ON n.id = ntk.note_id
+LEFT JOIN note_highlights nh ON nh.note_id = n.id AND nh.type = 'star'
+GROUP BY ntk.player
+ORDER BY total DESC`
+
+// tackleStatsByVideoQuery aggregates tackle stats for a specific video.
+const tackleStatsByVideoQuery = `
+SELECT
+    ntk.player,
+    COUNT(*) AS total,
+    SUM(CASE WHEN ntk.outcome = 'completed' THEN 1 ELSE 0 END) AS completed,
+    SUM(CASE WHEN ntk.outcome = 'missed' THEN 1 ELSE 0 END) AS missed,
+    SUM(CASE WHEN ntk.outcome = 'possible' THEN 1 ELSE 0 END) AS possible,
+    SUM(CASE WHEN ntk.outcome = 'other' THEN 1 ELSE 0 END) AS other,
+    SUM(CASE WHEN nh.type = 'star' THEN 1 ELSE 0 END) AS starred
+FROM note_tackles ntk
+INNER JOIN notes n ON n.id = ntk.note_id
+INNER JOIN note_videos nv ON nv.note_id = n.id
+LEFT JOIN note_highlights nh ON nh.note_id = n.id AND nh.type = 'star'
+WHERE nv.path = ?
+GROUP BY ntk.player
+ORDER BY total DESC`
+
 // loadTackleStats loads tackle statistics from the database.
 func (m *Model) loadTackleStats() {
 	if m.db == nil {
 		return
 	}
 
-	// Build query based on whether we want all videos or just current video
 	var query string
 	var args []interface{}
 
 	if m.statsView.AllVideos {
-		query = db.SelectTackleStatsAllSQL
+		query = tackleStatsAllVideosQuery
 	} else {
-		query = db.SelectTackleStatsByVideoSQL
+		query = tackleStatsByVideoQuery
 		args = append(args, m.videoPath)
 	}
 
@@ -1724,7 +1871,6 @@ func (m *Model) loadTackleStats() {
 			&stat.Starred,
 		)
 		if err == nil {
-			// Calculate completion percentage
 			if stat.Completed+stat.Missed > 0 {
 				stat.Percentage = float64(stat.Completed) / float64(stat.Completed+stat.Missed) * 100
 			}
@@ -1745,8 +1891,7 @@ func (m *Model) loadTackleStatsForPanel() {
 		return
 	}
 
-	// Always load stats for current video for the panel
-	rows, err := m.db.Query(db.SelectTackleStatsByVideoSQL, m.videoPath)
+	rows, err := m.db.Query(tackleStatsByVideoQuery, m.videoPath)
 	if err != nil {
 		return
 	}
