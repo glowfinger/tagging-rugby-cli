@@ -1,5 +1,2 @@
+// Package forms provides huh-based form components for the TUI.
 package forms
-
-import (
-	_ "github.com/charmbracelet/huh"
-)
