@@ -105,3 +105,17 @@
   - TackleFormResult.Outcome defaults to empty string — set first select option as default
   - Multiple detail records can be appended to children.Details for text + notes
 ---
+
+## 2026-02-09 - US-062
+- Reorganized tackle form from 3 steps to 2 steps matching database schema
+- Step 1: Player (required), Attempt (required, numeric), Outcome (required, select) — maps to note_tackles table
+- Step 2: Followed, Notes, Zone, Star — maps to note_details, note_zones, note_highlights
+- Removed Text, Category, Team fields from TackleFormResult (don't exist in schema)
+- Category is now always auto-set to "tackle" — not a form field
+- Updated saveTackleFromForm() in tui/tui.go to save Followed as note_detail type="followed", Zone as note_zones record
+- Files changed: tui/forms/tackleform.go, tui/tui.go
+- **Learnings for future iterations:**
+  - TackleFormResult fields should map 1:1 to database child tables (note_tackles, note_details, note_zones, note_highlights)
+  - When reorganizing forms, update both the form definition AND the save function that maps form results to database records
+  - Zone field stores in note_zones.horizontal — could be extended to horizontal+vertical if needed
+---
