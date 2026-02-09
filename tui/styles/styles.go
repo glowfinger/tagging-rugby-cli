@@ -1,26 +1,32 @@
-// Package styles provides Lipgloss styles for the TUI using a retro purple color palette.
+// Package styles provides Lipgloss styles for the TUI using the Ciapre colour palette.
 package styles
 
 import "github.com/charmbracelet/lipgloss"
 
-// Color palette - retro purple theme
+// Color palette - Ciapre (warm, earthy) theme from Gogh
 const (
-	// DeepPurple is the darkest background color
-	DeepPurple = lipgloss.Color("#1a1a2e")
-	// DarkPurple is a secondary dark background
-	DarkPurple = lipgloss.Color("#16213e")
-	// Purple is the main accent color
-	Purple = lipgloss.Color("#4a347d")
-	// BrightPurple is used for highlights and focus states
-	BrightPurple = lipgloss.Color("#7b2cbf")
-	// Lavender is a light accent color
-	Lavender = lipgloss.Color("#c77dff")
-	// LightLavender is the lightest purple for text
-	LightLavender = lipgloss.Color("#e0aaff")
-	// Pink is an accent color for special elements
-	Pink = lipgloss.Color("#ff6b9d")
-	// Cyan is an accent color for information
-	Cyan = lipgloss.Color("#64dfdf")
+	// DeepPurple is the main background colour (Ciapre background)
+	DeepPurple = lipgloss.Color("#191C27")
+	// DarkPurple is a secondary dark background (Ciapre ANSI 0 black)
+	DarkPurple = lipgloss.Color("#181818")
+	// Purple is the border/dim accent colour (Ciapre ANSI 6 brown)
+	Purple = lipgloss.Color("#5C4F4B")
+	// BrightPurple is used for highlights and focus states (Ciapre ANSI 5 magenta)
+	BrightPurple = lipgloss.Color("#724D7C")
+	// Lavender is a secondary text colour (Ciapre foreground)
+	Lavender = lipgloss.Color("#AEA47A")
+	// LightLavender is the primary text colour (Ciapre ANSI 14 cream)
+	LightLavender = lipgloss.Color("#F3DBB2")
+	// Pink is an accent colour for headers and special elements (Ciapre ANSI 13 bright magenta)
+	Pink = lipgloss.Color("#D33061")
+	// Cyan is an accent colour for information and interactive elements (Ciapre ANSI 12 bright blue)
+	Cyan = lipgloss.Color("#3097C6")
+	// Amber is a warm accent for sub-headers (Ciapre derived)
+	Amber = lipgloss.Color("#CC8B3F")
+	// Red is used for warnings and errors (Ciapre ANSI 1)
+	Red = lipgloss.Color("#AC3835")
+	// Green is used for success messages (Ciapre ANSI 2)
+	Green = lipgloss.Color("#A6A75D")
 )
 
 // Pre-defined styles using the color palette
@@ -55,10 +61,10 @@ var SecondaryText = lipgloss.NewStyle().
 
 // Warning is the style for warning messages
 var Warning = lipgloss.NewStyle().
-	Foreground(Pink).
+	Foreground(Red).
 	Bold(true)
 
 // Success is the style for success messages
 var Success = lipgloss.NewStyle().
-	Foreground(Cyan).
+	Foreground(Green).
 	Bold(true)
