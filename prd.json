@@ -1,15 +1,19 @@
 {
   "project": "tagging-rugby-cli",
-  "branchName": "ralph/huh-forms",
-  "description": "Replace custom form rendering and input handling in the TUI with huh library for multi-step wizard forms, validation, and keyboard navigation",
+  "branchName": "ralph/video-controls-ui-cleanup",
+  "description": "Add arrow key and punctuation key alternatives for video controls, and fix three-column layout alignment with responsive column sizing",
   "userStories": [
     {
-      "id": "US-055",
-      "title": "Add huh dependency",
-      "description": "As a developer, I need the huh library added to the project so that I can build forms with it.",
+      "id": "US-065",
+      "title": "Add arrow key alternatives for seek and navigation",
+      "description": "As a user, I want to use Left/Right arrow keys to seek backward/forward and Up/Down arrow keys to navigate the notes list, so that I have intuitive controls alongside the vim-style H/J/K/L keys.",
       "acceptanceCriteria": [
-        "Add github.com/charmbracelet/huh to go.mod",
-        "Run go mod tidy successfully",
+        "Left arrow key seeks backward by current step size (same as H key)",
+        "Right arrow key seeks forward by current step size (same as L key)",
+        "Up arrow key selects previous item in list (same as J key)",
+        "Down arrow key selects next item in list (same as K key)",
+        "Existing H/L/J/K bindings continue to work unchanged",
+        "Arrow keys do NOT trigger in command mode — left/right are already handled in handleCommandInput() for cursor movement, and up/down should be no-ops in command mode",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 1,
@@ -17,127 +21,63 @@
       "notes": ""
     },
     {
-      "id": "US-056",
-      "title": "Style huh forms to match TUI theme",
-      "description": "As a user, I want the huh forms to match the existing TUI color scheme so that the interface feels cohesive.",
+      "id": "US-066",
+      "title": "Add comma/period alternatives for step size control",
+      "description": "As a user, I want to use comma and period keys (in addition to < and >) to decrease/increase step size, so I don't need to hold Shift.",
       "acceptanceCriteria": [
-        "Create custom huh theme in tui/forms/theme.go",
-        "Use existing colors from tui/styles/styles.go (Purple, Pink, Lavender, Cyan, etc.)",
-        "Active field highlights match current style (LightLavender on Purple background)",
-        "Required field labels use Pink color",
-        "Optional field labels use Lavender color",
-        "Error messages use appropriate contrast color",
-        "Typecheck passes"
+        "Comma key (,) decreases step size by calling decreaseStepSize() — same as < key",
+        "Period key (.) increases step size by calling increaseStepSize() — same as > key",
+        "Existing < and > bindings continue to work unchanged",
+        "Comma and period do NOT trigger in command mode (only in normal mode)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 2,
       "passes": true,
       "notes": ""
     },
     {
-      "id": "US-057",
-      "title": "Create base note form using huh",
-      "description": "As a developer, I need a reusable note form built with huh that can be embedded in other forms or used standalone.",
+      "id": "US-067",
+      "title": "Update controls display and help overlay with new keybindings",
+      "description": "As a user, I want the controls panel and help overlay to show all available key alternatives so I can discover them.",
       "acceptanceCriteria": [
-        "Create tui/forms/noteform.go with a huh form for note input",
-        "Category is set automatically (not a user-facing field)",
-        "Form displays timestamp header (passed as parameter)",
-        "Form returns structured data on submit",
-        "Esc key cancels the form",
-        "Form uses the custom theme from tui/forms/theme.go",
-        "Typecheck passes"
+        "GetControlGroups() in tui/components/controls.go updated with combined shortcut text showing alternatives (e.g. Shortcut field becomes \"H/Left\" instead of just \"H\")",
+        "Help overlay in tui/components/help.go updated: Playback section shows H/Left and L/Right for seeking, ,/< and ./> for step size",
+        "Help overlay Navigation section shows J/Up for previous item and K/Down for next item",
+        "renderColumn1() in tui/tui.go refactored to use GetControlGroups() instead of its own hardcoded controls slice — remove the duplicate controls list around line 1528",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 3,
       "passes": true,
       "notes": ""
     },
     {
-      "id": "US-058",
-      "title": "Create tackle wizard form using huh",
-      "description": "As a user, I want a multi-step tackle form that captures note details first, then tackle-specific fields, so that data entry flows logically.",
+      "id": "US-069",
+      "title": "Fix three-column layout alignment",
+      "description": "As a user, I want the three columns to always render inline at the same height so the layout doesn't break or misalign.",
       "acceptanceCriteria": [
-        "Create tui/forms/tackleform.go with a multi-step huh wizard",
-        "Step 1: Tackle fields — Player (text input), Attempt (number input, required), Outcome (select, required)",
-        "Step 2: Optional fields — Followed (note_detail type=followed), Notes (note_detail type=notes), Zone (note_zones), Star (note_highlight)",
-        "Category is auto-set to tackle on the parent note",
-        "Outcome select has options: completed, missed, possible, other",
-        "Attempt field only accepts numeric input",
-        "Required fields show validation errors before proceeding",
-        "Progress indicator shows current step",
-        "Form uses the custom theme from tui/forms/theme.go",
-        "Typecheck passes"
+        "All three columns render at the same height regardless of content length — pad all column line arrays to colHeight before joining",
+        "Vertical border characters (│) align correctly on every row with no gaps or overflow",
+        "Each line in the row-by-row assembly is exactly the expected total width (col1 + border + col2 + border + col3)",
+        "Truncate column lines that exceed colWidth using lipgloss.Width() to measure ANSI-aware width, then trim excess",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 4,
       "passes": true,
       "notes": ""
     },
     {
-      "id": "US-059",
-      "title": "Integrate note form into TUI",
-      "description": "As a user, I want the note input to use the new huh form so that I get better validation and keyboard navigation.",
+      "id": "US-070",
+      "title": "Responsive column widths — column 3 shrinks first",
+      "description": "As a user, I want the live stats panel (column 3) to shrink before columns 1 and 2 when the terminal is narrow, so that controls and notes list stay usable.",
       "acceptanceCriteria": [
-        "Replace NoteInputState usage in tui/tui.go with huh form from tui/forms/noteform.go",
-        "Form appears inline in the center column when triggered (n key)",
-        "Tab/Shift+Tab navigate between fields",
-        "Enter submits when all required fields are valid",
-        "Esc cancels and returns to normal view",
-        "Submitted data saves to database correctly using db.InsertNoteWithChildren",
-        "Remove old tui/components/noteinput.go or mark deprecated",
-        "Typecheck passes"
-      ],
-      "priority": 5,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-060",
-      "title": "Integrate tackle form into TUI",
-      "description": "As a user, I want the tackle input to use the new multi-step huh form so that I can enter tackle data efficiently with wizard steps.",
-      "acceptanceCriteria": [
-        "Replace TackleInputState usage in tui/tui.go with huh wizard form from tui/forms/tackleform.go",
-        "Form appears inline in the center column when triggered (t key)",
-        "Wizard shows step progress (e.g. Step 1 of 2)",
-        "Can navigate back to previous steps to edit",
-        "Enter on final step submits when all required fields are valid",
-        "Esc cancels at any step and returns to normal view",
-        "Submitted data saves note (category=tackle), note_tackles, note_details, note_zones, and note_highlights to database correctly",
-        "Remove old tui/components/tackleinput.go or mark deprecated",
-        "Typecheck passes"
-      ],
-      "priority": 6,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-062",
-      "title": "Reorganize tackle form to match data model",
-      "description": "As a user, I want the tackle form fields to match the actual database schema so that data is saved correctly to the right tables.",
-      "acceptanceCriteria": [
-        "Step 1 contains: Player (text input), Attempt (number input, required), Outcome (select, required) — maps to note_tackles",
-        "Step 2 contains: Followed (note_detail type=followed), Notes (note_detail type=notes), Zone (note_zones), Star (note_highlights)",
-        "Category is auto-set to tackle on the parent note — not a form field",
-        "Remove Text, Team fields (do not exist in schema)",
-        "TackleFormResult struct updated to reflect correct field mappings",
-        "Step header descriptions update to reflect new groupings",
+        "At wide terminals (120+ cols): columns split roughly equal thirds as they do today",
+        "At medium terminals (90-119 cols): column 3 gets a smaller share (minimum ~18 chars) while columns 1 and 2 share the remaining space equally",
+        "At narrow terminals (below 90 cols): column 3 is hidden entirely, only one border character is used, and columns 1 and 2 share the full width",
+        "Column width calculation happens in the View() method around the existing usableWidth/colWidth logic — replace the equal-thirds math with the responsive algorithm",
+        "Layout recalculates correctly when terminal is resized (WindowSizeMsg already updates m.width)",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
-      "priority": 7,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-061",
-      "title": "Confirm discard when escaping form with data",
-      "description": "As a user, I want a confirmation prompt when I press Escape on a form that has data entered, so that I don't accidentally lose my input.",
-      "acceptanceCriteria": [
-        "Pressing Esc on a note or tackle form with at least one non-empty field shows an Are you sure? confirmation",
-        "Pressing Esc on an empty form (no fields filled) exits immediately without confirmation",
-        "Confirmation prompt offers Yes (discard) and No (return to form) options",
-        "Selecting Yes discards data and returns to normal view",
-        "Selecting No returns focus to the form at the same position",
-        "Confirmation prompt uses the custom huh theme for consistent styling",
-        "Typecheck passes"
-      ],
-      "priority": 8,
+      "priority": 5,
       "passes": true,
       "notes": ""
     }

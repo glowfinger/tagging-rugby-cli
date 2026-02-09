@@ -27,10 +27,12 @@ func HelpOverlay(width, height int) string {
 			}{
 				{"Space", "Toggle play/pause"},
 				{"M", "Toggle mute"},
-				{"H", "Step backward (by step size)"},
-				{"L", "Step forward (by step size)"},
-				{"<", "Decrease step size"},
-				{">", "Increase step size"},
+				{"H / Left", "Step backward (by step size)"},
+				{"L / Right", "Step forward (by step size)"},
+				{"Ctrl+H", "Frame step backward"},
+				{"Ctrl+L", "Frame step forward"},
+				{", / <", "Decrease step size"},
+				{". / >", "Increase step size"},
 			},
 		},
 		{
@@ -39,8 +41,8 @@ func HelpOverlay(width, height int) string {
 				key  string
 				desc string
 			}{
-				{"J", "Select previous item"},
-				{"K", "Select next item"},
+				{"J / Up", "Select previous item"},
+				{"K / Down", "Select next item"},
 				{"Enter", "Jump to selected item"},
 			},
 		},
@@ -68,7 +70,7 @@ func HelpOverlay(width, height int) string {
 			}{
 				{":", "Enter command mode"},
 				{"Esc", "Cancel command mode"},
-				{"q", "Quit application"},
+				{"Ctrl+C", "Quit application"},
 			},
 		},
 		{

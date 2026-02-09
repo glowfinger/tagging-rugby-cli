@@ -1,0 +1,36 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/huh-forms",
+  "description": "Improve Forms Using Huh - TUI keybinding improvements including frame-by-frame navigation and quit shortcut removal",
+  "userStories": [
+    {
+      "id": "US-063",
+      "title": "Frame-by-frame navigation with Ctrl modifier",
+      "description": "As a user, I want to hold Ctrl while pressing H/L so that I can step forward or backward by exactly one frame for precise positioning.",
+      "acceptanceCriteria": [
+        "ctrl+h steps backward by one frame using FrameBackStep()",
+        "ctrl+l steps forward by one frame using FrameStep()",
+        "Regular h/l continue to seek by the current step size (no regression)",
+        "Frame step only fires when mpv client is connected",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-064",
+      "title": "Remove q as quit shortcut",
+      "description": "As a user, I don't want pressing q to exit the application so that I can use q without accidentally quitting.",
+      "acceptanceCriteria": [
+        "Remove q from the quit key case in tui/tui.go (line ~203)",
+        "ctrl+c remains as the only way to quit",
+        "Pressing q in normal mode does nothing (no crash, no side effect)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

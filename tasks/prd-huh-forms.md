@@ -88,6 +88,25 @@ Replace the custom form rendering and input handling in the TUI with the [huh](h
 - [ ] Error messages use appropriate contrast color
 - [ ] Typecheck passes
 
+### US-063: Frame-by-frame navigation with Ctrl modifier
+**Description:** As a user, I want to hold Ctrl while pressing H/L so that I can step forward or backward by exactly one frame for precise positioning.
+
+**Acceptance Criteria:**
+- [ ] `ctrl+h` steps backward by one frame using `FrameBackStep()`
+- [ ] `ctrl+l` steps forward by one frame using `FrameStep()`
+- [ ] Regular `h`/`l` continue to seek by the current step size (no regression)
+- [ ] Frame step only fires when mpv client is connected
+- [ ] Typecheck passes (`CGO_ENABLED=0 go vet ./...`)
+
+### US-064: Remove q as quit shortcut
+**Description:** As a user, I don't want pressing `q` to exit the application so that I can use `q` without accidentally quitting.
+
+**Acceptance Criteria:**
+- [ ] Remove `"q"` from the quit key case in `tui/tui.go` (line ~203)
+- [ ] `ctrl+c` remains as the only way to quit
+- [ ] Pressing `q` in normal mode does nothing (no crash, no side effect)
+- [ ] Typecheck passes (`CGO_ENABLED=0 go vet ./...`)
+
 ## Functional Requirements
 
 - FR-1: Add `github.com/charmbracelet/huh` as a dependency

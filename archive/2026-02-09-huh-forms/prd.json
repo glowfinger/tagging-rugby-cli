@@ -1,0 +1,145 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/huh-forms",
+  "description": "Replace custom form rendering and input handling in the TUI with huh library for multi-step wizard forms, validation, and keyboard navigation",
+  "userStories": [
+    {
+      "id": "US-055",
+      "title": "Add huh dependency",
+      "description": "As a developer, I need the huh library added to the project so that I can build forms with it.",
+      "acceptanceCriteria": [
+        "Add github.com/charmbracelet/huh to go.mod",
+        "Run go mod tidy successfully",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-056",
+      "title": "Style huh forms to match TUI theme",
+      "description": "As a user, I want the huh forms to match the existing TUI color scheme so that the interface feels cohesive.",
+      "acceptanceCriteria": [
+        "Create custom huh theme in tui/forms/theme.go",
+        "Use existing colors from tui/styles/styles.go (Purple, Pink, Lavender, Cyan, etc.)",
+        "Active field highlights match current style (LightLavender on Purple background)",
+        "Required field labels use Pink color",
+        "Optional field labels use Lavender color",
+        "Error messages use appropriate contrast color",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-057",
+      "title": "Create base note form using huh",
+      "description": "As a developer, I need a reusable note form built with huh that can be embedded in other forms or used standalone.",
+      "acceptanceCriteria": [
+        "Create tui/forms/noteform.go with a huh form for note input",
+        "Category is set automatically (not a user-facing field)",
+        "Form displays timestamp header (passed as parameter)",
+        "Form returns structured data on submit",
+        "Esc key cancels the form",
+        "Form uses the custom theme from tui/forms/theme.go",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-058",
+      "title": "Create tackle wizard form using huh",
+      "description": "As a user, I want a multi-step tackle form that captures note details first, then tackle-specific fields, so that data entry flows logically.",
+      "acceptanceCriteria": [
+        "Create tui/forms/tackleform.go with a multi-step huh wizard",
+        "Step 1: Tackle fields — Player (text input), Attempt (number input, required), Outcome (select, required)",
+        "Step 2: Optional fields — Followed (note_detail type=followed), Notes (note_detail type=notes), Zone (note_zones), Star (note_highlight)",
+        "Category is auto-set to tackle on the parent note",
+        "Outcome select has options: completed, missed, possible, other",
+        "Attempt field only accepts numeric input",
+        "Required fields show validation errors before proceeding",
+        "Progress indicator shows current step",
+        "Form uses the custom theme from tui/forms/theme.go",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-059",
+      "title": "Integrate note form into TUI",
+      "description": "As a user, I want the note input to use the new huh form so that I get better validation and keyboard navigation.",
+      "acceptanceCriteria": [
+        "Replace NoteInputState usage in tui/tui.go with huh form from tui/forms/noteform.go",
+        "Form appears inline in the center column when triggered (n key)",
+        "Tab/Shift+Tab navigate between fields",
+        "Enter submits when all required fields are valid",
+        "Esc cancels and returns to normal view",
+        "Submitted data saves to database correctly using db.InsertNoteWithChildren",
+        "Remove old tui/components/noteinput.go or mark deprecated",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-060",
+      "title": "Integrate tackle form into TUI",
+      "description": "As a user, I want the tackle input to use the new multi-step huh form so that I can enter tackle data efficiently with wizard steps.",
+      "acceptanceCriteria": [
+        "Replace TackleInputState usage in tui/tui.go with huh wizard form from tui/forms/tackleform.go",
+        "Form appears inline in the center column when triggered (t key)",
+        "Wizard shows step progress (e.g. Step 1 of 2)",
+        "Can navigate back to previous steps to edit",
+        "Enter on final step submits when all required fields are valid",
+        "Esc cancels at any step and returns to normal view",
+        "Submitted data saves note (category=tackle), note_tackles, note_details, note_zones, and note_highlights to database correctly",
+        "Remove old tui/components/tackleinput.go or mark deprecated",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-062",
+      "title": "Reorganize tackle form to match data model",
+      "description": "As a user, I want the tackle form fields to match the actual database schema so that data is saved correctly to the right tables.",
+      "acceptanceCriteria": [
+        "Step 1 contains: Player (text input), Attempt (number input, required), Outcome (select, required) — maps to note_tackles",
+        "Step 2 contains: Followed (note_detail type=followed), Notes (note_detail type=notes), Zone (note_zones), Star (note_highlights)",
+        "Category is auto-set to tackle on the parent note — not a form field",
+        "Remove Text, Team fields (do not exist in schema)",
+        "TackleFormResult struct updated to reflect correct field mappings",
+        "Step header descriptions update to reflect new groupings",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-061",
+      "title": "Confirm discard when escaping form with data",
+      "description": "As a user, I want a confirmation prompt when I press Escape on a form that has data entered, so that I don't accidentally lose my input.",
+      "acceptanceCriteria": [
+        "Pressing Esc on a note or tackle form with at least one non-empty field shows an Are you sure? confirmation",
+        "Pressing Esc on an empty form (no fields filled) exits immediately without confirmation",
+        "Confirmation prompt offers Yes (discard) and No (return to form) options",
+        "Selecting Yes discards data and returns to normal view",
+        "Selecting No returns focus to the form at the same position",
+        "Confirmation prompt uses the custom huh theme for consistent styling",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

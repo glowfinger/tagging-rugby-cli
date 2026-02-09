@@ -200,7 +200,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loadTackleStats()
 			m.statsView.Active = true
 			return m, nil
-		case "q", "ctrl+c":
+		case "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
 		case ":":
@@ -225,32 +225,44 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
-		case "h", "H":
-			// H steps backward by current step size
+		case "ctrl+h":
+			// Ctrl+H steps backward by one frame
+			if m.client != nil && m.client.IsConnected() {
+				_ = m.client.FrameBackStep()
+			}
+			return m, nil
+		case "ctrl+l":
+			// Ctrl+L steps forward by one frame
+			if m.client != nil && m.client.IsConnected() {
+				_ = m.client.FrameStep()
+			}
+			return m, nil
+		case "h", "H", "left":
+			// H / Left arrow steps backward by current step size
 			if m.client != nil && m.client.IsConnected() {
 				_ = m.client.SeekRelative(-m.statusBar.StepSize)
 			}
 			return m, nil
-		case "l", "L":
-			// L steps forward by current step size
+		case "l", "L", "right":
+			// L / Right arrow steps forward by current step size
 			if m.client != nil && m.client.IsConnected() {
 				_ = m.client.SeekRelative(m.statusBar.StepSize)
 			}
 			return m, nil
-		case "<":
-			// Decrease step size
+		case "<", ",":
+			// < / , decreases step size
 			m.decreaseStepSize()
 			return m, nil
-		case ">":
-			// Increase step size
+		case ">", ".":
+			// > / . increases step size
 			m.increaseStepSize()
 			return m, nil
-		case "j", "J":
-			// J moves selection to previous note/tackle in list
+		case "j", "J", "up":
+			// J / Up arrow moves selection to previous note/tackle in list
 			m.notesList.MoveUp()
 			return m, nil
-		case "k", "K":
-			// K moves selection to next note/tackle in list
+		case "k", "K", "down":
+			// K / Down arrow moves selection to next note/tackle in list
 			m.notesList.MoveDown()
 			return m, nil
 		case "enter":
@@ -1434,12 +1446,12 @@ func (m *Model) View() string {
 		return statusBar + "\n" + controlsDisplay + "\n" + tackleFormView
 	}
 
-	// --- Three-column layout ---
-	// Compute column widths (equal thirds)
-	// Account for 2 vertical border characters between columns
-	usableWidth := m.width - 2
-	colWidth := usableWidth / 3
-	col3Width := usableWidth - colWidth*2 // last column gets remainder
+	// --- Three-column layout with responsive sizing ---
+	// Column 3 (live stats) shrinks first; hides entirely at narrow widths.
+	const (
+		col3HideThreshold = 90  // below this width, hide column 3 entirely
+		col3MinWidth      = 18  // minimum width for column 3 before hiding
+	)
 
 	// Available height for columns (total height minus status bar line, timeline 2 lines, and command input line)
 	colHeight := m.height - 5
@@ -1447,46 +1459,69 @@ func (m *Model) View() string {
 		colHeight = 5
 	}
 
-	// Column 1: Controls, playback status, current tag detail card, command input
-	col1Content := m.renderColumn1(colWidth, colHeight)
-
-	// Column 2: Scrollable list of all tags/events
-	col2Content := m.renderColumn2(colWidth, colHeight)
-
-	// Column 3: Live stats summary, bar graph, top players leaderboard
-	col3Content := m.renderColumn3(col3Width, colHeight)
+	showCol3 := m.width >= col3HideThreshold
 
 	// Border style for vertical separators
 	borderStr := lipgloss.NewStyle().
 		Foreground(styles.Purple).
 		Render("│")
 
-	// Join columns horizontally with borders
-	// Build each row by combining column lines side by side
-	col1Lines := strings.Split(col1Content, "\n")
-	col2Lines := strings.Split(col2Content, "\n")
-	col3Lines := strings.Split(col3Content, "\n")
+	var columnsView string
 
-	// Pad all columns to the same height
-	for len(col1Lines) < colHeight {
-		col1Lines = append(col1Lines, "")
-	}
-	for len(col2Lines) < colHeight {
-		col2Lines = append(col2Lines, "")
-	}
-	for len(col3Lines) < colHeight {
-		col3Lines = append(col3Lines, "")
-	}
+	if showCol3 {
+		// Three-column layout: account for 2 border characters
+		usableWidth := m.width - 2
+		var col1Width, col2Width, col3Width int
 
-	var rows []string
-	for i := 0; i < colHeight; i++ {
-		c1 := padToWidth(col1Lines[i], colWidth)
-		c2 := padToWidth(col2Lines[i], colWidth)
-		c3 := padToWidth(col3Lines[i], col3Width)
-		rows = append(rows, c1+borderStr+c2+borderStr+c3)
-	}
+		if m.width >= 120 {
+			// Wide: equal thirds
+			col1Width = usableWidth / 3
+			col2Width = usableWidth / 3
+			col3Width = usableWidth - col1Width - col2Width
+		} else {
+			// Medium: column 3 gets minimum, rest splits between 1 and 2
+			col3Width = col3MinWidth
+			remaining := usableWidth - col3Width
+			col1Width = remaining / 2
+			col2Width = remaining - col1Width
+		}
 
-	columnsView := strings.Join(rows, "\n")
+		col1Content := m.renderColumn1(col1Width, colHeight)
+		col2Content := m.renderColumn2(col2Width, colHeight)
+		col3Content := m.renderColumn3(col3Width, colHeight)
+
+		col1Lines := normalizeLines(strings.Split(col1Content, "\n"), colHeight)
+		col2Lines := normalizeLines(strings.Split(col2Content, "\n"), colHeight)
+		col3Lines := normalizeLines(strings.Split(col3Content, "\n"), colHeight)
+
+		var rows []string
+		for i := 0; i < colHeight; i++ {
+			c1 := padToWidth(col1Lines[i], col1Width)
+			c2 := padToWidth(col2Lines[i], col2Width)
+			c3 := padToWidth(col3Lines[i], col3Width)
+			rows = append(rows, c1+borderStr+c2+borderStr+c3)
+		}
+		columnsView = strings.Join(rows, "\n")
+	} else {
+		// Two-column layout: column 3 hidden, 1 border character
+		usableWidth := m.width - 1
+		col1Width := usableWidth / 2
+		col2Width := usableWidth - col1Width
+
+		col1Content := m.renderColumn1(col1Width, colHeight)
+		col2Content := m.renderColumn2(col2Width, colHeight)
+
+		col1Lines := normalizeLines(strings.Split(col1Content, "\n"), colHeight)
+		col2Lines := normalizeLines(strings.Split(col2Content, "\n"), colHeight)
+
+		var rows []string
+		for i := 0; i < colHeight; i++ {
+			c1 := padToWidth(col1Lines[i], col1Width)
+			c2 := padToWidth(col2Lines[i], col2Width)
+			rows = append(rows, c1+borderStr+c2)
+		}
+		columnsView = strings.Join(rows, "\n")
+	}
 
 	// Render timeline progress bar below columns (full width)
 	timeline := components.Timeline(m.statusBar.TimePos, m.statusBar.Duration, m.notesList.Items, m.width)
@@ -1497,14 +1532,71 @@ func (m *Model) View() string {
 	return statusBar + "\n" + columnsView + "\n" + timeline + "\n" + commandInput
 }
 
-// padToWidth pads a string with spaces to the specified width.
-// If the string is wider (due to ANSI sequences), it is returned as-is.
+// padToWidth pads or truncates a string to exactly the specified width.
+// Uses lipgloss.Width for ANSI-aware measurement. Truncates with ellipsis if too wide.
 func padToWidth(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
 	currentWidth := lipgloss.Width(s)
-	if currentWidth >= width {
+	if currentWidth == width {
 		return s
 	}
-	return s + strings.Repeat(" ", width-currentWidth)
+	if currentWidth < width {
+		return s + strings.Repeat(" ", width-currentWidth)
+	}
+	// Truncate: walk runes and measure visible width
+	truncated := truncateToWidth(s, width)
+	// Pad in case truncation left us short (due to wide chars)
+	truncWidth := lipgloss.Width(truncated)
+	if truncWidth < width {
+		truncated += strings.Repeat(" ", width-truncWidth)
+	}
+	return truncated
+}
+
+// normalizeLines pads or truncates a slice of strings to exactly the given height.
+func normalizeLines(lines []string, height int) []string {
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	for len(lines) < height {
+		lines = append(lines, "")
+	}
+	return lines
+}
+
+// truncateToWidth truncates a string to fit within the given visible width,
+// preserving ANSI escape sequences.
+func truncateToWidth(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	var result strings.Builder
+	visibleWidth := 0
+	inEscape := false
+
+	for _, r := range s {
+		if r == '\x1b' {
+			inEscape = true
+			result.WriteRune(r)
+			continue
+		}
+		if inEscape {
+			result.WriteRune(r)
+			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
+				inEscape = false
+			}
+			continue
+		}
+		// Normal visible character
+		if visibleWidth >= maxWidth {
+			break
+		}
+		result.WriteRune(r)
+		visibleWidth++
+	}
+	return result.String()
 }
 
 // renderColumn1 renders Column 1: Controls, playback status, tag detail card.
@@ -1518,36 +1610,22 @@ func (m *Model) renderColumn1(width, height int) string {
 	lines = append(lines, headerStyle.Render(" Controls"))
 	lines = append(lines, "")
 
-	// Compact controls display (vertical list for column)
+	// Compact controls display (vertical list for column) using shared control groups
 	shortcutStyle := lipgloss.NewStyle().
 		Foreground(styles.Cyan).
 		Bold(true)
 	nameStyle := lipgloss.NewStyle().
 		Foreground(styles.LightLavender)
 
-	controls := []struct {
-		emoji, name, key string
-	}{
-		{"\u23ef\ufe0f", "Play/Pause", "Space"},
-		{"\u23ea", "Back", "H"},
-		{"\u23e9", "Forward", "L"},
-		{"\u23ee", "Prev Item", "J"},
-		{"\u23ed", "Next Item", "K"},
-		{"\U0001F507", "Mute", "M"},
-		{"\u2796", "Step-", "<"},
-		{"\u2795", "Step+", ">"},
-		{"\U0001F4DD", "Overlay", "O"},
-		{"\U0001F4CA", "Stats", "S"},
-		{"\u2753", "Help", "?"},
-		{"\U0001F6AA", "Quit", "q"},
-	}
-
-	for _, c := range controls {
-		line := fmt.Sprintf(" %s %s %s",
-			c.emoji,
-			nameStyle.Render(fmt.Sprintf("%-10s", c.name)),
-			shortcutStyle.Render("["+c.key+"]"))
-		lines = append(lines, line)
+	groups := components.GetControlGroups()
+	for _, group := range groups {
+		for _, c := range group.Controls {
+			line := fmt.Sprintf(" %s %s %s",
+				c.Emoji,
+				nameStyle.Render(fmt.Sprintf("%-10s", c.Name)),
+				shortcutStyle.Render("["+c.Shortcut+"]"))
+			lines = append(lines, line)
+		}
 	}
 	lines = append(lines, "")
 
@@ -1792,7 +1870,7 @@ func (m *Model) handleStatsViewInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Move selection down
 		m.statsView.MoveDown()
 		return m, nil
-	case "q", "ctrl+c":
+	case "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
 	case "?":
