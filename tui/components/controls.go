@@ -26,24 +26,24 @@ func GetControlGroups() []ControlGroup {
 		// Playback controls
 		{
 			Controls: []Control{
-				{Emoji: "\u23ea", Name: "Back", Shortcut: "H"},
-				{Emoji: "\u23e9", Name: "Fwd", Shortcut: "L"},
+				{Emoji: "\u23ea", Name: "Back", Shortcut: "H/\u2190"},
+				{Emoji: "\u23e9", Name: "Fwd", Shortcut: "L/\u2192"},
 				{Emoji: "\u23ef\ufe0f", Name: "Play", Shortcut: "Space"},
 			},
 		},
 		// Navigation controls
 		{
 			Controls: []Control{
-				{Emoji: "\u23ee", Name: "Prev", Shortcut: "J"},
-				{Emoji: "\u23ed", Name: "Next", Shortcut: "K"},
+				{Emoji: "\u23ee", Name: "Prev", Shortcut: "J/\u2191"},
+				{Emoji: "\u23ed", Name: "Next", Shortcut: "K/\u2193"},
 				{Emoji: "\U0001F507", Name: "Mute", Shortcut: "M"},
 			},
 		},
 		// Step/overlay controls
 		{
 			Controls: []Control{
-				{Emoji: "\u2796", Name: "Step-", Shortcut: "<"},
-				{Emoji: "\u2795", Name: "Step+", Shortcut: ">"},
+				{Emoji: "\u2796", Name: "Step-", Shortcut: ",/<"},
+				{Emoji: "\u2795", Name: "Step+", Shortcut: "./>"},
 				{Emoji: "\U0001F4DD", Name: "Overlay", Shortcut: "O"},
 			},
 		},

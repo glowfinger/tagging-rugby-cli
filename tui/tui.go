@@ -1518,36 +1518,22 @@ func (m *Model) renderColumn1(width, height int) string {
 	lines = append(lines, headerStyle.Render(" Controls"))
 	lines = append(lines, "")
 
-	// Compact controls display (vertical list for column)
+	// Compact controls display (vertical list for column) using shared control groups
 	shortcutStyle := lipgloss.NewStyle().
 		Foreground(styles.Cyan).
 		Bold(true)
 	nameStyle := lipgloss.NewStyle().
 		Foreground(styles.LightLavender)
 
-	controls := []struct {
-		emoji, name, key string
-	}{
-		{"\u23ef\ufe0f", "Play/Pause", "Space"},
-		{"\u23ea", "Back", "H"},
-		{"\u23e9", "Forward", "L"},
-		{"\u23ee", "Prev Item", "J"},
-		{"\u23ed", "Next Item", "K"},
-		{"\U0001F507", "Mute", "M"},
-		{"\u2796", "Step-", "<"},
-		{"\u2795", "Step+", ">"},
-		{"\U0001F4DD", "Overlay", "O"},
-		{"\U0001F4CA", "Stats", "S"},
-		{"\u2753", "Help", "?"},
-		{"\U0001F6AA", "Quit", "q"},
-	}
-
-	for _, c := range controls {
-		line := fmt.Sprintf(" %s %s %s",
-			c.emoji,
-			nameStyle.Render(fmt.Sprintf("%-10s", c.name)),
-			shortcutStyle.Render("["+c.key+"]"))
-		lines = append(lines, line)
+	groups := components.GetControlGroups()
+	for _, group := range groups {
+		for _, c := range group.Controls {
+			line := fmt.Sprintf(" %s %s %s",
+				c.Emoji,
+				nameStyle.Render(fmt.Sprintf("%-10s", c.Name)),
+				shortcutStyle.Render("["+c.Shortcut+"]"))
+			lines = append(lines, line)
+		}
 	}
 	lines = append(lines, "")
 
