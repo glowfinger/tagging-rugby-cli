@@ -9,23 +9,16 @@ import (
 
 // TackleFormResult holds the data returned by a completed tackle wizard.
 type TackleFormResult struct {
-	// Step 1: Note fields
-	Text     string
-	Category string
-	Player   string
-	Team     string
-
-	// Step 2: Tackle fields
+	// Step 1: Tackle fields (maps to note_tackles)
+	Player  string
 	Attempt string
 	Outcome string
 
-	// Step 3: Optional fields
-	Followed string
-	Notes    string
-	Zone     string
-
-	// Star toggle
-	Star bool
+	// Step 2: Optional fields
+	Followed string // maps to note_detail type="followed"
+	Notes    string // maps to note_detail type="notes"
+	Zone     string // maps to note_zones
+	Star     bool   // maps to note_highlights type="star"
 }
 
 // NewTackleForm creates a multi-step huh wizard form for tackle input.
@@ -38,40 +31,20 @@ func NewTackleForm(timestamp float64, result *TackleFormResult) *huh.Form {
 	header := fmt.Sprintf("Add Tackle @ %d:%02d", mins, secs)
 
 	form := huh.NewForm(
-		// Step 1: Note fields
+		// Step 1: Tackle fields (maps to note_tackles)
 		huh.NewGroup(
-			huh.NewNote().Title(header).Description("Step 1 of 3: Note Details"),
-
-			huh.NewInput().
-				Title("Text").
-				Description("Required").
-				Value(&result.Text).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("text is required")
-					}
-					return nil
-				}),
-
-			huh.NewInput().
-				Title("Category").
-				Description("Optional").
-				Value(&result.Category),
+			huh.NewNote().Title(header).Description("Step 1 of 2: Tackle Details"),
 
 			huh.NewInput().
 				Title("Player").
-				Description("Optional").
-				Value(&result.Player),
-
-			huh.NewInput().
-				Title("Team").
-				Description("Optional").
-				Value(&result.Team),
-		),
-
-		// Step 2: Tackle fields
-		huh.NewGroup(
-			huh.NewNote().Title(header).Description("Step 2 of 3: Tackle Details"),
+				Description("Required").
+				Value(&result.Player).
+				Validate(func(s string) error {
+					if s == "" {
+						return fmt.Errorf("player is required")
+					}
+					return nil
+				}),
 
 			huh.NewInput().
 				Title("Attempt").
@@ -99,9 +72,9 @@ func NewTackleForm(timestamp float64, result *TackleFormResult) *huh.Form {
 				Value(&result.Outcome),
 		),
 
-		// Step 3: Optional fields
+		// Step 2: Optional fields (maps to note_details, note_zones, note_highlights)
 		huh.NewGroup(
-			huh.NewNote().Title(header).Description("Step 3 of 3: Optional Details"),
+			huh.NewNote().Title(header).Description("Step 2 of 2: Optional Details"),
 
 			huh.NewInput().
 				Title("Followed").

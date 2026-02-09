@@ -491,34 +491,36 @@ func (m *Model) saveTackleFromForm() (tea.Model, tea.Cmd) {
 		},
 	}
 
-	// Add text detail from note fields
-	if result.Text != "" {
-		children.Details = []db.NoteDetail{
-			{Type: "text", Note: result.Text},
-		}
+	// Add followed detail if provided (maps to note_detail type="followed")
+	if result.Followed != "" {
+		children.Details = append(children.Details, db.NoteDetail{
+			Type: "followed", Note: result.Followed,
+		})
 	}
 
-	// Add extra notes detail if provided
+	// Add notes detail if provided (maps to note_detail type="notes")
 	if result.Notes != "" {
 		children.Details = append(children.Details, db.NoteDetail{
 			Type: "notes", Note: result.Notes,
 		})
 	}
 
-	// Add highlight if starred
+	// Add zone if provided (maps to note_zones)
+	if result.Zone != "" {
+		children.Zones = []db.NoteZone{
+			{Horizontal: result.Zone},
+		}
+	}
+
+	// Add highlight if starred (maps to note_highlights type="star")
 	if result.Star {
 		children.Highlights = []db.NoteHighlight{
 			{Type: "star"},
 		}
 	}
 
-	// Use category from input, default to "tackle"
-	category := result.Category
-	if category == "" {
-		category = "tackle"
-	}
-
-	noteID, err := db.InsertNoteWithChildren(m.db, category, children)
+	// Category is always "tackle" — auto-set, not a form field
+	noteID, err := db.InsertNoteWithChildren(m.db, "tackle", children)
 	m.tackleForm = nil
 
 	if err != nil {
