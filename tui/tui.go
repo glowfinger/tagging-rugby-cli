@@ -200,7 +200,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loadTackleStats()
 			m.statsView.Active = true
 			return m, nil
-		case "q", "ctrl+c":
+		case "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
 		case ":":
@@ -1858,7 +1858,7 @@ func (m *Model) handleStatsViewInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Move selection down
 		m.statsView.MoveDown()
 		return m, nil
-	case "q", "ctrl+c":
+	case "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
 	case "?":

@@ -68,7 +68,7 @@ func HelpOverlay(width, height int) string {
 			}{
 				{":", "Enter command mode"},
 				{"Esc", "Cancel command mode"},
-				{"q", "Quit application"},
+				{"Ctrl+C", "Quit application"},
 			},
 		},
 		{

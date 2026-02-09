@@ -52,7 +52,7 @@ func GetControlGroups() []ControlGroup {
 			Controls: []Control{
 				{Emoji: "\U0001F4CA", Name: "Stats", Shortcut: "S"},
 				{Emoji: "\u2753", Name: "Help", Shortcut: "?"},
-				{Emoji: "\U0001F6AA", Name: "Quit", Shortcut: "q"},
+				{Emoji: "\U0001F6AA", Name: "Quit", Shortcut: "Ctrl+C"},
 			},
 		},
 	}
