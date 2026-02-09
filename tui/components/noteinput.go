@@ -1,4 +1,7 @@
 // Package components provides reusable TUI components.
+//
+// Deprecated: NoteInput is replaced by tui/forms/noteform.go using huh forms.
+// This file is kept for reference and will be removed in a future cleanup.
 package components
 
 import (

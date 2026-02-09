@@ -7,10 +7,12 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/mpv"
 	"github.com/user/tagging-rugby-cli/tui/components"
+	"github.com/user/tagging-rugby-cli/tui/forms"
 	"github.com/user/tagging-rugby-cli/tui/styles"
 )
 
@@ -66,8 +68,12 @@ type Model struct {
 	statsView components.StatsViewState
 	// overlayEnabled indicates if the mpv overlay is enabled
 	overlayEnabled bool
-	// noteInput holds the state for the quick note input
-	noteInput components.NoteInputState
+	// noteForm is the huh form for note input (nil when inactive)
+	noteForm *huh.Form
+	// noteFormResult holds the bound values for the note form
+	noteFormResult forms.NoteFormResult
+	// noteFormTimestamp is the timestamp captured when the note form was opened
+	noteFormTimestamp float64
 	// tackleInput holds the state for the quick tackle input
 	tackleInput components.TackleInputState
 }
@@ -99,6 +105,19 @@ func tickCmd() tea.Cmd {
 
 // Update handles messages and updates the model state.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Delegate all messages to active huh form (it needs non-key messages too)
+	if m.noteForm != nil {
+		if _, isKey := msg.(tea.KeyMsg); !isKey {
+			if _, isTick := msg.(tickMsg); !isTick {
+				if _, isClear := msg.(clearResultMsg); !isClear {
+					if _, isResize := msg.(tea.WindowSizeMsg); !isResize {
+						return m.handleNoteFormUpdate(msg)
+					}
+				}
+			}
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -134,9 +153,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleStatsViewInput(msg)
 		}
 
-		// Handle note input mode
-		if m.noteInput.Active {
-			return m.handleNoteInput(msg)
+		// Handle note form mode (huh form)
+		if m.noteForm != nil {
+			return m.handleNoteFormUpdate(msg)
 		}
 
 		// Handle tackle input mode
@@ -304,7 +323,7 @@ func (m *Model) handleCommandInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// openNoteInput opens the quick note input prompt.
+// openNoteInput opens the huh note form.
 func (m *Model) openNoteInput() (tea.Model, tea.Cmd) {
 	if m.client == nil || !m.client.IsConnected() {
 		m.commandInput.SetResult("Not connected to mpv", true)
@@ -322,100 +341,77 @@ func (m *Model) openNoteInput() (tea.Model, tea.Cmd) {
 		})
 	}
 
-	// Initialize note input state
-	m.noteInput.Clear()
-	m.noteInput.Active = true
-	m.noteInput.Timestamp = timestamp
-	m.noteInput.CurrentField = components.NoteInputFieldText
+	// Initialize huh note form
+	m.noteFormResult = forms.NoteFormResult{}
+	m.noteFormTimestamp = timestamp
+	m.noteForm = forms.NewNoteForm(timestamp, &m.noteFormResult)
 
-	return m, nil
+	return m, m.noteForm.Init()
 }
 
-// handleNoteInput handles key events when in note input mode.
-func (m *Model) handleNoteInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		// Cancel note input
-		m.noteInput.Clear()
+// handleNoteFormUpdate delegates messages to the huh note form and handles completion.
+func (m *Model) handleNoteFormUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
+	form, cmd := m.noteForm.Update(msg)
+	if f, ok := form.(*huh.Form); ok {
+		m.noteForm = f
+	}
+
+	// Check if form was completed or cancelled
+	if m.noteForm.State == huh.StateCompleted {
+		return m.saveNoteFromForm()
+	}
+	if m.noteForm.State == huh.StateAborted {
+		m.noteForm = nil
 		return m, nil
+	}
 
-	case "enter":
-		// Save note if text is not empty
-		text, category, _, _, timestamp := m.noteInput.GetNote()
-		if text == "" {
-			m.commandInput.SetResult("Note text cannot be empty", true)
-			return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
-				return clearResultMsg{}
-			})
-		}
+	return m, cmd
+}
 
-		// Get video duration for video child record
-		duration, _ := m.client.GetDuration()
+// saveNoteFromForm saves the note data from the completed huh form.
+func (m *Model) saveNoteFromForm() (tea.Model, tea.Cmd) {
+	result := m.noteFormResult
+	timestamp := m.noteFormTimestamp
 
-		// Build children
-		children := db.NoteChildren{
-			Timings: []db.NoteTiming{
-				{Start: timestamp, End: timestamp},
-			},
-			Videos: []db.NoteVideo{
-				{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
-			},
-			Details: []db.NoteDetail{
-				{Type: "text", Note: text},
-			},
-		}
+	// Get video duration for video child record
+	duration, _ := m.client.GetDuration()
 
-		// Use category from input, default to empty
-		if category == "" {
-			category = "note"
-		}
+	// Build children
+	children := db.NoteChildren{
+		Timings: []db.NoteTiming{
+			{Start: timestamp, End: timestamp},
+		},
+		Videos: []db.NoteVideo{
+			{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
+		},
+		Details: []db.NoteDetail{
+			{Type: "text", Note: result.Text},
+		},
+	}
 
-		// Save note with children
-		noteID, err := db.InsertNoteWithChildren(m.db, category, children)
-		if err != nil {
-			m.noteInput.Clear()
-			m.commandInput.SetResult("Error: "+err.Error(), true)
-			return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
-				return clearResultMsg{}
-			})
-		}
+	// Use category from input, default to "note"
+	category := result.Category
+	if category == "" {
+		category = "note"
+	}
 
-		// Clear note input and reload list
-		m.noteInput.Clear()
-		m.loadNotesAndTackles()
+	// Save note with children
+	noteID, err := db.InsertNoteWithChildren(m.db, category, children)
+	m.noteForm = nil
 
-		// Show confirmation
-		m.commandInput.SetResult(fmt.Sprintf("Note %d added at %s", noteID, formatTimeString(timestamp)), false)
+	if err != nil {
+		m.commandInput.SetResult("Error: "+err.Error(), true)
 		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
 			return clearResultMsg{}
 		})
-
-	case "tab":
-		// Move to next field
-		m.noteInput.NextField()
-		return m, nil
-
-	case "shift+tab":
-		// Move to previous field
-		m.noteInput.PrevField()
-		return m, nil
-
-	case "backspace":
-		// Delete last character
-		m.noteInput.Backspace()
-		return m, nil
-
-	default:
-		// Insert character if it's a printable rune
-		if len(msg.String()) == 1 {
-			m.noteInput.InsertChar(rune(msg.String()[0]))
-		} else if msg.Type == tea.KeyRunes {
-			for _, r := range msg.Runes {
-				m.noteInput.InsertChar(r)
-			}
-		}
-		return m, nil
 	}
+
+	// Reload list and show confirmation
+	m.loadNotesAndTackles()
+	m.commandInput.SetResult(fmt.Sprintf("Note %d added at %s", noteID, formatTimeString(timestamp)), false)
+	return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+		return clearResultMsg{}
+	})
 }
 
 // openTackleInput opens the quick tackle input prompt.
@@ -1375,11 +1371,11 @@ func (m *Model) View() string {
 	// Render status bar at top (full width)
 	statusBar := components.StatusBar(m.statusBar, m.width)
 
-	// Check if note input is active — show as single-column overlay
-	if m.noteInput.Active {
+	// Check if note form is active — show huh form as overlay
+	if m.noteForm != nil {
 		controlsDisplay := components.ControlsDisplay(m.width)
-		noteInput := components.NoteInput(m.noteInput, m.width, m.noteInput.Timestamp)
-		return statusBar + "\n" + controlsDisplay + "\n" + noteInput
+		noteFormView := m.noteForm.View()
+		return statusBar + "\n" + controlsDisplay + "\n" + noteFormView
 	}
 
 	// Check if tackle input is active — show as single-column overlay
