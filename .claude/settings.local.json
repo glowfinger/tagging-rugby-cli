@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./scripts/ralph/ralph.sh:*)",
+      "Bash(export PATH=\"$PATH:/home/node/go/bin\")",
+      "Bash(CGO_ENABLED=0 go vet:*)"
+    ]
+  }
+}

@@ -7,10 +7,12 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/mpv"
 	"github.com/user/tagging-rugby-cli/tui/components"
+	"github.com/user/tagging-rugby-cli/tui/forms"
 	"github.com/user/tagging-rugby-cli/tui/styles"
 )
 
@@ -66,10 +68,24 @@ type Model struct {
 	statsView components.StatsViewState
 	// overlayEnabled indicates if the mpv overlay is enabled
 	overlayEnabled bool
-	// noteInput holds the state for the quick note input
-	noteInput components.NoteInputState
-	// tackleInput holds the state for the quick tackle input
-	tackleInput components.TackleInputState
+	// noteForm is the huh form for note input (nil when inactive)
+	noteForm *huh.Form
+	// noteFormResult holds the bound values for the note form
+	noteFormResult forms.NoteFormResult
+	// noteFormTimestamp is the timestamp captured when the note form was opened
+	noteFormTimestamp float64
+	// tackleForm is the huh form for tackle input (nil when inactive)
+	tackleForm *huh.Form
+	// tackleFormResult holds the bound values for the tackle form
+	tackleFormResult forms.TackleFormResult
+	// tackleFormTimestamp is the timestamp captured when the tackle form was opened
+	tackleFormTimestamp float64
+	// confirmDiscardForm is shown when user presses Esc on a form with data (nil when inactive)
+	confirmDiscardForm *huh.Form
+	// confirmDiscard holds the confirm result (true = discard, false = go back)
+	confirmDiscard bool
+	// confirmDiscardTarget tracks which form triggered the confirm ("note" or "tackle")
+	confirmDiscardTarget string
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -99,6 +115,25 @@ func tickCmd() tea.Cmd {
 
 // Update handles messages and updates the model state.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Delegate all messages to active huh form (it needs non-key messages too)
+	if m.confirmDiscardForm != nil || m.noteForm != nil || m.tackleForm != nil {
+		if _, isKey := msg.(tea.KeyMsg); !isKey {
+			if _, isTick := msg.(tickMsg); !isTick {
+				if _, isClear := msg.(clearResultMsg); !isClear {
+					if _, isResize := msg.(tea.WindowSizeMsg); !isResize {
+						if m.confirmDiscardForm != nil {
+							return m.handleConfirmDiscardUpdate(msg)
+						}
+						if m.noteForm != nil {
+							return m.handleNoteFormUpdate(msg)
+						}
+						return m.handleTackleFormUpdate(msg)
+					}
+				}
+			}
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -134,14 +169,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleStatsViewInput(msg)
 		}
 
-		// Handle note input mode
-		if m.noteInput.Active {
-			return m.handleNoteInput(msg)
+		// Handle confirm discard dialog (huh form)
+		if m.confirmDiscardForm != nil {
+			return m.handleConfirmDiscardUpdate(msg)
 		}
 
-		// Handle tackle input mode
-		if m.tackleInput.Active {
-			return m.handleTackleInput(msg)
+		// Handle note form mode (huh form)
+		if m.noteForm != nil {
+			return m.handleNoteFormUpdate(msg)
+		}
+
+		// Handle tackle form mode (huh form)
+		if m.tackleForm != nil {
+			return m.handleTackleFormUpdate(msg)
 		}
 
 		// Handle command mode input
@@ -304,7 +344,7 @@ func (m *Model) handleCommandInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// openNoteInput opens the quick note input prompt.
+// openNoteInput opens the huh note form.
 func (m *Model) openNoteInput() (tea.Model, tea.Cmd) {
 	if m.client == nil || !m.client.IsConnected() {
 		m.commandInput.SetResult("Not connected to mpv", true)
@@ -322,103 +362,84 @@ func (m *Model) openNoteInput() (tea.Model, tea.Cmd) {
 		})
 	}
 
-	// Initialize note input state
-	m.noteInput.Clear()
-	m.noteInput.Active = true
-	m.noteInput.Timestamp = timestamp
-	m.noteInput.CurrentField = components.NoteInputFieldText
+	// Initialize huh note form
+	m.noteFormResult = forms.NoteFormResult{}
+	m.noteFormTimestamp = timestamp
+	m.noteForm = forms.NewNoteForm(timestamp, &m.noteFormResult)
 
-	return m, nil
+	return m, m.noteForm.Init()
 }
 
-// handleNoteInput handles key events when in note input mode.
-func (m *Model) handleNoteInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		// Cancel note input
-		m.noteInput.Clear()
+// handleNoteFormUpdate delegates messages to the huh note form and handles completion.
+func (m *Model) handleNoteFormUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
+	form, cmd := m.noteForm.Update(msg)
+	if f, ok := form.(*huh.Form); ok {
+		m.noteForm = f
+	}
+
+	// Check if form was completed or cancelled
+	if m.noteForm.State == huh.StateCompleted {
+		return m.saveNoteFromForm()
+	}
+	if m.noteForm.State == huh.StateAborted {
+		// If form has data, show confirm discard dialog
+		if m.noteFormResult.HasData() {
+			return m.openConfirmDiscard("note")
+		}
+		m.noteForm = nil
 		return m, nil
+	}
 
-	case "enter":
-		// Save note if text is not empty
-		text, category, _, _, timestamp := m.noteInput.GetNote()
-		if text == "" {
-			m.commandInput.SetResult("Note text cannot be empty", true)
-			return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
-				return clearResultMsg{}
-			})
-		}
+	return m, cmd
+}
 
-		// Get video duration for video child record
-		duration, _ := m.client.GetDuration()
+// saveNoteFromForm saves the note data from the completed huh form.
+func (m *Model) saveNoteFromForm() (tea.Model, tea.Cmd) {
+	result := m.noteFormResult
+	timestamp := m.noteFormTimestamp
 
-		// Build children
-		children := db.NoteChildren{
-			Timings: []db.NoteTiming{
-				{Start: timestamp, End: timestamp},
-			},
-			Videos: []db.NoteVideo{
-				{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
-			},
-			Details: []db.NoteDetail{
-				{Type: "text", Note: text},
-			},
-		}
+	// Get video duration for video child record
+	duration, _ := m.client.GetDuration()
 
-		// Use category from input, default to empty
-		if category == "" {
-			category = "note"
-		}
+	// Build children
+	children := db.NoteChildren{
+		Timings: []db.NoteTiming{
+			{Start: timestamp, End: timestamp},
+		},
+		Videos: []db.NoteVideo{
+			{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
+		},
+		Details: []db.NoteDetail{
+			{Type: "text", Note: result.Text},
+		},
+	}
 
-		// Save note with children
-		noteID, err := db.InsertNoteWithChildren(m.db, category, children)
-		if err != nil {
-			m.noteInput.Clear()
-			m.commandInput.SetResult("Error: "+err.Error(), true)
-			return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
-				return clearResultMsg{}
-			})
-		}
+	// Use category from input, default to "note"
+	category := result.Category
+	if category == "" {
+		category = "note"
+	}
 
-		// Clear note input and reload list
-		m.noteInput.Clear()
-		m.loadNotesAndTackles()
+	// Save note with children
+	noteID, err := db.InsertNoteWithChildren(m.db, category, children)
+	m.noteForm = nil
 
-		// Show confirmation
-		m.commandInput.SetResult(fmt.Sprintf("Note %d added at %s", noteID, formatTimeString(timestamp)), false)
+	if err != nil {
+		m.commandInput.SetResult("Error: "+err.Error(), true)
 		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
 			return clearResultMsg{}
 		})
-
-	case "tab":
-		// Move to next field
-		m.noteInput.NextField()
-		return m, nil
-
-	case "shift+tab":
-		// Move to previous field
-		m.noteInput.PrevField()
-		return m, nil
-
-	case "backspace":
-		// Delete last character
-		m.noteInput.Backspace()
-		return m, nil
-
-	default:
-		// Insert character if it's a printable rune
-		if len(msg.String()) == 1 {
-			m.noteInput.InsertChar(rune(msg.String()[0]))
-		} else if msg.Type == tea.KeyRunes {
-			for _, r := range msg.Runes {
-				m.noteInput.InsertChar(r)
-			}
-		}
-		return m, nil
 	}
+
+	// Reload list and show confirmation
+	m.loadNotesAndTackles()
+	m.commandInput.SetResult(fmt.Sprintf("Note %d added at %s", noteID, formatTimeString(timestamp)), false)
+	return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+		return clearResultMsg{}
+	})
 }
 
-// openTackleInput opens the quick tackle input prompt.
+// openTackleInput opens the huh tackle wizard form.
 func (m *Model) openTackleInput() (tea.Model, tea.Cmd) {
 	if m.client == nil || !m.client.IsConnected() {
 		m.commandInput.SetResult("Not connected to mpv", true)
@@ -436,144 +457,161 @@ func (m *Model) openTackleInput() (tea.Model, tea.Cmd) {
 		})
 	}
 
-	// Initialize tackle input state
-	m.tackleInput.Clear()
-	m.tackleInput.Active = true
-	m.tackleInput.Timestamp = timestamp
-	m.tackleInput.CurrentField = components.TackleInputFieldPlayer
+	// Initialize huh tackle form
+	m.tackleFormResult = forms.TackleFormResult{}
+	m.tackleFormTimestamp = timestamp
+	m.tackleForm = forms.NewTackleForm(timestamp, &m.tackleFormResult)
 
-	return m, nil
+	return m, m.tackleForm.Init()
 }
 
-// handleTackleInput handles key events when in tackle input mode.
-func (m *Model) handleTackleInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		// Cancel tackle input
-		m.tackleInput.Clear()
+// handleTackleFormUpdate delegates messages to the huh tackle form and handles completion.
+func (m *Model) handleTackleFormUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
+	form, cmd := m.tackleForm.Update(msg)
+	if f, ok := form.(*huh.Form); ok {
+		m.tackleForm = f
+	}
+
+	// Check if form was completed or cancelled
+	if m.tackleForm.State == huh.StateCompleted {
+		return m.saveTackleFromForm()
+	}
+	if m.tackleForm.State == huh.StateAborted {
+		// If form has data, show confirm discard dialog
+		if m.tackleFormResult.HasData() {
+			return m.openConfirmDiscard("tackle")
+		}
+		m.tackleForm = nil
 		return m, nil
+	}
 
-	case "enter":
-		// Validate required fields
-		if errMsg := m.tackleInput.ValidationError(); errMsg != "" {
-			m.commandInput.SetResult(errMsg, true)
-			return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
-				return clearResultMsg{}
-			})
-		}
+	return m, cmd
+}
 
-		// Save tackle to database
-		player, _, attemptStr, outcome, _, notes, _, star, timestamp := m.tackleInput.GetTackle()
+// openConfirmDiscard opens a confirm dialog when user presses Esc on a form with data.
+// The target parameter indicates which form triggered the confirm ("note" or "tackle").
+func (m *Model) openConfirmDiscard(target string) (tea.Model, tea.Cmd) {
+	m.confirmDiscard = false
+	m.confirmDiscardTarget = target
+	m.confirmDiscardForm = forms.NewConfirmDiscardForm(&m.confirmDiscard)
+	return m, m.confirmDiscardForm.Init()
+}
 
-		// Parse attempt as integer
-		var attempt int
-		fmt.Sscanf(attemptStr, "%d", &attempt)
+// handleConfirmDiscardUpdate delegates messages to the confirm discard form.
+func (m *Model) handleConfirmDiscardUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
+	form, cmd := m.confirmDiscardForm.Update(msg)
+	if f, ok := form.(*huh.Form); ok {
+		m.confirmDiscardForm = f
+	}
 
-		// Get video duration for video child record
-		duration, _ := m.client.GetDuration()
-
-		// Build children
-		children := db.NoteChildren{
-			Timings: []db.NoteTiming{
-				{Start: timestamp, End: timestamp},
-			},
-			Videos: []db.NoteVideo{
-				{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
-			},
-			Tackles: []db.NoteTackle{
-				{Player: player, Attempt: attempt, Outcome: outcome},
-			},
-		}
-
-		// Add detail if notes were provided
-		if notes != "" {
-			children.Details = []db.NoteDetail{
-				{Type: "text", Note: notes},
+	if m.confirmDiscardForm.State == huh.StateCompleted {
+		m.confirmDiscardForm = nil
+		if m.confirmDiscard {
+			// User chose to discard — close the underlying form
+			if m.confirmDiscardTarget == "note" {
+				m.noteForm = nil
+			} else {
+				m.tackleForm = nil
 			}
+			return m, nil
 		}
-
-		// Add highlight if starred
-		if star {
-			children.Highlights = []db.NoteHighlight{
-				{Type: "star"},
-			}
+		// User chose to go back — reopen the form from saved state
+		if m.confirmDiscardTarget == "note" {
+			m.noteForm = forms.NewNoteForm(m.noteFormTimestamp, &m.noteFormResult)
+			return m, m.noteForm.Init()
 		}
+		m.tackleForm = forms.NewTackleForm(m.tackleFormTimestamp, &m.tackleFormResult)
+		return m, m.tackleForm.Init()
+	}
 
-		noteID, err := db.InsertNoteWithChildren(m.db, "tackle", children)
-		if err != nil {
-			m.tackleInput.Clear()
-			m.commandInput.SetResult("Error: "+err.Error(), true)
-			return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
-				return clearResultMsg{}
-			})
+	if m.confirmDiscardForm.State == huh.StateAborted {
+		// Esc on confirm dialog — treat as "go back" to form
+		m.confirmDiscardForm = nil
+		if m.confirmDiscardTarget == "note" {
+			m.noteForm = forms.NewNoteForm(m.noteFormTimestamp, &m.noteFormResult)
+			return m, m.noteForm.Init()
 		}
+		m.tackleForm = forms.NewTackleForm(m.tackleFormTimestamp, &m.tackleFormResult)
+		return m, m.tackleForm.Init()
+	}
 
-		// Clear tackle input and reload list
-		m.tackleInput.Clear()
-		m.loadNotesAndTackles()
+	return m, cmd
+}
 
-		// Show confirmation
-		starSymbol := ""
-		if star {
-			starSymbol = " ★"
+// saveTackleFromForm saves the tackle data from the completed huh form.
+func (m *Model) saveTackleFromForm() (tea.Model, tea.Cmd) {
+	result := m.tackleFormResult
+	timestamp := m.tackleFormTimestamp
+
+	// Parse attempt as integer
+	var attempt int
+	fmt.Sscanf(result.Attempt, "%d", &attempt)
+
+	// Get video duration for video child record
+	duration, _ := m.client.GetDuration()
+
+	// Build children
+	children := db.NoteChildren{
+		Timings: []db.NoteTiming{
+			{Start: timestamp, End: timestamp},
+		},
+		Videos: []db.NoteVideo{
+			{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
+		},
+		Tackles: []db.NoteTackle{
+			{Player: result.Player, Attempt: attempt, Outcome: result.Outcome},
+		},
+	}
+
+	// Add followed detail if provided (maps to note_detail type="followed")
+	if result.Followed != "" {
+		children.Details = append(children.Details, db.NoteDetail{
+			Type: "followed", Note: result.Followed,
+		})
+	}
+
+	// Add notes detail if provided (maps to note_detail type="notes")
+	if result.Notes != "" {
+		children.Details = append(children.Details, db.NoteDetail{
+			Type: "notes", Note: result.Notes,
+		})
+	}
+
+	// Add zone if provided (maps to note_zones)
+	if result.Zone != "" {
+		children.Zones = []db.NoteZone{
+			{Horizontal: result.Zone},
 		}
-		m.commandInput.SetResult(fmt.Sprintf("Tackle %d recorded: %s %s%s", noteID, player, outcome, starSymbol), false)
+	}
+
+	// Add highlight if starred (maps to note_highlights type="star")
+	if result.Star {
+		children.Highlights = []db.NoteHighlight{
+			{Type: "star"},
+		}
+	}
+
+	// Category is always "tackle" — auto-set, not a form field
+	noteID, err := db.InsertNoteWithChildren(m.db, "tackle", children)
+	m.tackleForm = nil
+
+	if err != nil {
+		m.commandInput.SetResult("Error: "+err.Error(), true)
 		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
 			return clearResultMsg{}
 		})
-
-	case "tab":
-		// Move to next field
-		m.tackleInput.NextField()
-		return m, nil
-
-	case "shift+tab":
-		// Move to previous field
-		m.tackleInput.PrevField()
-		return m, nil
-
-	case "*", "s", "S":
-		// Toggle star (when not in a text field or when * is pressed)
-		if msg.String() == "*" || m.tackleInput.CurrentField == components.TackleInputFieldOutcome {
-			m.tackleInput.ToggleStar()
-			return m, nil
-		}
-		// For s/S in text fields, insert the character
-		m.tackleInput.InsertChar(rune(msg.String()[0]))
-		return m, nil
-
-	case "left":
-		// For outcome field, cycle to previous outcome
-		if m.tackleInput.CurrentField == components.TackleInputFieldOutcome {
-			m.tackleInput.PrevOutcome()
-		}
-		return m, nil
-
-	case "right":
-		// For outcome field, cycle to next outcome
-		if m.tackleInput.CurrentField == components.TackleInputFieldOutcome {
-			m.tackleInput.NextOutcome()
-		}
-		return m, nil
-
-	case "backspace":
-		// Delete last character
-		m.tackleInput.Backspace()
-		return m, nil
-
-	default:
-		// Insert character if it's a printable rune (except in outcome field)
-		if m.tackleInput.CurrentField != components.TackleInputFieldOutcome {
-			if len(msg.String()) == 1 {
-				m.tackleInput.InsertChar(rune(msg.String()[0]))
-			} else if msg.Type == tea.KeyRunes {
-				for _, r := range msg.Runes {
-					m.tackleInput.InsertChar(r)
-				}
-			}
-		}
-		return m, nil
 	}
+
+	// Reload list and show confirmation
+	m.loadNotesAndTackles()
+	starSymbol := ""
+	if result.Star {
+		starSymbol = " ★"
+	}
+	m.commandInput.SetResult(fmt.Sprintf("Tackle %d recorded: %s %s%s", noteID, result.Player, result.Outcome, starSymbol), false)
+	return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+		return clearResultMsg{}
+	})
 }
 
 // executeCommand parses and executes a command string.
@@ -1375,18 +1413,25 @@ func (m *Model) View() string {
 	// Render status bar at top (full width)
 	statusBar := components.StatusBar(m.statusBar, m.width)
 
-	// Check if note input is active — show as single-column overlay
-	if m.noteInput.Active {
+	// Check if confirm discard dialog is active — show it as overlay
+	if m.confirmDiscardForm != nil {
 		controlsDisplay := components.ControlsDisplay(m.width)
-		noteInput := components.NoteInput(m.noteInput, m.width, m.noteInput.Timestamp)
-		return statusBar + "\n" + controlsDisplay + "\n" + noteInput
+		confirmView := m.confirmDiscardForm.View()
+		return statusBar + "\n" + controlsDisplay + "\n" + confirmView
 	}
 
-	// Check if tackle input is active — show as single-column overlay
-	if m.tackleInput.Active {
+	// Check if note form is active — show huh form as overlay
+	if m.noteForm != nil {
 		controlsDisplay := components.ControlsDisplay(m.width)
-		tackleInput := components.TackleInput(m.tackleInput, m.width, m.tackleInput.Timestamp)
-		return statusBar + "\n" + controlsDisplay + "\n" + tackleInput
+		noteFormView := m.noteForm.View()
+		return statusBar + "\n" + controlsDisplay + "\n" + noteFormView
+	}
+
+	// Check if tackle form is active — show huh wizard as overlay
+	if m.tackleForm != nil {
+		controlsDisplay := components.ControlsDisplay(m.width)
+		tackleFormView := m.tackleForm.View()
+		return statusBar + "\n" + controlsDisplay + "\n" + tackleFormView
 	}
 
 	// --- Three-column layout ---
