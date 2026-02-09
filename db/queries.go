@@ -9,99 +9,74 @@ import (
 //go:embed sql/create_tables.sql
 var CreateTablesSQL string
 
-//go:embed sql/seed_categories.sql
-var SeedCategoriesSQL string
-
 // Notes queries
 
 //go:embed sql/insert_note.sql
 var InsertNoteSQL string
 
-//go:embed sql/select_notes_by_video.sql
-var SelectNotesByVideoSQL string
+//go:embed sql/select_notes.sql
+var SelectNotesSQL string
 
-//go:embed sql/select_note_id.sql
-var SelectNoteIDSQL string
-
-//go:embed sql/select_note_details.sql
-var SelectNoteDetailsSQL string
-
-//go:embed sql/select_note_brief.sql
-var SelectNoteBriefSQL string
+//go:embed sql/select_note_by_id.sql
+var SelectNoteByIDSQL string
 
 //go:embed sql/delete_note.sql
 var DeleteNoteSQL string
 
-//go:embed sql/select_notes_for_tui.sql
-var SelectNotesForTUISQL string
+// Note child table insert queries
 
-//go:embed sql/count_notes_by_video.sql
-var CountNotesByVideoSQL string
+//go:embed sql/insert_note_video.sql
+var InsertNoteVideoSQL string
 
-// Clips queries
+//go:embed sql/insert_note_clip.sql
+var InsertNoteClipSQL string
 
-//go:embed sql/insert_clip.sql
-var InsertClipSQL string
+//go:embed sql/insert_note_timing.sql
+var InsertNoteTimingSQL string
 
-//go:embed sql/insert_clip_basic.sql
-var InsertClipBasicSQL string
+//go:embed sql/insert_note_tackle.sql
+var InsertNoteTackleSQL string
 
-//go:embed sql/select_clip_play.sql
-var SelectClipPlaySQL string
+//go:embed sql/insert_note_zone.sql
+var InsertNoteZoneSQL string
 
-//go:embed sql/select_clip_export.sql
-var SelectClipExportSQL string
+//go:embed sql/insert_note_detail.sql
+var InsertNoteDetailSQL string
 
-//go:embed sql/select_clips_by_video_for_export.sql
-var SelectClipsByVideoForExportSQL string
+//go:embed sql/insert_note_highlight.sql
+var InsertNoteHighlightSQL string
 
-//go:embed sql/select_clips_by_video.sql
-var SelectClipsByVideoSQL string
+// Note child table select queries
 
-//go:embed sql/count_clips_by_video.sql
-var CountClipsByVideoSQL string
+//go:embed sql/select_note_videos_by_note.sql
+var SelectNoteVideosByNoteSQL string
 
-// Categories queries
+//go:embed sql/select_note_clips_by_note.sql
+var SelectNoteClipsByNoteSQL string
 
-//go:embed sql/select_categories.sql
-var SelectCategoriesSQL string
+//go:embed sql/select_note_timing_by_note.sql
+var SelectNoteTimingByNoteSQL string
 
-//go:embed sql/insert_category.sql
-var InsertCategorySQL string
+//go:embed sql/select_note_tackles_by_note.sql
+var SelectNoteTacklesByNoteSQL string
 
-//go:embed sql/delete_category.sql
-var DeleteCategorySQL string
+//go:embed sql/select_note_zones_by_note.sql
+var SelectNoteZonesByNoteSQL string
 
-// Tackles queries
+//go:embed sql/select_note_details_by_note.sql
+var SelectNoteDetailsByNoteSQL string
 
-//go:embed sql/insert_tackle.sql
-var InsertTackleSQL string
+//go:embed sql/select_note_highlights_by_note.sql
+var SelectNoteHighlightsByNoteSQL string
 
-//go:embed sql/insert_tackle_basic.sql
-var InsertTackleBasicSQL string
+// Joined queries for TUI views
 
-//go:embed sql/insert_tackle_with_extras.sql
-var InsertTackleWithExtrasSQL string
+//go:embed sql/select_notes_with_timing.sql
+var SelectNotesWithTimingSQL string
 
-//go:embed sql/select_tackles_by_video.sql
-var SelectTacklesByVideoSQL string
+//go:embed sql/select_notes_with_video.sql
+var SelectNotesWithVideoSQL string
 
-//go:embed sql/select_tackle_counts.sql
-var SelectTackleCountsSQL string
+//go:embed sql/select_tackle_stats.sql
+var SelectTackleStatsSQL string
 
-//go:embed sql/select_tackle_details.sql
-var SelectTackleDetailsSQL string
-
-//go:embed sql/select_tackles_for_tui.sql
-var SelectTacklesForTUISQL string
-
-//go:embed sql/count_tackles_by_video.sql
-var CountTacklesByVideoSQL string
-
-// Tackle stats queries
-
-//go:embed sql/select_tackle_stats_all.sql
-var SelectTackleStatsAllSQL string
-
-//go:embed sql/select_tackle_stats_by_video.sql
-var SelectTackleStatsByVideoSQL string

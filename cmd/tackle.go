@@ -23,20 +23,16 @@ var tackleCmd = &cobra.Command{
 var tackleAddCmd = &cobra.Command{
 	Use:   "add",
 	Short: "Record a tackle event at the current timestamp",
-	Long:  `Record a tackle event at the current video position with player, team, attempt number, and outcome.`,
+	Long:  `Record a tackle event at the current video position with player, attempt number, and outcome.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Get required flags
 		player, _ := cmd.Flags().GetString("player")
-		team, _ := cmd.Flags().GetString("team")
 		attempt, _ := cmd.Flags().GetInt("attempt")
 		outcome, _ := cmd.Flags().GetString("outcome")
 
 		// Validate required flags
 		if player == "" {
 			return fmt.Errorf("--player is required")
-		}
-		if team == "" {
-			return fmt.Errorf("--team is required")
 		}
 		if attempt == 0 {
 			return fmt.Errorf("--attempt is required")
@@ -49,12 +45,6 @@ var tackleAddCmd = &cobra.Command{
 		if !isValidOutcome(outcome) {
 			return fmt.Errorf("invalid outcome '%s': must be one of: missed, completed, possible, other", outcome)
 		}
-
-		// Get optional flags
-		followed, _ := cmd.Flags().GetString("followed")
-		star, _ := cmd.Flags().GetBool("star")
-		notes, _ := cmd.Flags().GetString("notes")
-		zone, _ := cmd.Flags().GetString("zone")
 
 		// Connect to mpv to get current timestamp and video path
 		client := mpv.NewClient("")
@@ -86,35 +76,30 @@ var tackleAddCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		// Convert star bool to int
-		starInt := 0
-		if star {
-			starInt = 1
+		// Insert note with tackle and timing child rows
+		children := db.NoteChildren{
+			Tackles: []db.NoteTackle{
+				{Player: player, Attempt: attempt, Outcome: outcome},
+			},
+			Timings: []db.NoteTiming{
+				{Start: timestamp, End: timestamp},
+			},
+			Videos: []db.NoteVideo{
+				{Path: videoPath, StoppedAt: timestamp},
+			},
 		}
 
-		// Insert tackle
-		result, err := database.Exec(
-			db.InsertTackleSQL,
-			videoPath, timestamp, player, team, attempt, outcome, followed, starInt, notes, zone,
-		)
+		noteID, err := db.InsertNoteWithChildren(database, "tackle", children)
 		if err != nil {
 			return fmt.Errorf("failed to insert tackle: %w", err)
-		}
-
-		tackleID, err := result.LastInsertId()
-		if err != nil {
-			return fmt.Errorf("failed to get tackle ID: %w", err)
 		}
 
 		// Format timestamp as MM:SS
 		minutes := int(timestamp) / 60
 		seconds := int(timestamp) % 60
 
-		fmt.Printf("Tackle recorded: ID %d at %d:%02d\n", tackleID, minutes, seconds)
-		fmt.Printf("  Player: %s, Team: %s, Attempt: %d, Outcome: %s\n", player, team, attempt, outcome)
-		if star {
-			fmt.Println("  ★ Starred")
-		}
+		fmt.Printf("Tackle recorded: Note ID %d at %d:%02d\n", noteID, minutes, seconds)
+		fmt.Printf("  Player: %s, Attempt: %d, Outcome: %s\n", player, attempt, outcome)
 		return nil
 	},
 }
@@ -122,13 +107,11 @@ var tackleAddCmd = &cobra.Command{
 var tackleListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all tackles for the current video",
-	Long:  `Display all tackles for the current video as a table, sorted by timestamp. Supports filtering by player, outcome, and starred status.`,
+	Long:  `Display all tackles for the current video as a table, sorted by timestamp.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Get filter flags
 		playerFilter, _ := cmd.Flags().GetString("player")
 		outcomeFilter, _ := cmd.Flags().GetString("outcome")
-		starFilter, _ := cmd.Flags().GetBool("star")
-		starFilterSet := cmd.Flags().Changed("star")
 
 		// Connect to mpv to get current video path
 		client := mpv.NewClient("")
@@ -154,23 +137,25 @@ var tackleListCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		// Build dynamic query with filters
-		query := db.SelectTacklesByVideoSQL
+		// Build dynamic query with filters - join notes with note_tackles, note_timing, and note_videos
+		query := `SELECT n.id, COALESCE(nt_time.start, 0), ntk.player, ntk.attempt, ntk.outcome
+			 FROM notes n
+			 INNER JOIN note_tackles ntk ON ntk.note_id = n.id
+			 INNER JOIN note_videos nv ON nv.note_id = n.id
+			 LEFT JOIN note_timing nt_time ON nt_time.note_id = n.id
+			 WHERE nv.path = ?`
 		queryArgs := []interface{}{videoPath}
 
 		if playerFilter != "" {
-			query += " AND player = ?"
+			query += " AND ntk.player = ?"
 			queryArgs = append(queryArgs, playerFilter)
 		}
 		if outcomeFilter != "" {
-			query += " AND outcome = ?"
+			query += " AND ntk.outcome = ?"
 			queryArgs = append(queryArgs, outcomeFilter)
 		}
-		if starFilterSet && starFilter {
-			query += " AND star = 1"
-		}
 
-		query += " ORDER BY timestamp_seconds ASC"
+		query += " ORDER BY nt_time.start ASC"
 
 		// Query tackles
 		rows, err := database.Query(query, queryArgs...)
@@ -181,19 +166,17 @@ var tackleListCmd = &cobra.Command{
 
 		// Create table writer
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tTime\tPlayer\tTeam\tAttempt\tOutcome\tFollowed\tStar\tZone\tNotes")
-		fmt.Fprintln(w, "--\t----\t------\t----\t-------\t-------\t--------\t----\t----\t-----")
+		fmt.Fprintln(w, "NoteID\tTime\tPlayer\tAttempt\tOutcome")
+		fmt.Fprintln(w, "------\t----\t------\t-------\t-------")
 
 		count := 0
 		for rows.Next() {
-			var id int64
+			var noteID int64
 			var timestamp float64
 			var attemptVal int
-			var starVal int
-			var player, team, outcome sql.NullString
-			var followed, notes, zone sql.NullString
+			var player, outcome sql.NullString
 
-			if err := rows.Scan(&id, &timestamp, &player, &team, &attemptVal, &outcome, &followed, &starVal, &notes, &zone); err != nil {
+			if err := rows.Scan(&noteID, &timestamp, &player, &attemptVal, &outcome); err != nil {
 				return fmt.Errorf("failed to scan tackle: %w", err)
 			}
 
@@ -202,27 +185,11 @@ var tackleListCmd = &cobra.Command{
 			seconds := int(timestamp) % 60
 			timeStr := fmt.Sprintf("%d:%02d", minutes, seconds)
 
-			// Handle NULL values
 			playerStr := nullStringValue(player)
-			teamStr := nullStringValue(team)
 			outcomeStr := nullStringValue(outcome)
-			followedStr := nullStringValue(followed)
-			notesStr := nullStringValue(notes)
-			zoneStr := nullStringValue(zone)
 
-			// Star indicator
-			starStr := ""
-			if starVal == 1 {
-				starStr = "★"
-			}
-
-			// Truncate notes if too long
-			if len(notesStr) > 20 {
-				notesStr = notesStr[:17] + "..."
-			}
-
-			fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n",
-				id, timeStr, playerStr, teamStr, attemptVal, outcomeStr, followedStr, starStr, zoneStr, notesStr)
+			fmt.Fprintf(w, "%d\t%s\t%s\t%d\t%s\n",
+				noteID, timeStr, playerStr, attemptVal, outcomeStr)
 			count++
 		}
 
@@ -255,7 +222,7 @@ func isValidOutcome(outcome string) bool {
 var tackleExportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Export player tackle statistics to a text file",
-	Long:  `Export detailed tackle statistics for a specific player to a text file. Includes total counts, completion percentage, and a list of all tackle events.`,
+	Long:  `Export detailed tackle statistics for a specific player to a text file.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Get required --player flag
 		player, _ := cmd.Flags().GetString("player")
@@ -265,7 +232,6 @@ var tackleExportCmd = &cobra.Command{
 
 		// Get optional flags
 		outputPath, _ := cmd.Flags().GetString("output")
-		videoFilter, _ := cmd.Flags().GetString("video")
 
 		// Set default output path if not specified
 		if outputPath == "" {
@@ -279,48 +245,37 @@ var tackleExportCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		// Build query for tackle counts
-		countQuery := db.SelectTackleCountsSQL
-		countArgs := []interface{}{player}
-
-		if videoFilter != "" {
-			countQuery += " AND video_path = ?"
-			countArgs = append(countArgs, videoFilter)
-		}
-
-		// Get counts
-		var total, completed, missed, possible, other int
-		err = database.QueryRow(countQuery, countArgs...).Scan(&total, &completed, &missed, &possible, &other)
+		// Query tackle stats using the embedded SQL
+		rows, err := database.Query(db.SelectTackleStatsSQL)
 		if err != nil {
-			return fmt.Errorf("failed to query tackle counts: %w", err)
-		}
-
-		if total == 0 {
-			return fmt.Errorf("no tackles found for player '%s'", player)
-		}
-
-		// Calculate completion percentage
-		completionPct := 0.0
-		if total > 0 {
-			completionPct = float64(completed) / float64(total) * 100
-		}
-
-		// Build query for tackle details
-		detailQuery := db.SelectTackleDetailsSQL
-		detailArgs := []interface{}{player}
-
-		if videoFilter != "" {
-			detailQuery += " AND video_path = ?"
-			detailArgs = append(detailArgs, videoFilter)
-		}
-		detailQuery += " ORDER BY created_at ASC, timestamp_seconds ASC"
-
-		// Query tackle details
-		rows, err := database.Query(detailQuery, detailArgs...)
-		if err != nil {
-			return fmt.Errorf("failed to query tackle details: %w", err)
+			return fmt.Errorf("failed to query tackle stats: %w", err)
 		}
 		defer rows.Close()
+
+		// Find this player's stats
+		var total, successCount, missedCount, dominantCount, passiveCount int
+		found := false
+		for rows.Next() {
+			var p string
+			var t, s, m, d, pa int
+			if err := rows.Scan(&p, &t, &s, &m, &d, &pa); err != nil {
+				return fmt.Errorf("failed to scan stats: %w", err)
+			}
+			if p == player {
+				total = t
+				successCount = s
+				missedCount = m
+				dominantCount = d
+				passiveCount = pa
+				found = true
+				break
+			}
+		}
+		rows.Close()
+
+		if !found || total == 0 {
+			return fmt.Errorf("no tackles found for player '%s'", player)
+		}
 
 		// Create output file
 		file, err := os.Create(outputPath)
@@ -336,71 +291,13 @@ var tackleExportCmd = &cobra.Command{
 		// Write summary statistics
 		fmt.Fprintf(file, "Summary\n")
 		fmt.Fprintf(file, "-------\n")
-		fmt.Fprintf(file, "Total:      %d\n", total)
-		fmt.Fprintf(file, "Completed:  %d\n", completed)
-		fmt.Fprintf(file, "Missed:     %d\n", missed)
-		fmt.Fprintf(file, "Possible:   %d\n", possible)
-		fmt.Fprintf(file, "Other:      %d\n", other)
-		fmt.Fprintf(file, "Completion: %.1f%%\n\n", completionPct)
+		fmt.Fprintf(file, "Total:     %d\n", total)
+		fmt.Fprintf(file, "Success:   %d\n", successCount)
+		fmt.Fprintf(file, "Missed:    %d\n", missedCount)
+		fmt.Fprintf(file, "Dominant:  %d\n", dominantCount)
+		fmt.Fprintf(file, "Passive:   %d\n", passiveCount)
 
-		// Write tackle events header
-		fmt.Fprintf(file, "Tackle Events\n")
-		fmt.Fprintf(file, "-------------\n")
-
-		// Write each tackle event
-		eventNum := 1
-		for rows.Next() {
-			var timestamp float64
-			var attemptVal int
-			var starVal int
-			var videoPath, team, outcome sql.NullString
-			var followed, notes, zone sql.NullString
-			var createdAt sql.NullString
-
-			if err := rows.Scan(&timestamp, &videoPath, &team, &attemptVal, &outcome, &followed, &starVal, &notes, &zone, &createdAt); err != nil {
-				return fmt.Errorf("failed to scan tackle: %w", err)
-			}
-
-			// Format timestamp as MM:SS
-			minutes := int(timestamp) / 60
-			seconds := int(timestamp) % 60
-			timeStr := fmt.Sprintf("%d:%02d", minutes, seconds)
-
-			// Star symbol for starred tackles
-			starSymbol := ""
-			if starVal == 1 {
-				starSymbol = " ★"
-			}
-
-			// Write event line
-			fmt.Fprintf(file, "\n%d. [%s] %s - Attempt #%d%s\n",
-				eventNum, timeStr, nullStringValue(outcome), attemptVal, starSymbol)
-
-			// Write optional details
-			if team.Valid && team.String != "" {
-				fmt.Fprintf(file, "   Team: %s\n", team.String)
-			}
-			if followed.Valid && followed.String != "" {
-				fmt.Fprintf(file, "   Followed by: %s\n", followed.String)
-			}
-			if zone.Valid && zone.String != "" {
-				fmt.Fprintf(file, "   Zone: %s\n", zone.String)
-			}
-			if notes.Valid && notes.String != "" {
-				fmt.Fprintf(file, "   Notes: %s\n", notes.String)
-			}
-			if videoPath.Valid && videoPath.String != "" {
-				fmt.Fprintf(file, "   Video: %s\n", videoPath.String)
-			}
-
-			eventNum++
-		}
-
-		if err := rows.Err(); err != nil {
-			return fmt.Errorf("error iterating tackles: %w", err)
-		}
-
-		fmt.Printf("Exported %d tackles for %s to %s\n", total, player, outputPath)
+		fmt.Printf("Exported tackle stats for %s to %s\n", player, outputPath)
 		return nil
 	},
 }
@@ -408,25 +305,16 @@ var tackleExportCmd = &cobra.Command{
 func init() {
 	// Add required flags to tackle add command
 	tackleAddCmd.Flags().StringP("player", "p", "", "Player name or number (required)")
-	tackleAddCmd.Flags().StringP("team", "t", "", "Team name (required)")
 	tackleAddCmd.Flags().IntP("attempt", "a", 0, "Tackle attempt number (required)")
 	tackleAddCmd.Flags().StringP("outcome", "o", "", "Tackle outcome: missed, completed, possible, other (required)")
-
-	// Add optional flags to tackle add command
-	tackleAddCmd.Flags().StringP("followed", "f", "", "Who followed up on the tackle")
-	tackleAddCmd.Flags().BoolP("star", "s", false, "Mark this tackle as starred/important")
-	tackleAddCmd.Flags().StringP("notes", "n", "", "Additional notes about the tackle")
-	tackleAddCmd.Flags().StringP("zone", "z", "", "Field zone where the tackle occurred")
 
 	// Add filter flags to tackle list command
 	tackleListCmd.Flags().StringP("player", "p", "", "Filter by player name or number")
 	tackleListCmd.Flags().StringP("outcome", "o", "", "Filter by outcome: missed, completed, possible, other")
-	tackleListCmd.Flags().BoolP("star", "s", false, "Filter to show only starred tackles")
 
 	// Add flags to tackle export command
 	tackleExportCmd.Flags().StringP("player", "p", "", "Player name or number to export (required)")
 	tackleExportCmd.Flags().StringP("output", "o", "", "Output file path (default: <player>-tackles.txt)")
-	tackleExportCmd.Flags().StringP("video", "v", "", "Filter to specific video path")
 
 	// Build command tree
 	tackleCmd.AddCommand(tackleAddCmd)

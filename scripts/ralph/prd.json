@@ -27,7 +27,7 @@
       ],
       "priority": 1,
       "passes": true,
-      "notes": ""
+      "notes": "Implemented in commit cb4a1ae"
     },
     {
       "id": "US-048",
@@ -48,7 +48,7 @@
       ],
       "priority": 2,
       "passes": true,
-      "notes": ""
+      "notes": "Implemented in commit 4aa7528"
     },
     {
       "id": "US-049",
@@ -105,7 +105,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
@@ -125,7 +125,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
@@ -142,7 +142,7 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
@@ -160,7 +160,7 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": true,
+      "passes": false,
       "notes": ""
     }
   ]

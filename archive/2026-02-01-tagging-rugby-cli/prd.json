@@ -1,0 +1,758 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/tagging-rugby-cli",
+  "description": "A Go CLI tool for rugby coaches and analysts to review game footage via mpv with timestamped annotations stored in SQLite",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Project scaffolding and CLI structure",
+      "description": "As a developer, I need the basic Go project structure with cobra CLI framework.",
+      "acceptanceCriteria": [
+        "Initialize Go module: go mod init github.com/user/tagging-rugby-cli",
+        "Install dependencies: cobra, viper, modernc.org/sqlite",
+        "Create main.go with cobra root command",
+        "Root command displays help with app name and description",
+        "Add version command that prints version number",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Dependencies will be added via go get when needed. Typecheck passes with CGO_ENABLED=0."
+    },
+    {
+      "id": "US-002",
+      "title": "SQLite database setup and connection",
+      "description": "As a developer, I need database initialization so that data persists.",
+      "acceptanceCriteria": [
+        "Create db package with Open function",
+        "Database file created at ~/.local/share/tagging-rugby-cli/data.db",
+        "Create parent directories if they don't exist",
+        "Return *sql.DB connection handle",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Uses modernc.org/sqlite (pure Go, no CGO). Typecheck passes with CGO_ENABLED=0."
+    },
+    {
+      "id": "US-003",
+      "title": "Database schema - notes table",
+      "description": "As a developer, I need the notes table schema for storing annotations.",
+      "acceptanceCriteria": [
+        "Create notes table: id INTEGER PRIMARY KEY, video_path TEXT, timestamp_seconds REAL, text TEXT, category TEXT, player TEXT, team TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP",
+        "Run migration on database open",
+        "Migration is idempotent (CREATE TABLE IF NOT EXISTS)",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Migration runs automatically on db.Open(). Uses migrate() helper function for future table additions."
+    },
+    {
+      "id": "US-004",
+      "title": "Database schema - clips table",
+      "description": "As a developer, I need the clips table schema for storing video segments.",
+      "acceptanceCriteria": [
+        "Create clips table: id INTEGER PRIMARY KEY, video_path TEXT, start_seconds REAL, end_seconds REAL, description TEXT, category TEXT, player TEXT, team TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP",
+        "Migration is idempotent",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Migration added to migrate() function in db/db.go. Uses CREATE TABLE IF NOT EXISTS for idempotency."
+    },
+    {
+      "id": "US-005",
+      "title": "Database schema - categories table",
+      "description": "As a developer, I need the categories table with default values.",
+      "acceptanceCriteria": [
+        "Create categories table: id INTEGER PRIMARY KEY, name TEXT UNIQUE, created_at DATETIME DEFAULT CURRENT_TIMESTAMP",
+        "Seed default categories on first run: try, tackle, turnover, lineout, scrum, penalty, kick",
+        "Migration is idempotent",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Categories table added to migrate() function. Uses INSERT OR IGNORE for idempotent seeding of default categories."
+    },
+    {
+      "id": "US-006",
+      "title": "Database schema - tackles table",
+      "description": "As a developer, I need the tackles table for detailed tackle tracking.",
+      "acceptanceCriteria": [
+        "Create tackles table: id INTEGER PRIMARY KEY, video_path TEXT, timestamp_seconds REAL, player TEXT, team TEXT, attempt INTEGER, outcome TEXT, followed TEXT, star INTEGER DEFAULT 0, notes TEXT, zone TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP",
+        "outcome constrained to: missed, completed, possible, other",
+        "Migration is idempotent",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Tackles table added to migrate() function with CHECK constraint on outcome. Uses CREATE TABLE IF NOT EXISTS for idempotency."
+    },
+    {
+      "id": "US-007",
+      "title": "mpv IPC client - connection",
+      "description": "As a developer, I need to connect to mpv via Unix socket.",
+      "acceptanceCriteria": [
+        "Create mpv package with Client struct",
+        "Connect to Unix socket at /tmp/tagging-rugby-mpv.sock",
+        "Implement Connect() and Close() methods",
+        "Return error if socket doesn't exist or connection fails",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "Created mpv/client.go with Client struct, NewClient(), Connect(), Close(), and IsConnected() methods. Uses sync.Mutex for thread safety."
+    },
+    {
+      "id": "US-008",
+      "title": "mpv IPC client - send commands",
+      "description": "As a developer, I need to send JSON IPC commands to mpv.",
+      "acceptanceCriteria": [
+        "Implement sendCommand(command string, args ...interface{}) method",
+        "Format as JSON: {\"command\": [command, args...]}",
+        "Send newline-terminated JSON over socket",
+        "Parse JSON response and return result or error",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "Implemented sendCommand with request_id for matching responses, bufio.Reader for efficient reading, and proper error handling for mpv responses."
+    },
+    {
+      "id": "US-009",
+      "title": "mpv IPC client - get/set properties",
+      "description": "As a developer, I need to get and set mpv properties.",
+      "acceptanceCriteria": [
+        "Implement GetProperty(name string) method",
+        "Implement SetProperty(name string, value interface{}) method",
+        "GetTimePos() returns current playback position in seconds",
+        "GetDuration() returns video duration in seconds",
+        "GetPaused() returns boolean pause state",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Implemented GetProperty, SetProperty, GetTimePos, GetDuration, GetPaused methods. Added toFloat64 helper for numeric type conversions."
+    },
+    {
+      "id": "US-010",
+      "title": "mpv IPC client - playback controls",
+      "description": "As a developer, I need playback control methods.",
+      "acceptanceCriteria": [
+        "Implement Play() - sets pause property to false",
+        "Implement Pause() - sets pause property to true",
+        "Implement TogglePause() - toggles pause state",
+        "Implement Seek(seconds float64) - absolute seek",
+        "Implement SeekRelative(seconds float64) - relative seek",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "Implemented Play, Pause, TogglePause, Seek, SeekRelative methods. Uses mpv seek command with 'absolute' and 'relative' flags."
+    },
+    {
+      "id": "US-011",
+      "title": "mpv IPC client - advanced controls",
+      "description": "As a developer, I need speed and frame stepping controls.",
+      "acceptanceCriteria": [
+        "Implement SetSpeed(multiplier float64) - sets speed property",
+        "Implement GetSpeed() - returns current speed",
+        "Implement FrameStep() - sends frame-step command",
+        "Implement FrameBackStep() - sends frame-back-step command",
+        "Implement SetMute(muted bool) and GetMute()",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "Implemented SetSpeed, GetSpeed, FrameStep, FrameBackStep, SetMute, GetMute methods. Uses mpv speed and mute properties, and frame-step/frame-back-step commands."
+    },
+    {
+      "id": "US-012",
+      "title": "mpv IPC client - A-B loop",
+      "description": "As a developer, I need A-B loop controls for clip playback.",
+      "acceptanceCriteria": [
+        "Implement SetABLoop(start, end float64) - sets ab-loop-a and ab-loop-b properties",
+        "Implement ClearABLoop() - sets both to 'no'",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "Implemented SetABLoop and ClearABLoop methods using mpv ab-loop-a and ab-loop-b properties. ClearABLoop sets both to string 'no' to disable looping."
+    },
+    {
+      "id": "US-013",
+      "title": "Dependency checker",
+      "description": "As a user, I want to be warned if mpv or ffmpeg are missing.",
+      "acceptanceCriteria": [
+        "Create deps package with CheckMpv() and CheckFfmpeg() functions",
+        "Use exec.LookPath to check if binaries exist",
+        "Return install URL on failure: https://mpv.io/installation/ and https://ffmpeg.org/download.html",
+        "Add 'doctor' subcommand that checks all dependencies and prints status",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": "Created deps/deps.go with CheckMpv, CheckFfmpeg, CheckAll, and DependencyError type. Added doctor command to cmd/root.go."
+    },
+    {
+      "id": "US-014",
+      "title": "Launch mpv with IPC socket",
+      "description": "As a developer, I need to launch mpv with the correct flags.",
+      "acceptanceCriteria": [
+        "Create LaunchMpv(videoPath string) function",
+        "Launch mpv with --input-ipc-server=/tmp/tagging-rugby-mpv.sock flag",
+        "Check mpv is installed first, return error with install link if not",
+        "Return process handle for later cleanup",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": "Created mpv/launch.go with LaunchMpv function. Uses deps.CheckMpv for dependency check, returns *exec.Cmd for process handle."
+    },
+    {
+      "id": "US-015",
+      "title": "Open command - launch video session",
+      "description": "As a coach, I want to open a video file for analysis.",
+      "acceptanceCriteria": [
+        "Add 'open' subcommand that takes video file path argument",
+        "Resolve video path to absolute path",
+        "Check video file exists, error if not",
+        "Launch mpv with video file",
+        "Wait briefly for socket to be ready, then connect",
+        "Print confirmation with filename and duration",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": "Added openCmd to cmd/root.go. Resolves paths, validates file existence, launches mpv, waits for socket with retry loop, displays duration in MM:SS format."
+    },
+    {
+      "id": "US-016",
+      "title": "Note CRUD - add and list",
+      "description": "As a coach, I want to add notes and list them.",
+      "acceptanceCriteria": [
+        "Add 'note add' subcommand with text argument",
+        "Flags: --category, --player, --team",
+        "Get current timestamp from mpv, store note in database",
+        "Print confirmation with note ID and timestamp",
+        "Add 'note list' subcommand",
+        "Display notes as table: ID, timestamp (MM:SS), category, player, team, text",
+        "Sort by timestamp ascending",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": "Created cmd/note.go with noteCmd, noteAddCmd, noteListCmd. Uses tabwriter for table display. Gets timestamp and video path from mpv IPC."
+    },
+    {
+      "id": "US-017",
+      "title": "Note CRUD - edit and delete",
+      "description": "As a coach, I want to edit and delete notes.",
+      "acceptanceCriteria": [
+        "Add 'note edit' subcommand with ID and new text arguments",
+        "Flags: --category, --player, --team, --timestamp (updates to current position)",
+        "Print updated note after edit",
+        "Add 'note delete' subcommand with ID argument",
+        "Prompt for confirmation before deletion",
+        "--force flag skips confirmation",
+        "Print confirmation after deletion",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": true,
+      "notes": "Added noteEditCmd and noteDeleteCmd to cmd/note.go. Edit command updates text and optionally category/player/team/timestamp. Delete command prompts for confirmation with --force to skip."
+    },
+    {
+      "id": "US-018",
+      "title": "Note filtering",
+      "description": "As a coach, I want to filter notes by various criteria.",
+      "acceptanceCriteria": [
+        "Add flags to 'note list': --category, --player, --team",
+        "Add --from and --to flags for time range (accept MM:SS or seconds)",
+        "Filters can be combined (AND logic)",
+        "Display count of matching notes",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": true,
+      "notes": "Added filtering flags to noteListCmd. parseTimeToSeconds helper parses MM:SS or seconds format. Dynamic SQL query building with AND logic for combined filters."
+    },
+    {
+      "id": "US-019",
+      "title": "Note goto command",
+      "description": "As an analyst, I want to jump to a note's timestamp.",
+      "acceptanceCriteria": [
+        "Add 'note goto' subcommand with note ID argument",
+        "Seek mpv to the note's timestamp",
+        "Display note details after seeking",
+        "Error message if note ID not found",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": true,
+      "notes": "Added noteGotoCmd to cmd/note.go. Uses client.Seek() to jump to note timestamp. Displays note details (text, category, player, team) after seeking."
+    },
+    {
+      "id": "US-020",
+      "title": "Clip commands - create and list",
+      "description": "As a coach, I want to create and list video clips.",
+      "acceptanceCriteria": [
+        "Add 'clip start' subcommand - stores start timestamp in memory/temp",
+        "Add 'clip end' subcommand with description argument - saves clip to database",
+        "Add 'clip add' subcommand with start, end, description arguments for manual entry",
+        "Flags: --category, --player, --team",
+        "Add 'clip list' subcommand showing: ID, start, end, duration, category, description",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": true,
+      "notes": "Created cmd/clip.go with clip start, end, add, and list commands. Uses sync.Mutex for thread-safe clip start state storage."
+    },
+    {
+      "id": "US-021",
+      "title": "Clip playback with A-B loop",
+      "description": "As an analyst, I want to loop playback of a clip.",
+      "acceptanceCriteria": [
+        "Add 'clip play' subcommand with clip ID argument",
+        "Seek to clip start timestamp",
+        "Set mpv A-B loop to clip start and end",
+        "Add 'clip stop' subcommand that clears A-B loop",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": true,
+      "notes": "Added clipPlayCmd and clipStopCmd to cmd/clip.go. Uses existing mpv client Seek, SetABLoop, and ClearABLoop methods."
+    },
+    {
+      "id": "US-022",
+      "title": "Category commands",
+      "description": "As a coach, I want to manage annotation categories.",
+      "acceptanceCriteria": [
+        "Add 'category list' subcommand showing all categories",
+        "Add 'category add' subcommand with name argument",
+        "Add 'category delete' subcommand with name argument",
+        "Error if trying to add duplicate category",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": true,
+      "notes": "Created cmd/category.go with list, add, delete subcommands. Uses tabwriter for table display. Add command checks for unique constraint violations."
+    },
+    {
+      "id": "US-023",
+      "title": "Tackle commands - add and list",
+      "description": "As a coach, I want to record tackle events.",
+      "acceptanceCriteria": [
+        "Add 'tackle add' subcommand",
+        "Required flags: --player, --attempt, --outcome (missed|completed|possible|other)",
+        "Optional flag: --team for team name",
+        "Optional flags: --followed, --star, --notes, --zone",
+        "Get timestamp from mpv, store in database",
+        "Add 'tackle list' subcommand showing all tackles as table",
+        "Typecheck passes"
+      ],
+      "priority": 23,
+      "passes": true,
+      "notes": "Created cmd/tackle.go with add and list subcommands. Add command validates required flags and outcome values. List command displays tackles in tabwriter table format."
+    },
+    {
+      "id": "US-024",
+      "title": "Tackle filtering",
+      "description": "As a coach, I want to filter tackles.",
+      "acceptanceCriteria": [
+        "Add flags to 'tackle list': --player, --outcome, --star",
+        "Filters can be combined",
+        "Display count of matching tackles",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": true,
+      "notes": "Added --player, --outcome, --star filter flags to tackle list command. Uses dynamic SQL query building with AND logic for combined filters."
+    },
+    {
+      "id": "US-025",
+      "title": "Tackle export to text file",
+      "description": "As a coach, I want to export player tackle statistics.",
+      "acceptanceCriteria": [
+        "Add 'tackle export' subcommand with --player flag (required)",
+        "Optional --output flag for custom file path (default: <player>-tackles.txt)",
+        "Optional --video flag to filter to specific video",
+        "Export includes: total, completed, missed, possible, other counts",
+        "Export includes: completion percentage",
+        "Export includes: list of all tackle events with details",
+        "Starred tackles marked with star symbol",
+        "Print confirmation with file path",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": true,
+      "notes": "Added tackleExportCmd to cmd/tackle.go with --player (required), --output, and --video flags. Uses SQL aggregation for statistics and outputs formatted text file with star symbol for starred tackles."
+    },
+    {
+      "id": "US-026",
+      "title": "Clip export with ffmpeg",
+      "description": "As a coach, I want to export clips as video files.",
+      "acceptanceCriteria": [
+        "Add 'clip export' subcommand with clip ID argument",
+        "Check ffmpeg is installed, error with install link if not",
+        "Use ffmpeg with -ss (start) and -to (end) flags",
+        "Default output: clip-<id>.mp4 in current directory",
+        "Optional --output flag for custom path",
+        "Optional --format flag (mp4, webm, mkv)",
+        "Use stream copy by default (-c copy)",
+        "Optional --reencode flag to re-encode",
+        "--all flag exports all clips for current video",
+        "Show progress message during export",
+        "Typecheck passes"
+      ],
+      "priority": 26,
+      "passes": true,
+      "notes": "Added clipExportCmd to cmd/clip.go with all required flags. Uses deps.CheckFfmpeg for dependency check. buildFfmpegArgs helper builds ffmpeg command with -ss (input seeking) and -to (duration) flags. Supports stream copy by default and re-encoding with --reencode flag."
+    },
+    {
+      "id": "US-027",
+      "title": "Bubbletea TUI - app structure",
+      "description": "As a developer, I need the basic Bubbletea app structure.",
+      "acceptanceCriteria": [
+        "Create tui package with Model struct implementing tea.Model",
+        "Model holds: mpv client, database connection, current video path",
+        "Implement Init(), Update(), View() methods",
+        "Add --tui or -t flag to 'open' command to launch TUI instead of CLI",
+        "Graceful shutdown on q or Ctrl+C",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": true,
+      "notes": "Created tui/tui.go with Model struct, Init/Update/View methods, and Run function. Added --tui/-t flag to open command. Uses tea.WithAltScreen for full-screen TUI."
+    },
+    {
+      "id": "US-028",
+      "title": "Bubbletea TUI - Lipgloss color palette",
+      "description": "As a developer, I need the retro purple color palette.",
+      "acceptanceCriteria": [
+        "Create styles package with Lipgloss styles",
+        "Define colors: DeepPurple #1a1a2e, DarkPurple #16213e, Purple #4a347d, BrightPurple #7b2cbf, Lavender #c77dff, LightLavender #e0aaff, Pink #ff6b9d, Cyan #64dfdf",
+        "Create styles for: background, panel, border, highlight, primaryText, secondaryText, warning, success",
+        "Typecheck passes"
+      ],
+      "priority": 28,
+      "passes": true,
+      "notes": "Created tui/styles/styles.go with retro purple color palette using lipgloss.Color constants and pre-defined styles for Background, Panel, Border, Highlight, PrimaryText, SecondaryText, Warning, Success."
+    },
+    {
+      "id": "US-029",
+      "title": "Bubbletea TUI - status bar",
+      "description": "As a user, I want to see playback status at a glance.",
+      "acceptanceCriteria": [
+        "Create status bar component at top of screen",
+        "Display: play/pause icon, current timestamp, duration, step size",
+        "Display: mute icon when muted, overlay icon when enabled",
+        "Style with Lipgloss using palette colors",
+        "Update in real-time by polling mpv every 100ms",
+        "Typecheck passes"
+      ],
+      "priority": 29,
+      "passes": true,
+      "notes": "Created tui/components/statusbar.go with StatusBarState struct and StatusBar render function. Updated tui/tui.go with tickMsg for 100ms polling, updateStatusFromMpv for real-time status updates, and integrated status bar into View."
+    },
+    {
+      "id": "US-030",
+      "title": "Bubbletea TUI - notes table",
+      "description": "As a user, I want to see notes in a table at the bottom of the interface.",
+      "acceptanceCriteria": [
+        "Create fixed 10-row table at the bottom of the interface",
+        "Table columns: ID, Timestamp, Category, Text (truncated)",
+        "Table scrolls to show notes near current video timestamp",
+        "Starred items show star symbol",
+        "Selected row highlighted with BrightPurple",
+        "List sorted by timestamp",
+        "Typecheck passes"
+      ],
+      "priority": 30,
+      "passes": true,
+      "notes": "Implemented fixed 10-row table with columns: ID (with star symbol), Timestamp, Category, Text. Auto-scrolls to current video timestamp. Selected row highlighted with BrightPurple."
+    },
+    {
+      "id": "US-031",
+      "title": "Bubbletea TUI - command input",
+      "description": "As a user, I want to type commands in the TUI.",
+      "acceptanceCriteria": [
+        "Create command input area at bottom of screen",
+        "':' key enters command mode, shows ':' prompt",
+        "Type command and press Enter to execute",
+        "Esc cancels command mode",
+        "Commands execute same logic as CLI subcommands",
+        "Show command result/error briefly",
+        "Typecheck passes"
+      ],
+      "priority": 31,
+      "passes": true,
+      "notes": "Created tui/components/commandinput.go with CommandInputState struct and render function. Updated tui/tui.go with handleCommandInput for key handling, executeCommand for command parsing and execution. Supports note/clip/tackle commands, playback controls, and seek. Result messages auto-dismiss after 3 seconds."
+    },
+    {
+      "id": "US-032",
+      "title": "TUI keybindings - playback",
+      "description": "As a coach, I want quick keys for playback control.",
+      "acceptanceCriteria": [
+        "Space toggles play/pause",
+        "M toggles mute",
+        "H steps backward by current step size",
+        "L steps forward by current step size",
+        "< decreases step size (cycle: 0.1, 0.5, 1, 2, 5, 10, 30)",
+        "> increases step size",
+        "Default step size is 1 second",
+        "Typecheck passes"
+      ],
+      "priority": 32,
+      "passes": true,
+      "notes": "Implemented playback keybindings in tui/tui.go Update method. stepSizes array defines the cycle values. Helper methods decreaseStepSize, increaseStepSize, and findStepSizeIndex manage step size cycling."
+    },
+    {
+      "id": "US-033",
+      "title": "TUI keybindings - navigation",
+      "description": "As a coach, I want quick keys for navigating events.",
+      "acceptanceCriteria": [
+        "J moves selection to previous note/tackle in list",
+        "K moves selection to next note/tackle in list",
+        "Enter on selected item seeks mpv to that timestamp",
+        "Display note/tackle details briefly when jumping",
+        "Typecheck passes"
+      ],
+      "priority": 33,
+      "passes": true,
+      "notes": "Implemented J/K navigation using existing MoveUp/MoveDown helpers on NotesListState. Enter key calls jumpToSelectedItem method which seeks mpv and displays item details briefly."
+    },
+    {
+      "id": "US-034",
+      "title": "TUI help screen",
+      "description": "As a user, I want to see all keybindings.",
+      "acceptanceCriteria": [
+        "? key displays help overlay",
+        "Help shows all keybindings grouped by function",
+        "Groups: Playback, Navigation, Views, Commands",
+        "Press any key to dismiss",
+        "Styled with palette colors",
+        "Typecheck passes"
+      ],
+      "priority": 34,
+      "passes": true,
+      "notes": "Created tui/components/help.go with HelpOverlay function. Added showHelp field to Model and ? key handling in Update. Groups: Playback, Navigation, Views, Commands."
+    },
+    {
+      "id": "US-035",
+      "title": "TUI stats view",
+      "description": "As a coach, I want to view tackle statistics.",
+      "acceptanceCriteria": [
+        "S key opens stats view",
+        "Show table: Player, Total, Completed, Missed, Possible, %, Starred",
+        "Players sorted alphabetically",
+        "Tab cycles sort column",
+        "V toggles between current video / all videos",
+        "Backspace returns to main view",
+        "Typecheck passes"
+      ],
+      "priority": 35,
+      "passes": true,
+      "notes": "Created tui/components/statsview.go with StatsViewState, PlayerStats structs, and StatsView render function. Added S key handler and loadTackleStats method in tui/tui.go. Supports Tab to cycle sort columns, V to toggle video scope, Backspace to return."
+    },
+    {
+      "id": "US-036",
+      "title": "TUI stats view - player filtering",
+      "description": "As a coach, I want to filter players in stats view.",
+      "acceptanceCriteria": [
+        "/ key enters filter mode in stats view",
+        "Type player name/initials to toggle them into filter",
+        "Filtered players highlighted and shown at top",
+        "Non-filtered players greyed out below",
+        "Multiple players can be filtered for comparison",
+        "Esc clears all filters",
+        "Typecheck passes"
+      ],
+      "priority": 36,
+      "passes": true,
+      "notes": "Implemented filter mode with / key, ToggleFilter method for name/initials matching, GetSortedStats for filtered-first ordering, ClearFilters on Esc. Filtered players shown in Cyan, non-filtered in greyed Purple."
+    },
+    {
+      "id": "US-037",
+      "title": "mpv overlay - display notes",
+      "description": "As a coach, I want notes to appear on the video.",
+      "acceptanceCriteria": [
+        "O key toggles overlay on/off",
+        "When enabled, display notes near current timestamp on mpv via osd-overlay",
+        "Show note text, category, player/team if present",
+        "Notes appear when within 2 seconds of their timestamp",
+        "Semi-transparent background to not obscure video",
+        "Typecheck passes"
+      ],
+      "priority": 37,
+      "passes": true,
+      "notes": "Uses mpv osd-overlay command with ASS formatting. ShowOverlay/HideOverlay methods in mpv/client.go. O key toggles overlay in TUI, updateOverlay method called during tick polling."
+    },
+    {
+      "id": "US-038",
+      "title": "Session resume",
+      "description": "As an analyst, I want to resume previous sessions.",
+      "acceptanceCriteria": [
+        "When opening a video that has existing notes, display count",
+        "All previous notes, clips, and tackles are available",
+        "Print message: 'Resuming session: X notes, Y clips, Z tackles'",
+        "Typecheck passes"
+      ],
+      "priority": 38,
+      "passes": true,
+      "notes": "Added session resume functionality to openCmd. Queries database for existing notes, clips, and tackles before displaying session info. Shows 'Resuming session: X notes, Y clips, Z tackles' message when reopening a video with existing data."
+    },
+    {
+      "id": "US-039",
+      "title": "Quick note input in TUI",
+      "description": "As a coach, I want to quickly add a note with a single keypress so that I can annotate moments without interrupting my review flow.",
+      "acceptanceCriteria": [
+        "N key opens a note input prompt at the bottom of the screen",
+        "Prompt shows current timestamp and text input field",
+        "Enter saves the note at the current timestamp and closes the prompt",
+        "Escape cancels input and closes the prompt without saving",
+        "Optional: Tab cycles through category/player/team fields before saving",
+        "Note is saved to database and appears in notes list immediately",
+        "Confirmation message displays briefly after saving",
+        "Input prompt styled consistently with command input area",
+        "Typecheck/lint passes"
+      ],
+      "priority": 39,
+      "passes": true,
+      "notes": "Created tui/components/noteinput.go with NoteInputState struct and NoteInput render function. N key opens prompt showing timestamp and input fields. Tab cycles through text/category/player/team fields. Enter saves note, Escape cancels. Confirmation message auto-dismisses after 3 seconds."
+    },
+    {
+      "id": "US-040",
+      "title": "Quick tackle input in TUI",
+      "description": "As a coach, I want to quickly record a tackle with a single keypress so that I can track defensive events without interrupting my review flow.",
+      "acceptanceCriteria": [
+        "T key opens a tackle input prompt at the bottom of the screen",
+        "Prompt shows current timestamp and required fields",
+        "Fields displayed in order: Player, Team, Attempt #, Outcome",
+        "Outcome field offers selection: completed, missed, possible, other",
+        "Tab moves to next field, Shift+Tab moves to previous field",
+        "Enter saves the tackle when all required fields are filled",
+        "Escape cancels input and closes the prompt without saving",
+        "Optional fields (followed, star, notes, zone) accessible via additional tab stops or modifier key",
+        "* or S while in prompt toggles star on the tackle",
+        "Tackle is saved to database and appears in list immediately",
+        "Confirmation message displays briefly after saving",
+        "Input prompt styled consistently with command input area",
+        "Typecheck/lint passes"
+      ],
+      "priority": 40,
+      "passes": true,
+      "notes": "Created tui/components/tackleinput.go with TackleInputState struct and TackleInput render function. T key opens prompt showing timestamp and fields. Tab/Shift+Tab cycles through all 7 fields (4 required, 3 optional). Left/right arrows or typing cycles outcome selection. * or S toggles star. Enter validates required fields and saves tackle. Confirmation message auto-dismisses after 3 seconds."
+    },
+    {
+      "id": "US-041",
+      "title": "Shorthand commands in TUI",
+      "description": "As a coach, I want shorthand commands for common actions so that I can work faster without typing full command names.",
+      "acceptanceCriteria": [
+        ":nt (no args) opens the quick tackle input prompt (same as T key)",
+        ":nt <player> <team> <attempt> <outcome> adds tackle with positional args",
+        ":nt with partial args shows error with usage hint",
+        ":nn (no args) opens the quick note input prompt (same as N key)",
+        ":nn <text> adds note with the given text (shorthand for :note add)",
+        ":cs marks clip start (shorthand for :clip start)",
+        ":ce <description> marks clip end (shorthand for :clip end)",
+        "Shorthand commands documented in help screen (?)",
+        "Typecheck/lint passes"
+      ],
+      "priority": 41,
+      "passes": true,
+      "notes": "Implemented :nn, :nt, :cs, :ce shorthand commands in executeCommand switch. Added executeShorthandNoteCommand and executeShorthandTackleCommand methods. Special return values trigger opening input prompts. Help screen updated with new Shorthand Commands group."
+    },
+    {
+      "id": "US-042",
+      "title": "Fix escape key in input prompts",
+      "description": "As a coach, I want the escape key to cancel input prompts so that I can dismiss note/tackle input without saving.",
+      "acceptanceCriteria": [
+        "Escape key cancels note input prompt and returns to normal mode",
+        "Escape key cancels tackle input prompt and returns to normal mode",
+        "Escape key cancels command input mode",
+        "Escape key cancels stats view filter mode",
+        "All escape handlers use correct Bubble Tea key string",
+        "Typecheck/lint passes"
+      ],
+      "priority": 42,
+      "passes": true,
+      "notes": "Fixed escape key handling in TUI by changing 'escape' to 'esc' in all case statements in tui/tui.go. Updated handleCommandInput, handleNoteInput, handleTackleInput, handleStatsViewInput, and handleStatsFilterInput functions."
+    },
+    {
+      "id": "US-043",
+      "title": "Controls display on home screen",
+      "description": "As a user, I want to see available controls on the home screen so that I can quickly learn and reference keybindings.",
+      "acceptanceCriteria": [
+        "Controls display shown between status bar and command input",
+        "Each control shows: emoji, name, shortcut key in brackets",
+        "Controls grouped by function (playback, navigation, views)",
+        "Controls include: ⏪ Back [H], ⏩ Fwd [L], ⏯️ Play [Space]",
+        "Controls include: ⏮️ Prev [J], ⏭️ Next [K], 🔇 Mute [M]",
+        "Controls include: ➖ Step- [<], ➕ Step+ [>], 📝 Overlay [O]",
+        "Controls include: 📊 Stats [S], ❓ Help [?], 🚪 Quit [q]",
+        "Controls styled consistently with palette colors",
+        "Typecheck/lint passes"
+      ],
+      "priority": 43,
+      "passes": true,
+      "notes": "Created tui/components/controls.go with Control struct, ControlGroup struct, and ControlsDisplay render function. Controls grouped by function (playback, navigation, step/overlay, views). Added controlsDisplay to View() in tui/tui.go between status bar and notes list."
+    },
+    {
+      "id": "US-044",
+      "title": "Embed SQL from named files",
+      "description": "As a developer, I want SQL queries stored in separate .sql files and embedded into the Go binary so that SQL is readable, maintainable, and syntax-highlighted in editors.",
+      "acceptanceCriteria": [
+        "All SQL queries stored in .sql files under a sql/ directory (e.g., sql/create_tables.sql, sql/insert_note.sql)",
+        "SQL files embedded into Go binary using go:embed directives",
+        "Each SQL file contains a single named query or migration",
+        "File naming convention: <action>_<entity>.sql (e.g., create_tables.sql, select_notes_by_video.sql, insert_tackle.sql)",
+        "No inline SQL strings in Go source files — all SQL referenced via embedded file variables",
+        "SQL files are valid standalone SQL that can be run directly against SQLite for testing",
+        "Typecheck/lint passes"
+      ],
+      "priority": 44,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-045",
+      "title": "Three-column TUI layout",
+      "description": "As a coach, I want a multi-column layout so that I can see controls, events, and stats simultaneously without switching views.",
+      "acceptanceCriteria": [
+        "TUI displays three equal-width columns side by side",
+        "Column 1: Controls, playback status, current tag detail card, and command input",
+        "Column 2: Scrollable list of all tags/events for the current video",
+        "Column 3: Live stats summary, bar graph of event distribution, and top players leaderboard",
+        "Columns separated by vertical borders using Lipgloss styling",
+        "Columns resize proportionally when terminal is resized",
+        "Minimum terminal width enforced — displays warning if too narrow",
+        "Layout built with Bubbletea and Lipgloss JoinHorizontal",
+        "Typecheck/lint passes"
+      ],
+      "priority": 45,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-046",
+      "title": "Timeline progress bar",
+      "description": "As a coach, I want a visual timeline bar at the bottom of the screen so that I can see playback progress and where notes are located in the video.",
+      "acceptanceCriteria": [
+        "Progress bar spans full terminal width, pinned below the three columns",
+        "Bar shows filled and unfilled segments for playback position",
+        "Current and total timestamps displayed to the right of the bar",
+        "Note/event markers shown as dots at their timestamps along the bar",
+        "Current position indicator displayed below the bar",
+        "Bar updates in real-time during playback",
+        "Bar resizes dynamically with terminal width",
+        "Always visible at the bottom of the screen regardless of scrolling",
+        "Typecheck/lint passes"
+      ],
+      "priority": 46,
+      "passes": true,
+      "notes": "Created tui/components/timeline.go with Timeline render function. Bar uses filled/unfilled segments with event markers as diamonds. Current position shown with indicator arrow below. Timestamps displayed to the right. Integrated into View() between columns and command input."
+    }
+  ]
+}

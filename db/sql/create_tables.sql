@@ -1,43 +1,65 @@
 CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY,
-    video_path TEXT,
-    timestamp_seconds REAL,
-    text TEXT,
     category TEXT,
-    player TEXT,
-    team TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS clips (
+CREATE TABLE IF NOT EXISTS note_videos (
     id INTEGER PRIMARY KEY,
-    video_path TEXT,
-    start_seconds REAL,
-    end_seconds REAL,
-    description TEXT,
-    category TEXT,
-    player TEXT,
-    team TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    path TEXT,
+    size INTEGER,
+    duration REAL,
+    format TEXT,
+    stopped_at REAL
 );
 
-CREATE TABLE IF NOT EXISTS categories (
+CREATE TABLE IF NOT EXISTS note_clips (
     id INTEGER PRIMARY KEY,
-    name TEXT UNIQUE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    name TEXT,
+    duration REAL,
+    started_at DATETIME,
+    finished_at DATETIME,
+    error_at DATETIME,
+    error TEXT
 );
 
-CREATE TABLE IF NOT EXISTS tackles (
+CREATE TABLE IF NOT EXISTS note_timing (
     id INTEGER PRIMARY KEY,
-    video_path TEXT,
-    timestamp_seconds REAL,
+    note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    start REAL,
+    end REAL
+);
+
+CREATE TABLE IF NOT EXISTS note_tackles (
+    id INTEGER PRIMARY KEY,
+    note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
     player TEXT,
-    team TEXT,
     attempt INTEGER,
-    outcome TEXT CHECK(outcome IN ('missed', 'completed', 'possible', 'other')),
-    followed TEXT,
-    star INTEGER DEFAULT 0,
-    notes TEXT,
-    zone TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    outcome TEXT
 );
+
+CREATE TABLE IF NOT EXISTS note_zones (
+    id INTEGER PRIMARY KEY,
+    note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    horizontal TEXT,
+    vertical TEXT
+);
+
+CREATE TABLE IF NOT EXISTS note_details (
+    id INTEGER PRIMARY KEY,
+    note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    type TEXT,
+    note TEXT
+);
+
+CREATE TABLE IF NOT EXISTS note_highlights (
+    id INTEGER PRIMARY KEY,
+    note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+    type TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_notes_category ON notes(category);
+CREATE INDEX IF NOT EXISTS idx_note_details_type ON note_details(type);
+CREATE INDEX IF NOT EXISTS idx_note_highlights_type ON note_highlights(type);

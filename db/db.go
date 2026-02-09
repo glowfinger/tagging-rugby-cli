@@ -35,6 +35,12 @@ func Open() (*sql.DB, error) {
 		return nil, err
 	}
 
+	// Enable foreign keys
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	// Run migrations
 	if err := migrate(db); err != nil {
 		db.Close()
@@ -51,15 +57,6 @@ func migrate(db *sql.DB) error {
 	_, err := db.Exec(CreateTablesSQL)
 	if err != nil {
 		return err
-	}
-
-	// Seed default categories (INSERT OR IGNORE for idempotency)
-	defaultCategories := []string{"try", "tackle", "turnover", "lineout", "scrum", "penalty", "kick"}
-	for _, cat := range defaultCategories {
-		_, err = db.Exec(SeedCategoriesSQL, cat)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
