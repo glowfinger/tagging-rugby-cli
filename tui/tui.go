@@ -225,6 +225,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
+		case "ctrl+h":
+			// Ctrl+H steps backward by one frame
+			if m.client != nil && m.client.IsConnected() {
+				_ = m.client.FrameBackStep()
+			}
+			return m, nil
+		case "ctrl+l":
+			// Ctrl+L steps forward by one frame
+			if m.client != nil && m.client.IsConnected() {
+				_ = m.client.FrameStep()
+			}
+			return m, nil
 		case "h", "H", "left":
 			// H / Left arrow steps backward by current step size
 			if m.client != nil && m.client.IsConnected() {

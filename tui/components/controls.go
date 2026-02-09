@@ -29,6 +29,8 @@ func GetControlGroups() []ControlGroup {
 				{Emoji: "\u23ea", Name: "Back", Shortcut: "H/\u2190"},
 				{Emoji: "\u23e9", Name: "Fwd", Shortcut: "L/\u2192"},
 				{Emoji: "\u23ef\ufe0f", Name: "Play", Shortcut: "Space"},
+				{Emoji: "\U0001F3AC", Name: "Frame-", Shortcut: "C-h"},
+				{Emoji: "\U0001F3AC", Name: "Frame+", Shortcut: "C-l"},
 			},
 		},
 		// Navigation controls

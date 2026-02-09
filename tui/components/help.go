@@ -29,6 +29,8 @@ func HelpOverlay(width, height int) string {
 				{"M", "Toggle mute"},
 				{"H / Left", "Step backward (by step size)"},
 				{"L / Right", "Step forward (by step size)"},
+				{"Ctrl+H", "Frame step backward"},
+				{"Ctrl+L", "Frame step forward"},
 				{", / <", "Decrease step size"},
 				{". / >", "Increase step size"},
 			},
