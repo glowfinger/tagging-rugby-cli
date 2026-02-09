@@ -1,0 +1,139 @@
+## Codebase Patterns
+- Use `CGO_ENABLED=0` for all Go build/vet commands (required for modernc.org/sqlite)
+- Go binary is at `/home/node/go/bin/go` - use `export PATH="$PATH:/home/node/go/bin"` before Go commands
+- Database connection uses modernc.org/sqlite (pure Go implementation, no CGO)
+- Add new table migrations to the `migrate()` function in db/db.go - always use `CREATE TABLE IF NOT EXISTS`
+- Bubble Tea key strings: use "esc" (not "escape"), "enter", "tab", "backspace", "left", "right" for key handling
+- SQL queries live in `db/sql/*.sql` files, embedded via `go:embed` in `db/queries.go` — reference as `db.InsertNoteSQL` etc.
+- go:embed can only access files within the same package directory or subdirectories (no `../` paths)
+- Three-column TUI layout uses padToWidth helper + manual row-by-row assembly (split lines, pad, join with border chars)
+- lipgloss.Width() accounts for ANSI escape sequences when measuring rendered string width
+- Column 3 live stats use loadTackleStatsForPanel() on tick — only updates when stats view is not active to avoid conflicts
+- Go structs for all tables in db/models.go; database functions (insert/select/delete) in db/functions.go
+- Use `db.InsertNoteWithChildren(database, category, db.NoteChildren{...})` for transactional insert of note + child records
+- CLI commands create notes with category field ("clip", "tackle", or user-provided) plus child rows for timing, video, and type-specific data
+- TUI note/tackle/clip creation also uses `db.InsertNoteWithChildren()` — same pattern as CLI commands
+- Tackle stats in TUI use inline SQL queries joining note_tackles, notes, note_videos, and note_highlights (not embedded SQL files)
+- loadNotesAndTackles() uses inline SQL joining notes, note_videos, note_timing, then loads child details/tackles/highlights per note
+- Star highlights are stored as note_highlights rows with type="star", not as a column on notes
+- huh forms package lives in tui/forms/ — theme, note form, and tackle form go here
+- huh form integration pattern: store *huh.Form + result struct in Model, delegate Update/View, check State for completion
+- huh forms need ALL message types delegated (not just KeyMsg) — cursor blink, focus msgs are internal
+- huh Select auto-sets value to first option on Init() — exclude from HasData() checks for "empty form" detection
+- Confirm discard pattern: intercept StateAborted, check HasData(), show confirm form, reopen original form if user cancels
+
+---
+
+## 2026-02-09 - US-055
+- Added github.com/charmbracelet/huh v0.8.0 to go.mod
+- Created tui/forms/forms.go with blank import to keep dependency through go mod tidy
+- Files changed: go.mod, go.sum, tui/forms/forms.go
+- **Learnings for future iterations:**
+  - go mod tidy removes unused dependencies — need at least a blank import (`_ "pkg"`) to keep a dependency
+  - huh v0.8.0 brings in charmbracelet/bubbles as a transitive dependency
+  - tui/forms/ package created and ready for theme.go, noteform.go, tackleform.go in upcoming stories
+---
+
+## 2026-02-09 - US-056
+- Created custom huh theme in tui/forms/theme.go matching the TUI purple palette
+- Theme uses styles.Pink for required field titles (focused), styles.Lavender for optional/blurred
+- Active field border uses BrightPurple, focused buttons use LightLavender on BrightPurple
+- Error messages use Pink color for visibility
+- Files changed: tui/forms/theme.go, tui/forms/forms.go
+- **Learnings for future iterations:**
+  - huh themes have Focused and Blurred FieldStyles — customize both for cohesive look
+  - Start from huh.ThemeBase() and override styles — preserves structural defaults
+  - TextInput styles are nested: t.Focused.TextInput.Cursor, .Placeholder, .Prompt, .Text
+  - SetString() on selector styles controls the indicator character (e.g., "▸ ")
+---
+
+## 2026-02-09 - US-057
+- Created tui/forms/noteform.go with huh form for note input
+- NoteFormResult struct holds Text, Category, Player, Team fields
+- NewNoteForm(timestamp, *NoteFormResult) creates form with timestamp header and field bindings
+- Text field has non-empty validation, other fields optional
+- Files changed: tui/forms/noteform.go
+- **Learnings for future iterations:**
+  - huh binds to pointers — pass *NoteFormResult so caller can read values after submit
+  - huh.NewNote() creates a display-only field, good for headers/labels
+  - huh.NewInput().Validate() takes func(string) error for field validation
+  - Form cancel (Esc) is built into huh — no extra handling needed
+---
+
+## 2026-02-09 - US-058
+- Created tui/forms/tackleform.go with 3-step huh wizard
+- Step 1: Note fields (Text required, Category/Player/Team optional)
+- Step 2: Tackle fields (Attempt with numeric validation, Outcome select)
+- Step 3: Optional fields (Followed, Notes, Zone) + Star confirm toggle
+- Each step shows progress indicator via huh.NewNote description ("Step N of 3")
+- Files changed: tui/forms/tackleform.go
+- **Learnings for future iterations:**
+  - huh.NewForm with multiple huh.NewGroup creates wizard steps automatically
+  - huh.NewSelect[string]() requires type parameter for Go generics
+  - huh.NewConfirm() provides yes/no toggle, good for boolean flags like Star
+  - strconv.Atoi validation in Validate func enforces numeric-only input
+---
+
+## 2026-02-09 - US-059
+- Replaced NoteInputState in tui/tui.go with huh.Form integration
+- Added noteForm (*huh.Form), noteFormResult (forms.NoteFormResult), noteFormTimestamp fields to Model
+- openNoteInput() creates form via forms.NewNoteForm() and calls form.Init()
+- handleNoteFormUpdate() delegates tea.Msg to form.Update(), checks State for completion/abort
+- saveNoteFromForm() extracts result values and calls db.InsertNoteWithChildren
+- View() renders form.View() when noteForm is active
+- Non-key messages delegated to form at top of Update() (huh needs focus/cursor blink messages)
+- Marked tui/components/noteinput.go as deprecated
+- Files changed: tui/tui.go, tui/components/noteinput.go
+- **Learnings for future iterations:**
+  - huh.Form implements tea.Model — delegate Init/Update/View from parent model
+  - Type assert form.Update() return: `if f, ok := form.(*huh.Form); ok { m.form = f }`
+  - Check form.State == huh.StateCompleted / huh.StateAborted to detect submit/cancel
+  - huh forms need non-key messages too (cursor blink, focus) — delegate ALL non-app messages
+  - Set form = nil to deactivate, check form != nil to detect active state
+---
+
+## 2026-02-09 - US-060
+- Replaced TackleInputState in tui/tui.go with huh.Form integration (same pattern as US-059)
+- Added tackleForm (*huh.Form), tackleFormResult (forms.TackleFormResult), tackleFormTimestamp fields
+- openTackleInput() creates wizard form via forms.NewTackleForm() and calls form.Init()
+- handleTackleFormUpdate() delegates tea.Msg to form.Update(), checks State for completion/abort
+- saveTackleFromForm() extracts result values, builds NoteChildren with tackles/details/highlights
+- Non-key message delegation handles both noteForm and tackleForm at top of Update()
+- Marked tui/components/tackleinput.go as deprecated
+- Files changed: tui/tui.go, tui/components/tackleinput.go
+- **Learnings for future iterations:**
+  - Same huh integration pattern works for both single-group forms and multi-step wizards
+  - Tackle form wizard navigates groups automatically — back navigation is built in
+  - TackleFormResult.Outcome defaults to empty string — set first select option as default
+  - Multiple detail records can be appended to children.Details for text + notes
+---
+
+## 2026-02-09 - US-062
+- Reorganized tackle form from 3 steps to 2 steps matching database schema
+- Step 1: Player (required), Attempt (required, numeric), Outcome (required, select) — maps to note_tackles table
+- Step 2: Followed, Notes, Zone, Star — maps to note_details, note_zones, note_highlights
+- Removed Text, Category, Team fields from TackleFormResult (don't exist in schema)
+- Category is now always auto-set to "tackle" — not a form field
+- Updated saveTackleFromForm() in tui/tui.go to save Followed as note_detail type="followed", Zone as note_zones record
+- Files changed: tui/forms/tackleform.go, tui/tui.go
+- **Learnings for future iterations:**
+  - TackleFormResult fields should map 1:1 to database child tables (note_tackles, note_details, note_zones, note_highlights)
+  - When reorganizing forms, update both the form definition AND the save function that maps form results to database records
+  - Zone field stores in note_zones.horizontal — could be extended to horizontal+vertical if needed
+---
+
+## 2026-02-09 - US-061
+- Added confirm discard dialog when pressing Esc on forms with data entered
+- NoteFormResult.HasData() and TackleFormResult.HasData() check if any user-entered fields are non-empty
+- NewConfirmDiscardForm() in tui/forms/forms.go creates a themed huh confirm dialog
+- Model gains confirmDiscardForm, confirmDiscard (bool result), confirmDiscardTarget ("note"/"tackle")
+- On form abort with data: shows confirm dialog; Yes discards, No reopens form with saved state
+- Esc on confirm dialog itself also returns to the form
+- Empty forms still exit immediately on Esc (no confirmation)
+- Files changed: tui/forms/forms.go, tui/forms/noteform.go, tui/forms/tackleform.go, tui/tui.go
+- **Learnings for future iterations:**
+  - huh Select auto-populates bound value with first option on Init() — exclude from HasData() to avoid false positives
+  - Confirm discard uses same huh form pattern: separate *huh.Form field, delegate messages, check State
+  - When "go back" from confirm, must recreate the original huh form (re-bind same result pointer to preserve data)
+  - confirmDiscardForm takes priority over note/tackleForm in both Update() and View() message delegation
+---
