@@ -1565,35 +1565,9 @@ func normalizeLines(lines []string, height int) []string {
 	return lines
 }
 
-// renderColumn1 renders Column 1: Controls, playback status, tag detail card.
+// renderColumn1 renders Column 1: Playback status, selected tag detail, controls.
 func (m *Model) renderColumn1(width, height int) string {
 	var lines []string
-
-	// Section header
-	headerStyle := lipgloss.NewStyle().
-		Foreground(styles.Cyan).
-		Bold(true)
-	lines = append(lines, headerStyle.Render(" Controls"))
-	lines = append(lines, "")
-
-	// Compact controls display (vertical list for column) using shared control groups
-	shortcutStyle := lipgloss.NewStyle().
-		Foreground(styles.Cyan).
-		Bold(true)
-	nameStyle := lipgloss.NewStyle().
-		Foreground(styles.LightLavender)
-
-	groups := components.GetControlGroups()
-	for _, group := range groups {
-		for _, c := range group.Controls {
-			line := fmt.Sprintf(" %s %s %s",
-				c.Emoji,
-				nameStyle.Render(fmt.Sprintf("%-10s", c.Name)),
-				shortcutStyle.Render("["+c.Shortcut+"]"))
-			lines = append(lines, line)
-		}
-	}
-	lines = append(lines, "")
 
 	// Playback status card
 	statusHeader := lipgloss.NewStyle().
@@ -1661,6 +1635,32 @@ func (m *Model) renderColumn1(width, height int) string {
 				text = text[:maxTextW-3] + "..."
 			}
 			lines = append(lines, detailStyle.Render(" "+text))
+		}
+		lines = append(lines, "")
+	}
+
+	// Controls section
+	controlsHeader := lipgloss.NewStyle().
+		Foreground(styles.Cyan).
+		Bold(true)
+	lines = append(lines, controlsHeader.Render(" Controls"))
+	lines = append(lines, "")
+
+	// Compact controls display (vertical list for column) using shared control groups
+	shortcutStyle := lipgloss.NewStyle().
+		Foreground(styles.Cyan).
+		Bold(true)
+	nameStyle := lipgloss.NewStyle().
+		Foreground(styles.LightLavender)
+
+	groups := components.GetControlGroups()
+	for _, group := range groups {
+		for _, c := range group.Controls {
+			line := fmt.Sprintf(" %s %s %s",
+				c.Emoji,
+				nameStyle.Render(fmt.Sprintf("%-10s", c.Name)),
+				shortcutStyle.Render("["+c.Shortcut+"]"))
+			lines = append(lines, line)
 		}
 	}
 
