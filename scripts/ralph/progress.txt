@@ -1,70 +1,38 @@
+# Ralph Progress Log
+Started: Mon Feb  9 15:36:20 PST 2026
+---
+
 ## Codebase Patterns
-- Use `CGO_ENABLED=0` for all Go build/vet commands (required for modernc.org/sqlite)
-- Go binary is at `/home/node/go/bin/go` - use `export PATH="$PATH:/home/node/go/bin"` before Go commands
-- Database connection uses modernc.org/sqlite (pure Go implementation, no CGO)
-- Add new table migrations to the `migrate()` function in db/db.go - always use `CREATE TABLE IF NOT EXISTS`
-- Bubble Tea key strings: use "esc" (not "escape"), "enter", "tab", "backspace", "left", "right" for key handling
-- SQL queries live in `db/sql/*.sql` files, embedded via `go:embed` in `db/queries.go` — reference as `db.InsertNoteSQL` etc.
-- go:embed can only access files within the same package directory or subdirectories (no `../` paths)
-- Three-column TUI layout uses padToWidth helper + manual row-by-row assembly (split lines, pad, join with border chars)
-- lipgloss.Width() accounts for ANSI escape sequences when measuring rendered string width
-- Column 3 live stats use loadTackleStatsForPanel() on tick — only updates when stats view is not active to avoid conflicts
-- Go structs for all tables in db/models.go; database functions (insert/select/delete) in db/functions.go
-- Use `db.InsertNoteWithChildren(database, category, db.NoteChildren{...})` for transactional insert of note + child records
-- CLI commands create notes with category field ("clip", "tackle", or user-provided) plus child rows for timing, video, and type-specific data
-- TUI note/tackle/clip creation also uses `db.InsertNoteWithChildren()` — same pattern as CLI commands
-- Tackle stats in TUI use inline SQL queries joining note_tackles, notes, note_videos, and note_highlights (not embedded SQL files)
-- loadNotesAndTackles() uses inline SQL joining notes, note_videos, note_timing, then loads child details/tackles/highlights per note
-- Star highlights are stored as note_highlights rows with type="star", not as a column on notes
-- huh forms package lives in tui/forms/ — theme, note form, and tackle form go here
-- huh form integration pattern: store *huh.Form + result struct in Model, delegate Update/View, check State for completion
-- huh forms need ALL message types delegated (not just KeyMsg) — cursor blink, focus msgs are internal
-- huh Select auto-sets value to first option on Init() — exclude from HasData() checks for "empty form" detection
-- Confirm discard pattern: intercept StateAborted, check HasData(), show confirm form, reopen original form if user cancels
-- Normal-mode keybindings in Update() switch: msg.String() returns "left", "right", "up", "down" for arrow keys and "," "." for punctuation
-- Command mode already handles "left"/"right" for cursor movement — normal-mode arrow cases only fire when commandInput.Active is false
-- Column 1 renderColumn1() now uses GetControlGroups() from controls.go (single source of truth)
-- padToWidth() uses lipgloss.Width() to ANSI-aware pad AND truncate lines to exact column width
-- truncateToWidth() preserves ANSI escape sequences while trimming visible width
-- normalizeLines() ensures column line arrays are exactly the target height
-- Responsive layout: col3HideThreshold=90, col3MinWidth=18; at <90 cols, two-column layout with single border
-- Arrow keys ("left","right","up","down") and punctuation (",",".") added as alternatives in normal-mode switch
-
+- huh form theme in `tui/forms/theme.go` references styles constants from `tui/styles/styles.go` — update styles first, then theme
+- Use `styles.Purple` (#5C4F4B) for all border colours, `styles.Red` for errors instead of `styles.Pink`
+- `styles.Cyan` (#3097C6) is the standard interactive/info colour across forms and main TUI
+- Column layout: renderColumn functions return raw content (no lipgloss Width/Height wrapping) — padToWidth handles exact width per line
+- Use `ansi.Truncate()` from `charmbracelet/x/ansi` for ANSI+grapheme-aware truncation (handles emoji correctly)
+- Never use hand-rolled ANSI truncation — `truncateToWidth` was buggy with double-width chars, replaced by `ansi.Truncate`
 ---
 
-## 2026-02-09 - US-065
-- Added "left"/"right" cases alongside "h"/"l" for seek backward/forward
-- Added "up"/"down" cases alongside "j"/"k" for notes list navigation
-- Files changed: tui/tui.go
-- **Learnings:** msg.String() returns "left", "right", "up", "down" for arrow keys in Bubble Tea
+## 2026-02-09 - US-003
+- Updated huh form theme (tui/forms/theme.go) to match Ciapre palette
+- Changed focused border from BrightPurple to Purple (#5C4F4B brown) for consistent border styling
+- Changed error indicators/messages from Pink to Red (#AC3835) for proper error colour semantics
+- Changed blurred card border from DeepPurple to Purple for border consistency
+- Files changed: tui/forms/theme.go
+- **Learnings for future iterations:**
+  - theme.go already used styles.* constants, so the main palette change in US-002 automatically propagated most colours
+  - Only borders (focused base, blurred card) and error colours needed manual fixes — they were using semantic mismatches (BrightPurple for borders, Pink for errors)
+  - The Ciapre palette maps: Purple=borders, BrightPurple=highlights, Red=errors, Cyan=interactive
 ---
 
-## 2026-02-09 - US-066
-- Added ","/"." cases alongside "<"/">" for step size decrease/increase
-- Files changed: tui/tui.go
-- **Learnings:** Comma and period don't conflict with command mode since command mode check happens first
----
-
-## 2026-02-09 - US-067
-- Updated GetControlGroups() shortcuts to show alternatives: "H/←", "L/→", "J/↑", "K/↓", ",/<", "./>"
-- Updated help overlay with "H / Left", "L / Right", "J / Up", "K / Down", ", / <", ". / >" bindings
-- Refactored renderColumn1() to use GetControlGroups() — removed duplicate hardcoded controls list
-- Files changed: tui/components/controls.go, tui/components/help.go, tui/tui.go
-- **Learnings:** Unicode arrows (←→↑↓) render well in terminal for compact shortcut display
----
-
-## 2026-02-09 - US-069
-- padToWidth() now truncates overflowing lines (not just pads short ones)
-- Added truncateToWidth() that preserves ANSI escape sequences while trimming visible chars
-- Added normalizeLines() to ensure column line arrays match target height exactly
-- Files changed: tui/tui.go
-- **Learnings:** ANSI escape sequences start with \x1b and end with a letter — must skip them during width measurement
----
-
-## 2026-02-09 - US-070
-- Replaced equal-thirds column calculation with responsive algorithm
-- Wide (120+): equal thirds; Medium (90-119): col3 shrinks to 18 chars; Narrow (<90): col3 hidden
-- Two-column fallback uses single border character, columns 1+2 split evenly
-- Files changed: tui/tui.go
-- **Learnings:** Keep layout constants as named consts (col3HideThreshold, col3MinWidth) for easy tuning
+## 2026-02-09 - US-004
+- Fixed jagged column borders by replacing hand-rolled truncateToWidth with ansi.Truncate
+- Removed double-processing: renderColumn functions no longer apply lipgloss Width/Height/Background
+- padToWidth now uses ansi.Truncate for proper ANSI-aware, grapheme-aware truncation
+- Added charmbracelet/x/ansi as a direct dependency (was already indirect via lipgloss)
+- Files changed: tui/tui.go, go.mod
+- **Learnings for future iterations:**
+  - The old truncateToWidth counted every rune as width 1, breaking emoji (2-cell width)
+  - lipgloss.Width() uses go-runewidth internally and IS correct — but truncateToWidth didn't
+  - Double-processing (lipgloss Width/Height render + padToWidth) caused inconsistent line widths
+  - charmbracelet/x/ansi.Truncate handles: ANSI escapes, grapheme clusters, double-width chars
+  - Always let padToWidth be the single source of truth for column line width
 ---

@@ -53,7 +53,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-002 having updated the styles.go palette. theme.go may reference styles constants or hardcode hex values — update both."
     },
     {
@@ -69,7 +69,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "The column layout code is in tui/tui.go lines ~1449-1524. padToWidth is at line ~1535. normalizeLines at ~1558. Key: each column content must be exactly colNWidth visible characters wide before the border character."
     },
     {
