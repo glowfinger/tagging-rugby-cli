@@ -1,36 +1,124 @@
 {
   "project": "tagging-rugby-cli",
-  "branchName": "ralph/huh-forms",
-  "description": "Improve Forms Using Huh - TUI keybinding improvements including frame-by-frame navigation and quit shortcut removal",
+  "branchName": "ralph/tidy-up-ui",
+  "description": "Tidy Up UI - Polish column borders, reorder Column 1 layout, redesign controls with sub-headers, adopt Ciapre colour scheme, remove deprecated code",
   "userStories": [
     {
-      "id": "US-063",
-      "title": "Frame-by-frame navigation with Ctrl modifier",
-      "description": "As a user, I want to hold Ctrl while pressing H/L so that I can step forward or backward by exactly one frame for precise positioning.",
+      "id": "US-001",
+      "title": "Remove deprecated input components",
+      "description": "As a developer, I want to remove the old noteinput.go and tackleinput.go files since they've been replaced by huh forms, to reduce dead code.",
       "acceptanceCriteria": [
-        "ctrl+h steps backward by one frame using FrameBackStep()",
-        "ctrl+l steps forward by one frame using FrameStep()",
-        "Regular h/l continue to seek by the current step size (no regression)",
-        "Frame step only fires when mpv client is connected",
+        "Delete tui/components/noteinput.go",
+        "Delete tui/components/tackleinput.go",
+        "No remaining imports or references to NoteInput or TackleInput types from these files",
+        "App builds successfully (CGO_ENABLED=0 go build ./...)",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
-      "id": "US-064",
-      "title": "Remove q as quit shortcut",
-      "description": "As a user, I don't want pressing q to exit the application so that I can use q without accidentally quitting.",
+      "id": "US-002",
+      "title": "Adopt Ciapre colour palette in styles.go",
+      "description": "As a user, I want the app to use the Ciapre colour scheme from Gogh so it has a warm, earthy look with good readability. Replace all colour constants in tui/styles/styles.go with Ciapre values.",
       "acceptanceCriteria": [
-        "Remove q from the quit key case in tui/tui.go (line ~203)",
-        "ctrl+c remains as the only way to quit",
-        "Pressing q in normal mode does nothing (no crash, no side effect)",
+        "Replace DeepPurple (#1a1a2e) with #191C27 (Ciapre background)",
+        "Replace DarkPurple (#16213e) with #181818 (Ciapre ANSI 0 black)",
+        "Replace Purple (#4a347d) with #5C4F4B (Ciapre ANSI 6 prompt/brown)",
+        "Replace BrightPurple (#7b2cbf) with #724D7C (Ciapre ANSI 5 magenta)",
+        "Replace Lavender (#c77dff) with #AEA47A (Ciapre foreground)",
+        "Replace LightLavender (#e0aaff) with #F3DBB2 (Ciapre ANSI 14 cream)",
+        "Replace Pink (#ff6b9d) with #D33061 (Ciapre ANSI 13 bright magenta)",
+        "Replace Cyan (#64dfdf) with #3097C6 (Ciapre ANSI 12 bright blue)",
+        "Add new Amber constant #CC8B3F for sub-headers and warm accents",
+        "Add new Red constant #AC3835 for warnings/errors",
+        "Add new Green constant #A6A75D for success messages",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 2,
+      "passes": true,
+      "notes": "This changes the visual foundation. All components that reference styles.XXX constants will pick up new colours automatically."
+    },
+    {
+      "id": "US-003",
+      "title": "Update huh form theme to match Ciapre palette",
+      "description": "As a user, I want the huh forms (note input, tackle input, confirm dialog) to match the new Ciapre colour scheme so they look consistent with the rest of the app.",
+      "acceptanceCriteria": [
+        "Update tui/forms/theme.go to use the new Ciapre palette colours from styles package",
+        "Form borders use #5C4F4B (Brown/border colour)",
+        "Form text uses #F3DBB2 (cream) for primary and #AEA47A for secondary",
+        "Form focused elements use #724D7C (magenta highlight)",
+        "Form interactive elements (buttons, selections) use #3097C6 (blue)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 3,
       "passes": false,
-      "notes": ""
+      "notes": "Depends on US-002 having updated the styles.go palette. theme.go may reference styles constants or hardcode hex values — update both."
+    },
+    {
+      "id": "US-004",
+      "title": "Fix jagged column borders",
+      "description": "As a user, I want the three-column layout to have perfectly aligned single-line vertical borders so the UI looks clean and professional.",
+      "acceptanceCriteria": [
+        "Every row in the column view uses the same │ border character at the same horizontal position",
+        "padToWidth correctly handles ANSI-styled text so columns are always the exact expected width (uses lipgloss.Width not len)",
+        "No visual gaps, double borders, or misaligned rows at any terminal width (80-200 cols)",
+        "Column content that overflows is truncated rather than breaking alignment",
+        "Two-column fallback (< 90 cols) also has clean borders",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "The column layout code is in tui/tui.go lines ~1449-1524. padToWidth is at line ~1535. normalizeLines at ~1558. Key: each column content must be exactly colNWidth visible characters wide before the border character."
+    },
+    {
+      "id": "US-005",
+      "title": "Reorder Column 1 — Playback and Selected Tag above Controls",
+      "description": "As a user, I want to see the playback status and selected tag details first in Column 1, with keyboard controls listed below, so the most dynamic information is at the top.",
+      "acceptanceCriteria": [
+        "Column 1 renders sections in this order: (1) Playback, (2) Selected Tag, (3) Controls",
+        "Each section has a styled header (Pink/D33061 for Playback and Selected Tag, Cyan/3097C6 for Controls)",
+        "A blank line separates each section",
+        "The existing Playback section content is unchanged (play state, time, step, mute, overlay)",
+        "The existing Selected Tag section content is unchanged (ID, type, star, time, category, player, team, text)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Modify renderColumn1() in tui/tui.go (starts at line ~1602). Currently the order is Controls -> Playback -> Selected Tag. Just move the Controls block to after Selected Tag."
+    },
+    {
+      "id": "US-006",
+      "title": "Redesign controls display with sub-headers and two-line layout",
+      "description": "As a user, I want each control group to have a labelled sub-header, each control to show the icon and name on one line with the shortcut key on the next line below, and visible spacing between controls so they're easy to scan.",
+      "acceptanceCriteria": [
+        "Each control group has a styled sub-header label in amber (#CC8B3F): 'Playback', 'Navigation', 'Step / Overlay', 'Views'",
+        "Add a Name field to ControlGroup struct in controls.go to store the group label",
+        "Each control renders as two lines: Line 1 is 'emoji  Name', Line 2 is indented '[Key]' styled in blue (#3097C6)",
+        "At least one blank line separates each control from the next",
+        "An extra blank line separates each group from the next",
+        "The controls section clips naturally at column bottom if it exceeds available height",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Modify: tui/components/controls.go (add Name to ControlGroup, update GetControlGroups), tui/tui.go renderColumn1() controls section. The ControlsDisplay() function in controls.go is used for form overlay views — update it too or leave it as a horizontal compact layout for that context."
+    },
+    {
+      "id": "US-007",
+      "title": "Verify full UI consistency and build",
+      "description": "As a user, I want the entire TUI to look consistent after all changes — column borders, spacing, colours, and layout should feel cohesive.",
+      "acceptanceCriteria": [
+        "App builds successfully (CGO_ENABLED=0 go build ./...)",
+        "No hardcoded colour hex values outside of tui/styles/styles.go (grep for '#' in .go files under tui/)",
+        "Status bar, timeline, and command input span full width without gaps",
+        "No compiler warnings or vet errors",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Final QA story. Check all components reference the shared palette. Grep for any remaining old colour values (#1a1a2e, #16213e, #4a347d, #7b2cbf, #c77dff, #e0aaff, #ff6b9d, #64dfdf)."
     }
   ]
 }

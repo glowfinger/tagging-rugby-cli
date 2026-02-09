@@ -1,3 +1,36 @@
 # Ralph Progress Log
-# Branch: ralph/huh-forms
+# Branch: ralph/tidy-up-ui
 # Started: 2026-02-09
+
+## Codebase Patterns
+- Use `CGO_ENABLED=0` for all Go build/vet commands (modernc.org/sqlite requirement)
+- Go binary at `/home/node/go/bin/go` — export PATH before commands
+- huh forms live in `tui/forms/` — the old `tui/components/noteinput.go` and `tackleinput.go` are now deleted
+- `openNoteInput()` and `openTackleInput()` in tui/tui.go are the huh-based methods, not references to old code
+- Colour palette is Ciapre (warm/earthy) — constants kept as DeepPurple/DarkPurple/etc. for backward compat but values are Ciapre hex
+- New colour constants available: `styles.Amber`, `styles.Red`, `styles.Green`
+
+---
+
+## 2026-02-09 - US-001
+- Deleted deprecated `tui/components/noteinput.go` and `tui/components/tackleinput.go`
+- Verified no remaining imports or references to `NoteInputState`, `TackleInputState`, `NoteInputField`, `TackleInputField` types
+- Build and vet pass cleanly
+- Files changed: tui/components/noteinput.go (deleted), tui/components/tackleinput.go (deleted)
+- **Learnings for future iterations:**
+  - The method names `openNoteInput` / `openTackleInput` in tui/tui.go are the huh form openers — don't confuse with the deleted deprecated types
+  - `NoteInput` and `TackleInput` types were only self-contained in their own files with no external references, making deletion safe
+---
+
+## 2026-02-09 - US-002
+- Replaced all 8 colour constants in `tui/styles/styles.go` with Ciapre palette hex values
+- Added 3 new constants: Amber (#CC8B3F), Red (#AC3835), Green (#A6A75D)
+- Updated Warning style to use Red, Success style to use Green
+- Updated package doc string to reference Ciapre palette
+- Build and vet pass cleanly
+- Files changed: tui/styles/styles.go
+- **Learnings for future iterations:**
+  - Kept original constant names (DeepPurple, DarkPurple, etc.) even though Ciapre isn't purple — avoids renaming across 20+ files
+  - All components reference `styles.XXX` constants, so changing values in one place propagates everywhere
+  - New Amber, Red, Green constants are available for US-003+ (sub-headers, warnings, success)
+---
