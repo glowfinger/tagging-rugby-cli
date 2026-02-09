@@ -80,6 +80,12 @@ type Model struct {
 	tackleFormResult forms.TackleFormResult
 	// tackleFormTimestamp is the timestamp captured when the tackle form was opened
 	tackleFormTimestamp float64
+	// confirmDiscardForm is shown when user presses Esc on a form with data (nil when inactive)
+	confirmDiscardForm *huh.Form
+	// confirmDiscard holds the confirm result (true = discard, false = go back)
+	confirmDiscard bool
+	// confirmDiscardTarget tracks which form triggered the confirm ("note" or "tackle")
+	confirmDiscardTarget string
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -110,11 +116,14 @@ func tickCmd() tea.Cmd {
 // Update handles messages and updates the model state.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Delegate all messages to active huh form (it needs non-key messages too)
-	if m.noteForm != nil || m.tackleForm != nil {
+	if m.confirmDiscardForm != nil || m.noteForm != nil || m.tackleForm != nil {
 		if _, isKey := msg.(tea.KeyMsg); !isKey {
 			if _, isTick := msg.(tickMsg); !isTick {
 				if _, isClear := msg.(clearResultMsg); !isClear {
 					if _, isResize := msg.(tea.WindowSizeMsg); !isResize {
+						if m.confirmDiscardForm != nil {
+							return m.handleConfirmDiscardUpdate(msg)
+						}
 						if m.noteForm != nil {
 							return m.handleNoteFormUpdate(msg)
 						}
@@ -158,6 +167,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle stats view input
 		if m.statsView.Active {
 			return m.handleStatsViewInput(msg)
+		}
+
+		// Handle confirm discard dialog (huh form)
+		if m.confirmDiscardForm != nil {
+			return m.handleConfirmDiscardUpdate(msg)
 		}
 
 		// Handle note form mode (huh form)
@@ -368,6 +382,10 @@ func (m *Model) handleNoteFormUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.saveNoteFromForm()
 	}
 	if m.noteForm.State == huh.StateAborted {
+		// If form has data, show confirm discard dialog
+		if m.noteFormResult.HasData() {
+			return m.openConfirmDiscard("note")
+		}
 		m.noteForm = nil
 		return m, nil
 	}
@@ -459,8 +477,62 @@ func (m *Model) handleTackleFormUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.saveTackleFromForm()
 	}
 	if m.tackleForm.State == huh.StateAborted {
+		// If form has data, show confirm discard dialog
+		if m.tackleFormResult.HasData() {
+			return m.openConfirmDiscard("tackle")
+		}
 		m.tackleForm = nil
 		return m, nil
+	}
+
+	return m, cmd
+}
+
+// openConfirmDiscard opens a confirm dialog when user presses Esc on a form with data.
+// The target parameter indicates which form triggered the confirm ("note" or "tackle").
+func (m *Model) openConfirmDiscard(target string) (tea.Model, tea.Cmd) {
+	m.confirmDiscard = false
+	m.confirmDiscardTarget = target
+	m.confirmDiscardForm = forms.NewConfirmDiscardForm(&m.confirmDiscard)
+	return m, m.confirmDiscardForm.Init()
+}
+
+// handleConfirmDiscardUpdate delegates messages to the confirm discard form.
+func (m *Model) handleConfirmDiscardUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
+	form, cmd := m.confirmDiscardForm.Update(msg)
+	if f, ok := form.(*huh.Form); ok {
+		m.confirmDiscardForm = f
+	}
+
+	if m.confirmDiscardForm.State == huh.StateCompleted {
+		m.confirmDiscardForm = nil
+		if m.confirmDiscard {
+			// User chose to discard — close the underlying form
+			if m.confirmDiscardTarget == "note" {
+				m.noteForm = nil
+			} else {
+				m.tackleForm = nil
+			}
+			return m, nil
+		}
+		// User chose to go back — reopen the form from saved state
+		if m.confirmDiscardTarget == "note" {
+			m.noteForm = forms.NewNoteForm(m.noteFormTimestamp, &m.noteFormResult)
+			return m, m.noteForm.Init()
+		}
+		m.tackleForm = forms.NewTackleForm(m.tackleFormTimestamp, &m.tackleFormResult)
+		return m, m.tackleForm.Init()
+	}
+
+	if m.confirmDiscardForm.State == huh.StateAborted {
+		// Esc on confirm dialog — treat as "go back" to form
+		m.confirmDiscardForm = nil
+		if m.confirmDiscardTarget == "note" {
+			m.noteForm = forms.NewNoteForm(m.noteFormTimestamp, &m.noteFormResult)
+			return m, m.noteForm.Init()
+		}
+		m.tackleForm = forms.NewTackleForm(m.tackleFormTimestamp, &m.tackleFormResult)
+		return m, m.tackleForm.Init()
 	}
 
 	return m, cmd
@@ -1340,6 +1412,13 @@ func (m *Model) View() string {
 
 	// Render status bar at top (full width)
 	statusBar := components.StatusBar(m.statusBar, m.width)
+
+	// Check if confirm discard dialog is active — show it as overlay
+	if m.confirmDiscardForm != nil {
+		controlsDisplay := components.ControlsDisplay(m.width)
+		confirmView := m.confirmDiscardForm.View()
+		return statusBar + "\n" + controlsDisplay + "\n" + confirmView
+	}
 
 	// Check if note form is active — show huh form as overlay
 	if m.noteForm != nil {

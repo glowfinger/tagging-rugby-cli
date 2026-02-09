@@ -14,6 +14,11 @@ type NoteFormResult struct {
 	Team     string
 }
 
+// HasData returns true if any field in the note form result has a non-empty value.
+func (r *NoteFormResult) HasData() bool {
+	return r.Text != "" || r.Category != "" || r.Player != "" || r.Team != ""
+}
+
 // NewNoteForm creates a huh form for note input with the given timestamp.
 // The timestamp is displayed as a header in MM:SS format.
 // The result pointer is bound to the form fields and will be populated on submit.

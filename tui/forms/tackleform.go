@@ -21,6 +21,13 @@ type TackleFormResult struct {
 	Star     bool   // maps to note_highlights type="star"
 }
 
+// HasData returns true if any user-entered field in the tackle form has data.
+// Excludes Outcome (auto-populated by select widget) and Star (defaults to false).
+func (r *TackleFormResult) HasData() bool {
+	return r.Player != "" || r.Attempt != "" ||
+		r.Followed != "" || r.Notes != "" || r.Zone != ""
+}
+
 // NewTackleForm creates a multi-step huh wizard form for tackle input.
 // The timestamp is displayed as a header in MM:SS format.
 // The result pointer is bound to the form fields and will be populated on submit.
