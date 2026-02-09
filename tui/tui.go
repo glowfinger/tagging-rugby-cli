@@ -237,12 +237,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_ = m.client.SeekRelative(m.statusBar.StepSize)
 			}
 			return m, nil
-		case "<":
-			// Decrease step size
+		case "<", ",":
+			// < / , decreases step size
 			m.decreaseStepSize()
 			return m, nil
-		case ">":
-			// Increase step size
+		case ">", ".":
+			// > / . increases step size
 			m.increaseStepSize()
 			return m, nil
 		case "j", "J", "up":
