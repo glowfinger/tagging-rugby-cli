@@ -225,14 +225,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
-		case "h", "H":
-			// H steps backward by current step size
+		case "h", "H", "left":
+			// H / Left arrow steps backward by current step size
 			if m.client != nil && m.client.IsConnected() {
 				_ = m.client.SeekRelative(-m.statusBar.StepSize)
 			}
 			return m, nil
-		case "l", "L":
-			// L steps forward by current step size
+		case "l", "L", "right":
+			// L / Right arrow steps forward by current step size
 			if m.client != nil && m.client.IsConnected() {
 				_ = m.client.SeekRelative(m.statusBar.StepSize)
 			}
@@ -245,12 +245,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Increase step size
 			m.increaseStepSize()
 			return m, nil
-		case "j", "J":
-			// J moves selection to previous note/tackle in list
+		case "j", "J", "up":
+			// J / Up arrow moves selection to previous note/tackle in list
 			m.notesList.MoveUp()
 			return m, nil
-		case "k", "K":
-			// K moves selection to next note/tackle in list
+		case "k", "K", "down":
+			// K / Down arrow moves selection to next note/tackle in list
 			m.notesList.MoveDown()
 			return m, nil
 		case "enter":
