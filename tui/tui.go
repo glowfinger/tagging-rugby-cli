@@ -1434,12 +1434,12 @@ func (m *Model) View() string {
 		return statusBar + "\n" + controlsDisplay + "\n" + tackleFormView
 	}
 
-	// --- Three-column layout ---
-	// Compute column widths (equal thirds)
-	// Account for 2 vertical border characters between columns
-	usableWidth := m.width - 2
-	colWidth := usableWidth / 3
-	col3Width := usableWidth - colWidth*2 // last column gets remainder
+	// --- Three-column layout with responsive sizing ---
+	// Column 3 (live stats) shrinks first; hides entirely at narrow widths.
+	const (
+		col3HideThreshold = 90  // below this width, hide column 3 entirely
+		col3MinWidth      = 18  // minimum width for column 3 before hiding
+	)
 
 	// Available height for columns (total height minus status bar line, timeline 2 lines, and command input line)
 	colHeight := m.height - 5
@@ -1447,40 +1447,69 @@ func (m *Model) View() string {
 		colHeight = 5
 	}
 
-	// Column 1: Controls, playback status, current tag detail card, command input
-	col1Content := m.renderColumn1(colWidth, colHeight)
-
-	// Column 2: Scrollable list of all tags/events
-	col2Content := m.renderColumn2(colWidth, colHeight)
-
-	// Column 3: Live stats summary, bar graph, top players leaderboard
-	col3Content := m.renderColumn3(col3Width, colHeight)
+	showCol3 := m.width >= col3HideThreshold
 
 	// Border style for vertical separators
 	borderStr := lipgloss.NewStyle().
 		Foreground(styles.Purple).
 		Render("│")
 
-	// Join columns horizontally with borders
-	// Build each row by combining column lines side by side
-	col1Lines := strings.Split(col1Content, "\n")
-	col2Lines := strings.Split(col2Content, "\n")
-	col3Lines := strings.Split(col3Content, "\n")
+	var columnsView string
 
-	// Ensure all columns are exactly colHeight lines (pad short, truncate long)
-	col1Lines = normalizeLines(col1Lines, colHeight)
-	col2Lines = normalizeLines(col2Lines, colHeight)
-	col3Lines = normalizeLines(col3Lines, colHeight)
+	if showCol3 {
+		// Three-column layout: account for 2 border characters
+		usableWidth := m.width - 2
+		var col1Width, col2Width, col3Width int
 
-	var rows []string
-	for i := 0; i < colHeight; i++ {
-		c1 := padToWidth(col1Lines[i], colWidth)
-		c2 := padToWidth(col2Lines[i], colWidth)
-		c3 := padToWidth(col3Lines[i], col3Width)
-		rows = append(rows, c1+borderStr+c2+borderStr+c3)
+		if m.width >= 120 {
+			// Wide: equal thirds
+			col1Width = usableWidth / 3
+			col2Width = usableWidth / 3
+			col3Width = usableWidth - col1Width - col2Width
+		} else {
+			// Medium: column 3 gets minimum, rest splits between 1 and 2
+			col3Width = col3MinWidth
+			remaining := usableWidth - col3Width
+			col1Width = remaining / 2
+			col2Width = remaining - col1Width
+		}
+
+		col1Content := m.renderColumn1(col1Width, colHeight)
+		col2Content := m.renderColumn2(col2Width, colHeight)
+		col3Content := m.renderColumn3(col3Width, colHeight)
+
+		col1Lines := normalizeLines(strings.Split(col1Content, "\n"), colHeight)
+		col2Lines := normalizeLines(strings.Split(col2Content, "\n"), colHeight)
+		col3Lines := normalizeLines(strings.Split(col3Content, "\n"), colHeight)
+
+		var rows []string
+		for i := 0; i < colHeight; i++ {
+			c1 := padToWidth(col1Lines[i], col1Width)
+			c2 := padToWidth(col2Lines[i], col2Width)
+			c3 := padToWidth(col3Lines[i], col3Width)
+			rows = append(rows, c1+borderStr+c2+borderStr+c3)
+		}
+		columnsView = strings.Join(rows, "\n")
+	} else {
+		// Two-column layout: column 3 hidden, 1 border character
+		usableWidth := m.width - 1
+		col1Width := usableWidth / 2
+		col2Width := usableWidth - col1Width
+
+		col1Content := m.renderColumn1(col1Width, colHeight)
+		col2Content := m.renderColumn2(col2Width, colHeight)
+
+		col1Lines := normalizeLines(strings.Split(col1Content, "\n"), colHeight)
+		col2Lines := normalizeLines(strings.Split(col2Content, "\n"), colHeight)
+
+		var rows []string
+		for i := 0; i < colHeight; i++ {
+			c1 := padToWidth(col1Lines[i], col1Width)
+			c2 := padToWidth(col2Lines[i], col2Width)
+			rows = append(rows, c1+borderStr+c2)
+		}
+		columnsView = strings.Join(rows, "\n")
 	}
-
-	columnsView := strings.Join(rows, "\n")
 
 	// Render timeline progress bar below columns (full width)
 	timeline := components.Timeline(m.statusBar.TimePos, m.statusBar.Duration, m.notesList.Items, m.width)
