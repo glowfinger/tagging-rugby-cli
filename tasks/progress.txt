@@ -47,3 +47,19 @@
   - The Selected Tag section is conditional (only renders if an item is selected), so the blank line separator after it needs to be inside the `if item != nil` block
   - `ControlsDisplay()` in controls.go is a separate horizontal compact layout used for form overlay views — not the same as the column 1 controls rendering
 ---
+
+## 2026-02-09 - US-006
+- Added `Name` field to `ControlGroup` struct in `tui/components/controls.go`
+- Updated `GetControlGroups()` with group labels: "Playback", "Navigation", "Step / Overlay", "Views"
+- Redesigned controls section in `renderColumn1()` in `tui/tui.go`:
+  - Each group gets an amber-styled sub-header (`styles.Amber`)
+  - Each control renders as two lines: emoji+name, then indented [key] in blue (`styles.Cyan`)
+  - Blank line between each control, extra blank line between groups
+- Left `ControlsDisplay()` unchanged — it's the horizontal compact layout used for form overlay views
+- Build and vet pass cleanly
+- Files changed: tui/components/controls.go, tui/tui.go
+- **Learnings for future iterations:**
+  - The `ControlGroup.Name` field is now available for any view that wants to display group labels
+  - `ControlsDisplay()` is independent from the column 1 rendering — changes to one don't affect the other
+  - Controls section clips naturally at column bottom since `renderColumn1` output is truncated to height by the column layout code
+---

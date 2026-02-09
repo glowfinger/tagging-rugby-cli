@@ -102,7 +102,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "Modify: tui/components/controls.go (add Name to ControlGroup, update GetControlGroups), tui/tui.go renderColumn1() controls section. The ControlsDisplay() function in controls.go is used for form overlay views — update it too or leave it as a horizontal compact layout for that context."
     },
     {
