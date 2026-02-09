@@ -1,4 +1,7 @@
 // Package components provides reusable TUI components.
+//
+// Deprecated: TackleInput is replaced by tui/forms/tackleform.go using huh forms.
+// This file is kept for reference and will be removed in a future cleanup.
 package components
 
 import (
