@@ -34,3 +34,16 @@
   - All components reference `styles.XXX` constants, so changing values in one place propagates everywhere
   - New Amber, Red, Green constants are available for US-003+ (sub-headers, warnings, success)
 ---
+
+## 2026-02-09 - US-005
+- Reordered `renderColumn1()` in `tui/tui.go` to render sections as: (1) Playback, (2) Selected Tag, (3) Controls
+- Previously the order was Controls → Playback → Selected Tag
+- Each section retains its styled header (Pink for Playback/Selected Tag, Cyan for Controls) with blank line separators
+- Updated function comment to reflect new order
+- Build and vet pass cleanly
+- Files changed: tui/tui.go
+- **Learnings for future iterations:**
+  - `renderColumn1()` starts around line 1569 — the three sections are self-contained blocks that can be reordered by moving code blocks
+  - The Selected Tag section is conditional (only renders if an item is selected), so the blank line separator after it needs to be inside the `if item != nil` block
+  - `ControlsDisplay()` in controls.go is a separate horizontal compact layout used for form overlay views — not the same as the column 1 controls rendering
+---

@@ -85,7 +85,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "Modify renderColumn1() in tui/tui.go (starts at line ~1602). Currently the order is Controls -> Playback -> Selected Tag. Just move the Controls block to after Selected Tag."
     },
     {
