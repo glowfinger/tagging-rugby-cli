@@ -1467,16 +1467,10 @@ func (m *Model) View() string {
 	col2Lines := strings.Split(col2Content, "\n")
 	col3Lines := strings.Split(col3Content, "\n")
 
-	// Pad all columns to the same height
-	for len(col1Lines) < colHeight {
-		col1Lines = append(col1Lines, "")
-	}
-	for len(col2Lines) < colHeight {
-		col2Lines = append(col2Lines, "")
-	}
-	for len(col3Lines) < colHeight {
-		col3Lines = append(col3Lines, "")
-	}
+	// Ensure all columns are exactly colHeight lines (pad short, truncate long)
+	col1Lines = normalizeLines(col1Lines, colHeight)
+	col2Lines = normalizeLines(col2Lines, colHeight)
+	col3Lines = normalizeLines(col3Lines, colHeight)
 
 	var rows []string
 	for i := 0; i < colHeight; i++ {
@@ -1497,14 +1491,71 @@ func (m *Model) View() string {
 	return statusBar + "\n" + columnsView + "\n" + timeline + "\n" + commandInput
 }
 
-// padToWidth pads a string with spaces to the specified width.
-// If the string is wider (due to ANSI sequences), it is returned as-is.
+// padToWidth pads or truncates a string to exactly the specified width.
+// Uses lipgloss.Width for ANSI-aware measurement. Truncates with ellipsis if too wide.
 func padToWidth(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
 	currentWidth := lipgloss.Width(s)
-	if currentWidth >= width {
+	if currentWidth == width {
 		return s
 	}
-	return s + strings.Repeat(" ", width-currentWidth)
+	if currentWidth < width {
+		return s + strings.Repeat(" ", width-currentWidth)
+	}
+	// Truncate: walk runes and measure visible width
+	truncated := truncateToWidth(s, width)
+	// Pad in case truncation left us short (due to wide chars)
+	truncWidth := lipgloss.Width(truncated)
+	if truncWidth < width {
+		truncated += strings.Repeat(" ", width-truncWidth)
+	}
+	return truncated
+}
+
+// normalizeLines pads or truncates a slice of strings to exactly the given height.
+func normalizeLines(lines []string, height int) []string {
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	for len(lines) < height {
+		lines = append(lines, "")
+	}
+	return lines
+}
+
+// truncateToWidth truncates a string to fit within the given visible width,
+// preserving ANSI escape sequences.
+func truncateToWidth(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	var result strings.Builder
+	visibleWidth := 0
+	inEscape := false
+
+	for _, r := range s {
+		if r == '\x1b' {
+			inEscape = true
+			result.WriteRune(r)
+			continue
+		}
+		if inEscape {
+			result.WriteRune(r)
+			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
+				inEscape = false
+			}
+			continue
+		}
+		// Normal visible character
+		if visibleWidth >= maxWidth {
+			break
+		}
+		result.WriteRune(r)
+		visibleWidth++
+	}
+	return result.String()
 }
 
 // renderColumn1 renders Column 1: Controls, playback status, tag detail card.
