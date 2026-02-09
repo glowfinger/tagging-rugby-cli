@@ -1646,7 +1646,10 @@ func (m *Model) renderColumn1(width, height int) string {
 	lines = append(lines, controlsHeader.Render(" Controls"))
 	lines = append(lines, "")
 
-	// Compact controls display (vertical list for column) using shared control groups
+	// Two-line controls display with sub-headers per group
+	subHeaderStyle := lipgloss.NewStyle().
+		Foreground(styles.Amber).
+		Bold(true)
 	shortcutStyle := lipgloss.NewStyle().
 		Foreground(styles.Cyan).
 		Bold(true)
@@ -1654,13 +1657,26 @@ func (m *Model) renderColumn1(width, height int) string {
 		Foreground(styles.LightLavender)
 
 	groups := components.GetControlGroups()
-	for _, group := range groups {
-		for _, c := range group.Controls {
-			line := fmt.Sprintf(" %s %s %s",
-				c.Emoji,
-				nameStyle.Render(fmt.Sprintf("%-10s", c.Name)),
-				shortcutStyle.Render("["+c.Shortcut+"]"))
-			lines = append(lines, line)
+	for i, group := range groups {
+		// Group sub-header
+		lines = append(lines, subHeaderStyle.Render(" "+group.Name))
+		lines = append(lines, "")
+
+		for j, c := range group.Controls {
+			// Line 1: emoji  Name
+			lines = append(lines, nameStyle.Render(fmt.Sprintf(" %s  %s", c.Emoji, c.Name)))
+			// Line 2: indented [Key]
+			lines = append(lines, shortcutStyle.Render(fmt.Sprintf("     [%s]", c.Shortcut)))
+
+			// Blank line between controls (but not after the last in the last group)
+			if j < len(group.Controls)-1 || i < len(groups)-1 {
+				lines = append(lines, "")
+			}
+		}
+
+		// Extra blank line between groups
+		if i < len(groups)-1 {
+			lines = append(lines, "")
 		}
 	}
 

@@ -17,6 +17,7 @@ type Control struct {
 
 // ControlGroup represents a group of related controls.
 type ControlGroup struct {
+	Name     string
 	Controls []Control
 }
 
@@ -25,6 +26,7 @@ func GetControlGroups() []ControlGroup {
 	return []ControlGroup{
 		// Playback controls
 		{
+			Name: "Playback",
 			Controls: []Control{
 				{Emoji: "\u23ea", Name: "Back", Shortcut: "H/\u2190"},
 				{Emoji: "\u23e9", Name: "Fwd", Shortcut: "L/\u2192"},
@@ -35,6 +37,7 @@ func GetControlGroups() []ControlGroup {
 		},
 		// Navigation controls
 		{
+			Name: "Navigation",
 			Controls: []Control{
 				{Emoji: "\u23ee", Name: "Prev", Shortcut: "J/\u2191"},
 				{Emoji: "\u23ed", Name: "Next", Shortcut: "K/\u2193"},
@@ -43,6 +46,7 @@ func GetControlGroups() []ControlGroup {
 		},
 		// Step/overlay controls
 		{
+			Name: "Step / Overlay",
 			Controls: []Control{
 				{Emoji: "\u2796", Name: "Step-", Shortcut: ",/<"},
 				{Emoji: "\u2795", Name: "Step+", Shortcut: "./>"},
@@ -51,6 +55,7 @@ func GetControlGroups() []ControlGroup {
 		},
 		// View controls
 		{
+			Name: "Views",
 			Controls: []Control{
 				{Emoji: "\U0001F4CA", Name: "Stats", Shortcut: "S"},
 				{Emoji: "\u2753", Name: "Help", Shortcut: "?"},
