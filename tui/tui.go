@@ -1534,16 +1534,11 @@ func (m *Model) View() string {
 
 	showCol3 := m.width >= col3HideThreshold
 
-	// Border style for vertical separators
-	borderStr := lipgloss.NewStyle().
-		Foreground(styles.Purple).
-		Render("│")
-
 	var columnsView string
 
 	if showCol3 {
-		// Three-column layout: col1 fixed at 30, account for 2 border characters
-		usableWidth := m.width - 2
+		// Three-column layout: col1 fixed at 30, no border characters
+		usableWidth := m.width
 		var col2Width, col3Width int
 
 		if m.width >= 120 {
@@ -1570,12 +1565,12 @@ func (m *Model) View() string {
 			c1 := padToWidth(col1Lines[i], col1Width)
 			c2 := padToWidth(col2Lines[i], col2Width)
 			c3 := padToWidth(col3Lines[i], col3Width)
-			rows = append(rows, c1+borderStr+c2+borderStr+c3)
+			rows = append(rows, c1+c2+c3)
 		}
 		columnsView = strings.Join(rows, "\n")
 	} else {
-		// Two-column layout: col1 fixed at 30, column 3 hidden, 1 border character
-		usableWidth := m.width - 1
+		// Two-column layout: col1 fixed at 30, column 3 hidden, no border characters
+		usableWidth := m.width
 		col2Width := usableWidth - col1Width
 
 		col1Content := m.renderColumn1(col1Width, colHeight)
@@ -1588,7 +1583,7 @@ func (m *Model) View() string {
 		for i := 0; i < colHeight; i++ {
 			c1 := padToWidth(col1Lines[i], col1Width)
 			c2 := padToWidth(col2Lines[i], col2Width)
-			rows = append(rows, c1+borderStr+c2)
+			rows = append(rows, c1+c2)
 		}
 		columnsView = strings.Join(rows, "\n")
 	}
