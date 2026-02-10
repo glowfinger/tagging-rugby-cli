@@ -1,19 +1,20 @@
 {
   "project": "tagging-rugby-cli",
-  "branchName": "ralph/video-controls-ui-cleanup",
-  "description": "Add arrow key and punctuation key alternatives for video controls, and fix three-column layout alignment with responsive column sizing",
+  "branchName": "ralph/tidy-up-ui-3",
+  "description": "UI polish: fixed col1 width, playback speed controls, bordered containers for all sections, remove column separators and command hint bar",
   "userStories": [
     {
-      "id": "US-065",
-      "title": "Add arrow key alternatives for seek and navigation",
-      "description": "As a user, I want to use Left/Right arrow keys to seek backward/forward and Up/Down arrow keys to navigate the notes list, so that I have intuitive controls alongside the vim-style H/J/K/L keys.",
+      "id": "US-084",
+      "title": "Fix column 1 to 30 characters wide",
+      "description": "As a user, I want column 1 to be a fixed compact width so the notes list and stats panel get maximum space.",
       "acceptanceCriteria": [
-        "Left arrow key seeks backward by current step size (same as H key)",
-        "Right arrow key seeks forward by current step size (same as L key)",
-        "Up arrow key selects previous item in list (same as J key)",
-        "Down arrow key selects next item in list (same as K key)",
-        "Existing H/L/J/K bindings continue to work unchanged",
-        "Arrow keys do NOT trigger in command mode — left/right are already handled in handleCommandInput() for cursor movement, and up/down should be no-ops in command mode",
+        "Add a constant col1Width = 30 in the View() layout section of tui/tui.go",
+        "Three-column layout (width >= 90): col1 = 30, col3 gets its share, col2 gets the remainder",
+        "Two-column layout (width < 90): col1 = 30, col2 gets the remainder",
+        "Wide terminals (>= 120): col1 = 30, col2 and col3 split the remaining space",
+        "Medium terminals (90-119): col1 = 30, col3 = col3MinWidth (18), col2 gets the rest",
+        "Narrow terminals (80-89): col1 = 30, col2 gets the rest, col3 hidden",
+        "Bordered control boxes render correctly at width 30",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 1,
@@ -21,64 +22,179 @@
       "notes": ""
     },
     {
-      "id": "US-066",
-      "title": "Add comma/period alternatives for step size control",
-      "description": "As a user, I want to use comma and period keys (in addition to < and >) to decrease/increase step size, so I don't need to hold Shift.",
+      "id": "US-085",
+      "title": "Remove command mode hint bar text",
+      "description": "As a user, I want the bottom bar to be empty when not in use so the UI is cleaner.",
       "acceptanceCriteria": [
-        "Comma key (,) decreases step size by calling decreaseStepSize() — same as < key",
-        "Period key (.) increases step size by calling increaseStepSize() — same as > key",
-        "Existing < and > bindings continue to work unchanged",
-        "Comma and period do NOT trigger in command mode (only in normal mode)",
+        "When command mode is not active and no result message is showing, the bottom bar renders as an empty styled line with DarkPurple background at full width and no text",
+        "When command mode is active, the colon prompt and input with cursor still render exactly as before",
+        "When a result message is showing (success or error), it still renders exactly as before",
+        "Remove the hint text string and hintStyle variable from the default branch in CommandInput() in tui/components/commandinput.go (lines 79-88)",
+        "Replace with: return lineStyle.Render(\" \") using the existing DarkPurple background lineStyle",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
-      "id": "US-067",
-      "title": "Update controls display and help overlay with new keybindings",
-      "description": "As a user, I want the controls panel and help overlay to show all available key alternatives so I can discover them.",
+      "id": "US-086",
+      "title": "Add playback speed state and status bar display",
+      "description": "As a user, I want to see the current playback speed in the status bar so I always know what speed the video is playing at.",
       "acceptanceCriteria": [
-        "GetControlGroups() in tui/components/controls.go updated with combined shortcut text showing alternatives (e.g. Shortcut field becomes \"H/Left\" instead of just \"H\")",
-        "Help overlay in tui/components/help.go updated: Playback section shows H/Left and L/Right for seeking, ,/< and ./> for step size",
-        "Help overlay Navigation section shows J/Up for previous item and K/Down for next item",
-        "renderColumn1() in tui/tui.go refactored to use GetControlGroups() instead of its own hardcoded controls slice — remove the duplicate controls list around line 1528",
+        "Add Speed float64 field to StatusBarState struct in tui/components/statusbar.go",
+        "Status bar right side displays speed (e.g. Speed: 1x, Speed: 1.5x, Speed: 0.75x) alongside step size",
+        "Speed is always shown, even at 1.0x",
+        "Format uses %g to avoid trailing zeros (e.g. 1 not 1.0, 1.5 not 1.50, 0.75 stays 0.75)",
+        "The updateStatusFromMpv() tick handler in tui/tui.go polls client.GetSpeed() and updates statusBar.Speed",
+        "Default speed value is 1.0 when mpv is not connected",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
-      "id": "US-069",
-      "title": "Fix three-column layout alignment",
-      "description": "As a user, I want the three columns to always render inline at the same height so the layout doesn't break or misalign.",
+      "id": "US-087",
+      "title": "Add playback speed control keybindings",
+      "description": "As a user, I want to press [ or { to slow down, ] or } to speed up, and backslash to reset speed to 1x.",
       "acceptanceCriteria": [
-        "All three columns render at the same height regardless of content length — pad all column line arrays to colHeight before joining",
-        "Vertical border characters (│) align correctly on every row with no gaps or overflow",
-        "Each line in the row-by-row assembly is exactly the expected total width (col1 + border + col2 + border + col3)",
-        "Truncate column lines that exceed colWidth using lipgloss.Width() to measure ANSI-aware width, then trim excess",
+        "Define a predefined speed list: []float64{0.5, 0.75, 1.0, 1.25, 1.5, 2.0} as a package-level var in tui/tui.go (similar to stepSizes)",
+        "Add increaseSpeed() and decreaseSpeed() helper methods on Model that cycle through the speed list and call client.SetSpeed()",
+        "[ and { keys decrease speed — cycle to previous value in the list; do nothing at minimum (0.5x)",
+        "] and } keys increase speed — cycle to next value in the list; do nothing at maximum (2.0x)",
+        "Backslash key resets speed to 1.0x via client.SetSpeed(1.0)",
+        "All speed keys only work in normal mode (not during command input, forms, or stats view)",
+        "Speed keys also work in mini player mode (add to the allowed keys list in the mini player key filter)",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
-      "id": "US-070",
-      "title": "Responsive column widths — column 3 shrinks first",
-      "description": "As a user, I want the live stats panel (column 3) to shrink before columns 1 and 2 when the terminal is narrow, so that controls and notes list stay usable.",
+      "id": "US-088",
+      "title": "Add speed controls to controls display and help overlay",
+      "description": "As a user, I want to see the speed keybindings in the controls panel and help overlay.",
       "acceptanceCriteria": [
-        "At wide terminals (120+ cols): columns split roughly equal thirds as they do today",
-        "At medium terminals (90-119 cols): column 3 gets a smaller share (minimum ~18 chars) while columns 1 and 2 share the remaining space equally",
-        "At narrow terminals (below 90 cols): column 3 is hidden entirely, only one border character is used, and columns 1 and 2 share the full width",
-        "Column width calculation happens in the View() method around the existing usableWidth/colWidth logic — replace the equal-thirds math with the responsive algorithm",
-        "Layout recalculates correctly when terminal is resized (WindowSizeMsg already updates m.width)",
+        "Add a fourth sub-group to the Playback control group in GetControlGroups(): Speed - [ [ / { ], Speed + [ ] / } ], Speed 1x [ \\\\ ]",
+        "The Playback bordered box now shows 4 sub-groups separated by horizontal dividers: Play/Back/Fwd, Step-/Step+, Frame-/Frame+, Speed-/Speed+/Speed1x",
+        "Help overlay in tui/components/help.go updated with speed bindings in the Playback section",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-089",
+      "title": "Replace playback status card with mini player in column 1",
+      "description": "As a user, I want the playback section in column 1 to use the bordered mini player card for visual consistency.",
+      "acceptanceCriteria": [
+        "Add a new function or modify RenderMiniPlayer to accept a fixedWidth parameter and a showWarning bool — when fixedWidth > 0, use that width instead of auto-sizing; when showWarning is false, omit the warning line",
+        "Replace the plain-text Playback section in renderColumn1() (play state, time, step, mute, overlay lines) with the bordered mini player card",
+        "The bordered card fills column 1 width (left-aligned, not centered)",
+        "Card shows: play/pause icon, step size, speed (from US-086), time position / duration, mute icon when muted",
+        "The Selected Tag detail card below the playback card remains unchanged",
+        "The control boxes below the detail card remain unchanged",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-090",
+      "title": "Wrap selected tag detail in bordered container",
+      "description": "As a user, I want the selected tag detail in column 1 to be in a bordered box matching the other containers.",
+      "acceptanceCriteria": [
+        "Create a generic RenderInfoBox(title string, contentLines []string, width int) string function in tui/components/controls.go that renders a bordered box with tab-style header and content lines — reusable for any info card",
+        "Replace the plain-text Selected Tag section in renderColumn1() with a call to RenderInfoBox",
+        "Box uses tab-style Selected Tag header with same box-drawing characters as RenderControlBox",
+        "All existing detail fields shown inside the box: #ID Type star, @ H:MM:SS, [category], Player: name, Team: name, text",
+        "Optional fields still only appear when present — box height is dynamic",
+        "When no item is selected, the box is hidden entirely (current behavior)",
+        "Border color uses styles.Purple, header text uses styles.Pink, content uses styles.LightLavender and styles.Lavender",
+        "Text field truncation accounts for inner box width (column width - 4 for borders and padding)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-091",
+      "title": "Wrap notes list in bordered container",
+      "description": "As a user, I want the notes list in column 2 to have a bordered container matching the rest of the UI.",
+      "acceptanceCriteria": [
+        "The notes list in renderColumn2() is wrapped in a bordered box with tab-style Notes header using same box-drawing style",
+        "Can reuse RenderInfoBox from US-090 or build the box directly in renderColumn2() wrapping the NotesList output",
+        "Table header row (ID, Time, Category, Text) renders inside the box below the tab header",
+        "All data rows render inside the box",
+        "The box fills full column 2 width and height (produces exactly colHeight lines)",
+        "NotesList table height shrinks to account for box chrome: listHeight = colHeight - 4 (3 tab header lines + 1 bottom border line)",
+        "Selected row highlighting still works correctly inside the box",
+        "Empty state message still renders correctly inside the box",
+        "Scrolling behavior is unchanged",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-092",
+      "title": "Remove column separator lines",
+      "description": "As a developer, I need to remove the vertical separators between columns since bordered containers provide visual separation.",
+      "acceptanceCriteria": [
+        "The borderStr variable (purple vertical bar) is removed from the View() layout assembly in tui/tui.go",
+        "Three-column row assembly changes from c1+borderStr+c2+borderStr+c3 to c1+c2+c3",
+        "Two-column row assembly changes from c1+borderStr+c2 to c1+c2",
+        "usableWidth calculation no longer subtracts border characters: was m.width - 2 for 3-col and m.width - 1 for 2-col, now just m.width for both",
+        "The reclaimed 1-2 characters are distributed to column widths (col2 and col3 grow slightly)",
+        "No visual gap or overlap between columns — columns tile to fill full terminal width",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-093",
+      "title": "Wrap progress bar in bordered container",
+      "description": "As a user, I want the timeline progress bar in a bordered container matching the rest of the UI.",
+      "acceptanceCriteria": [
+        "The Timeline() function in tui/components/timeline.go wraps its output in a bordered box with tab-style Timeline header",
+        "The progress bar line (filled/unfilled bar with event markers + time display) renders as a content row inside the box",
+        "The position indicator line (triangle) renders as a content row inside the box",
+        "Box spans full terminal width and adapts when terminal is resized",
+        "Bar width calculates against inner box width (width - 4 for borders and padding) instead of raw width",
+        "Event markers still display at correct positions",
+        "Playhead position still tracks correctly",
+        "Time display H:MM:SS / H:MM:SS still shows to the right of the bar",
+        "The DarkPurple background on the bare lines is removed since the box provides framing",
+        "Total box height is 6 lines: 3 tab header + 2 content rows + 1 bottom border",
+        "colHeight in View() adjusted from m.height - 5 to m.height - 9 to account for the taller bordered timeline (was 2 lines, now 6)",
+        "At narrow widths (< 20), the timeline still returns empty gracefully",
+        "Border color uses styles.Purple, header text uses styles.Pink",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-094",
+      "title": "Update mini player to show speed",
+      "description": "As a user, I want the standalone mini player (narrow terminals) to show playback speed.",
+      "acceptanceCriteria": [
+        "The standalone RenderMiniPlayer (used for terminals < 80 cols) status line includes speed display (e.g. Speed: 1.5x) alongside step size",
+        "Speed display uses same %gx format as the status bar",
+        "Card width adjusts if speed text makes the status line wider",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 11,
+      "passes": false,
       "notes": ""
     }
   ]
