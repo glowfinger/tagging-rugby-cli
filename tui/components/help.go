@@ -33,6 +33,9 @@ func HelpOverlay(width, height int) string {
 				{"Ctrl+L", "Frame step forward"},
 				{", / <", "Decrease step size"},
 				{". / >", "Increase step size"},
+				{"[ / {", "Decrease speed"},
+				{"] / }", "Increase speed"},
+				{"\\", "Reset speed to 1x"},
 			},
 		},
 		{
