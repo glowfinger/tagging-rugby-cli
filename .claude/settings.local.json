@@ -6,7 +6,8 @@
       "Bash(CGO_ENABLED=0 go vet:*)",
       "Bash(git checkout:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(gh api:*)"
     ]
   }
 }
