@@ -76,16 +76,12 @@ func CommandInput(state CommandInputState, width int) string {
 		return lineStyle.Render(" " + resultStyle.Render(state.Result))
 	}
 
-	// Default: show help hint
-	hintStyle := lipgloss.NewStyle().
-		Foreground(styles.Lavender).
-		Italic(true)
-
+	// Default: empty bar
 	lineStyle := lipgloss.NewStyle().
 		Background(styles.DarkPurple).
 		Width(width)
 
-	return lineStyle.Render(" " + hintStyle.Render("Press : to enter command mode, ? for help, q to quit"))
+	return lineStyle.Render(" ")
 }
 
 // InsertChar inserts a character at the current cursor position.
