@@ -299,23 +299,6 @@ func joinStrings(strs []string, sep string) string {
 	return result
 }
 
-// parseTimeToSeconds parses a time string in MM:SS or seconds format.
-func parseTimeToSeconds(timeStr string) (float64, error) {
-	// Try MM:SS format first
-	var minutes, seconds int
-	if n, err := fmt.Sscanf(timeStr, "%d:%d", &minutes, &seconds); n == 2 && err == nil {
-		return float64(minutes*60 + seconds), nil
-	}
-
-	// Try seconds format (float)
-	var secs float64
-	if n, err := fmt.Sscanf(timeStr, "%f", &secs); n == 1 && err == nil {
-		return secs, nil
-	}
-
-	return 0, fmt.Errorf("expected MM:SS or seconds, got '%s'", timeStr)
-}
-
 func init() {
 	// Add flags to note add command
 	noteAddCmd.Flags().StringP("category", "c", "", "Note category")
