@@ -1731,15 +1731,65 @@ func (m *Model) renderColumn1(width, height int) string {
 	return strings.Join(lines, "\n")
 }
 
-// renderColumn2 renders Column 2: Scrollable list of all tags/events.
+// renderColumn2 renders Column 2: Scrollable list of all tags/events in a bordered box.
 func (m *Model) renderColumn2(width, height int) string {
-	// Use a taller list that fills the column
-	listHeight := height
+	// List height shrinks to account for box chrome: 3 tab header lines + 1 bottom border = 4
+	listHeight := height - 4
 	if listHeight < 3 {
 		listHeight = 3
 	}
 
-	return components.NotesList(m.notesList, width, listHeight, m.statusBar.TimePos)
+	// Inner width for the table content (column width - 2 for border chars)
+	innerWidth := width - 2
+	if innerWidth < 10 {
+		innerWidth = 10
+	}
+
+	// Render the notes list at inner width
+	tableContent := components.NotesList(m.notesList, innerWidth, listHeight, m.statusBar.TimePos)
+
+	// Build bordered box with tab-style "Notes" header
+	headerStyle := lipgloss.NewStyle().Foreground(styles.Pink).Bold(true)
+	borderColor := styles.Purple
+	topBorderStyle := lipgloss.NewStyle().Foreground(borderColor)
+	sideStyle := lipgloss.NewStyle().Foreground(borderColor)
+
+	// Tab header: ╭─ Notes ─────╮
+	headerText := headerStyle.Render(" Notes ")
+	headerTextWidth := lipgloss.Width(headerText)
+	topLeft := topBorderStyle.Render("╭─")
+	topRight := topBorderStyle.Render("╮")
+	fillWidth := innerWidth - 2 - headerTextWidth - 1 + 2 // innerWidth - topLeftChars - headerWidth - topRightChar + border adjustment
+	if fillWidth < 0 {
+		fillWidth = 0
+	}
+	topLine := topLeft + headerText + topBorderStyle.Render(strings.Repeat("─", fillWidth)) + topRight
+
+	var lines []string
+	lines = append(lines, topLine)
+
+	// Wrap each table line in side borders
+	tableLines := strings.Split(tableContent, "\n")
+	for _, tl := range tableLines {
+		lineWidth := lipgloss.Width(tl)
+		pad := innerWidth - lineWidth
+		if pad < 0 {
+			pad = 0
+		}
+		lines = append(lines, sideStyle.Render("│")+tl+strings.Repeat(" ", pad)+sideStyle.Render("│"))
+	}
+
+	// Pad to fill column height (account for top line + bottom line)
+	targetContentLines := height - 2 // total height minus top border and bottom border
+	for len(lines) < targetContentLines+1 { // +1 because lines already includes top line
+		lines = append(lines, sideStyle.Render("│")+strings.Repeat(" ", innerWidth)+sideStyle.Render("│"))
+	}
+
+	// Bottom border: ╰──────────────╯
+	bottomLine := topBorderStyle.Render("╰" + strings.Repeat("─", innerWidth) + "╯")
+	lines = append(lines, bottomLine)
+
+	return strings.Join(lines, "\n")
 }
 
 // renderColumn3 renders Column 3: Live stats summary, bar graph, top players leaderboard.
