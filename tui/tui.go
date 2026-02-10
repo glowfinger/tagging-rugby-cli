@@ -30,6 +30,10 @@ const (
 // Users can cycle through these with < and > keys.
 var stepSizes = []float64{0.1, 0.5, 1, 2, 5, 10, 30}
 
+// speedSizes defines the available playback speed levels.
+// Users can cycle through these with [ ] { } keys.
+var speedSizes = []float64{0.5, 0.75, 1.0, 1.25, 1.5, 2.0}
+
 // tickMsg is a message sent on every tick interval to update playback status.
 type tickMsg time.Time
 
@@ -287,6 +291,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "t", "T":
 			// T opens quick tackle input prompt
 			return m.openTackleInput()
+		case "[", "{":
+			// [ / { decreases playback speed
+			m.decreaseSpeed()
+			return m, nil
+		case "]", "}":
+			// ] / } increases playback speed
+			m.increaseSpeed()
+			return m, nil
+		case "\\":
+			// Backslash resets speed to 1.0x
+			if m.client != nil && m.client.IsConnected() {
+				_ = m.client.SetSpeed(1.0)
+			}
+			return m, nil
 		}
 	}
 
@@ -1245,6 +1263,52 @@ func (m *Model) findStepSizeIndex() int {
 		}
 	}
 	return len(stepSizes) - 1
+}
+
+// decreaseSpeed cycles to the previous (slower) playback speed.
+func (m *Model) decreaseSpeed() {
+	if m.client == nil || !m.client.IsConnected() {
+		return
+	}
+	currentIndex := m.findSpeedIndex()
+	if currentIndex > 0 {
+		_ = m.client.SetSpeed(speedSizes[currentIndex-1])
+	}
+}
+
+// increaseSpeed cycles to the next (faster) playback speed.
+func (m *Model) increaseSpeed() {
+	if m.client == nil || !m.client.IsConnected() {
+		return
+	}
+	currentIndex := m.findSpeedIndex()
+	if currentIndex < len(speedSizes)-1 {
+		_ = m.client.SetSpeed(speedSizes[currentIndex+1])
+	}
+}
+
+// findSpeedIndex finds the index of the current speed in the speedSizes array.
+// If the current speed is not in the array, it returns the index of the closest value.
+func (m *Model) findSpeedIndex() int {
+	currentSpeed := m.statusBar.Speed
+	if currentSpeed == 0 {
+		currentSpeed = 1.0
+	}
+	for i, speed := range speedSizes {
+		if currentSpeed == speed {
+			return i
+		}
+	}
+	// Find closest if not exact match
+	for i, speed := range speedSizes {
+		if currentSpeed < speed {
+			if i == 0 {
+				return 0
+			}
+			return i - 1
+		}
+	}
+	return len(speedSizes) - 1
 }
 
 // parseTimeToSeconds parses a time string in MM:SS or seconds format.

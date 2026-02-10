@@ -102,3 +102,17 @@
   - GetSpeed()/SetSpeed() already exist in mpv/client.go — no new mpv client methods needed
   - %g format is ideal for speed display: drops trailing zeros automatically
 ---
+
+## 2026-02-10 - US-087
+- Added `speedSizes` package-level var: []float64{0.5, 0.75, 1.0, 1.25, 1.5, 2.0}
+- Added `increaseSpeed()` and `decreaseSpeed()` methods on Model that cycle through speedSizes and call client.SetSpeed()
+- Added `findSpeedIndex()` helper (mirrors findStepSizeIndex pattern) with closest-match fallback
+- Key bindings: `[` and `{` decrease speed, `]` and `}` increase speed, `\` resets to 1.0x
+- All speed keys in normal mode switch only (not active during command input, forms, or stats view)
+- Mini player mode doesn't exist yet (US-089) — speed keys will be added to its key filter when it's implemented
+- Files changed: tui/tui.go
+- **Learnings for future iterations:**
+  - speedSizes follows the same pattern as stepSizes — package-level var + find index + cycle methods
+  - Backslash key string in Bubble Tea is `"\\"` (Go string escape)
+  - Mini player doesn't exist yet — US-089 will create it; speed key integration deferred to that story
+---
