@@ -29,6 +29,7 @@
 - normalizeLines() ensures column line arrays are exactly the target height
 - Responsive layout: col1Width=30 (fixed), col3HideThreshold=90, col3MinWidth=18; at <90 cols, two-column layout with single border
 - Arrow keys ("left","right","up","down") and punctuation (",",".") added as alternatives in normal-mode switch
+- RenderInfoBox(title, contentLines, width) in controls.go — generic bordered box; pass pre-styled lines, box handles borders only
 
 ---
 
@@ -139,4 +140,33 @@
   - innerWidth = cardWidth - 2 (for the two │ border chars); content padding = innerWidth - lipgloss.Width(content)
   - formatTime() and formatStepSize() are reusable helpers already in statusbar.go (same package)
   - RenderMiniPlayer can be reused for narrow terminal mini player (US-094) with fixedWidth=0 for auto-sizing
+---
+
+## 2026-02-10 - US-090
+- Created generic RenderInfoBox(title, contentLines, width) in tui/components/controls.go
+- Replaced plain-text Selected Tag section in renderColumn1() with bordered box via RenderInfoBox
+- Box uses tab-style header (╭─ Selected Tag ─╮) with same box-drawing chars as RenderMiniPlayer
+- Content lines are pre-styled by the caller (LightLavender for primary, Lavender for dim)
+- Text truncation uses innerW = width - 4 (2 border + 2 padding) for accurate clipping
+- Box is hidden entirely when no item is selected (preserves existing behavior)
+- Files changed: tui/components/controls.go, tui/tui.go
+- **Learnings for future iterations:**
+  - RenderInfoBox is generic and reusable — pass pre-styled content lines, box handles borders only
+  - Inner width for text truncation = column width - 4 (2 border chars + 2 spaces for content padding)
+  - RenderInfoBox can be reused for US-091 (notes list border) or any future bordered section
+---
+
+## 2026-02-10 - US-091
+- Wrapped notes list in bordered container with tab-style "Notes" header in renderColumn2()
+- Built box directly in renderColumn2() wrapping NotesList output (simpler than reusing RenderInfoBox since table fills full height)
+- List height shrinks by 4 (3 tab header lines + 1 bottom border) to account for box chrome
+- Replaced hardcoded `tableRows = 10` with dynamic `visibleRows` derived from height parameter
+- Updated scrollToCurrentTime() to accept visibleRows parameter instead of using constant
+- Box pads empty rows with bordered empty lines to fill full column height
+- Files changed: tui/tui.go, tui/components/noteslist.go
+- **Learnings for future iterations:**
+  - NotesList now uses height parameter dynamically — no more hardcoded tableRows constant
+  - scrollToCurrentTime() signature changed: now takes (currentTimePos, visibleRows) instead of just (currentTimePos)
+  - For full-height bordered containers, build the box in the render function rather than using RenderInfoBox (which is designed for variable-height content)
+  - innerWidth for bordered column2 = width - 2 (just the 2 │ border chars, no extra padding needed since table already has internal spacing)
 ---
