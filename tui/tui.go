@@ -1612,40 +1612,13 @@ func (m *Model) renderColumn1(width, height int) string {
 		lines = append(lines, "")
 	}
 
-	// Controls section
-	controlsHeader := lipgloss.NewStyle().
-		Foreground(styles.Cyan).
-		Bold(true)
-	lines = append(lines, controlsHeader.Render(" Controls"))
-	lines = append(lines, "")
-
-	// Controls display with sub-headers per group
-	subHeaderStyle := lipgloss.NewStyle().
-		Foreground(styles.Amber).
-		Bold(true)
-	shortcutStyle := lipgloss.NewStyle().
-		Foreground(styles.Cyan).
-		Bold(true)
-	nameStyle := lipgloss.NewStyle().
-		Foreground(styles.LightLavender)
-
+	// Controls section — bordered containers per group
 	groups := components.GetControlGroups()
 	for i, group := range groups {
-		// Group sub-header
-		lines = append(lines, subHeaderStyle.Render(" "+group.Name))
-		lines = append(lines, "")
+		box := components.RenderControlBox(group, width)
+		lines = append(lines, box)
 
-		for si, subGroup := range group.SubGroups {
-			for _, c := range subGroup {
-				lines = append(lines, nameStyle.Render(fmt.Sprintf(" %s", c.Name))+" "+shortcutStyle.Render(fmt.Sprintf("[%s]", c.Shortcut)))
-			}
-			// Blank line between sub-groups (but not after the last)
-			if si < len(group.SubGroups)-1 {
-				lines = append(lines, "")
-			}
-		}
-
-		// Blank line between groups
+		// 1 blank line gap between bordered containers
 		if i < len(groups)-1 {
 			lines = append(lines, "")
 		}
