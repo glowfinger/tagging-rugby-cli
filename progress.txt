@@ -116,3 +116,27 @@
   - Backslash key string in Bubble Tea is `"\\"` (Go string escape)
   - Mini player doesn't exist yet — US-089 will create it; speed key integration deferred to that story
 ---
+
+## 2026-02-10 - US-088
+- Added Speed-, Speed+, Speed1x controls to Playback group in GetControlGroups()
+- Added speed keybindings ([ / {, ] / }, \) to Playback section of help overlay
+- Files changed: tui/components/controls.go, tui/components/help.go
+- **Learnings for future iterations:**
+  - Speed controls use same emoji style as existing playback controls (⏪ for decrease, ⏩ for increase, 🔄 for reset)
+  - Help overlay key column is 12 chars wide — "[ / {" and "] / }" fit well within that
+  - GetControlGroups() is the single source of truth for controls — both column 1 display and ControlsDisplay() use it
+---
+
+## 2026-02-10 - US-089
+- Created RenderMiniPlayer() in tui/components/miniplayer.go — bordered card with tab-style "Playback" header
+- Accepts fixedWidth (use column width) and showWarning bool parameters
+- Shows play/pause icon, step size, speed, time/duration, mute icon (when muted)
+- Replaced plain-text Playback section in renderColumn1() with bordered mini player card
+- Uses box-drawing chars (╭╮╰╯│─) with styles.Purple border color and styles.Pink header
+- Files changed: tui/components/miniplayer.go (new), tui/tui.go
+- **Learnings for future iterations:**
+  - Box-drawing pattern for bordered cards: top line = ╭─ + header + fill + ╮, content = │ + text + pad + │, bottom = ╰ + fill + ╯
+  - innerWidth = cardWidth - 2 (for the two │ border chars); content padding = innerWidth - lipgloss.Width(content)
+  - formatTime() and formatStepSize() are reusable helpers already in statusbar.go (same package)
+  - RenderMiniPlayer can be reused for narrow terminal mini player (US-094) with fixedWidth=0 for auto-sizing
+---

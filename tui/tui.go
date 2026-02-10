@@ -1638,31 +1638,9 @@ func normalizeLines(lines []string, height int) []string {
 func (m *Model) renderColumn1(width, height int) string {
 	var lines []string
 
-	// Playback status card
-	statusHeader := lipgloss.NewStyle().
-		Foreground(styles.Pink).
-		Bold(true)
-	lines = append(lines, statusHeader.Render(" Playback"))
-
-	infoStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
-
-	playState := "▶ Playing"
-	if m.statusBar.Paused {
-		playState = "⏸ Paused"
-	}
-	lines = append(lines, infoStyle.Render(" "+playState))
-	lines = append(lines, infoStyle.Render(fmt.Sprintf(" Time: %s / %s",
-		formatTimeString(m.statusBar.TimePos),
-		formatTimeString(m.statusBar.Duration))))
-	lines = append(lines, infoStyle.Render(fmt.Sprintf(" Step: %s", formatStepSize(m.statusBar.StepSize))))
-
-	if m.statusBar.Muted {
-		lines = append(lines, infoStyle.Render(" 🔇 Muted"))
-	}
-	if m.statusBar.OverlayEnabled {
-		lines = append(lines, infoStyle.Render(" 📺 Overlay On"))
-	}
-	lines = append(lines, "")
+	// Bordered mini player card
+	miniPlayer := components.RenderMiniPlayer(m.statusBar, width, false)
+	lines = append(lines, strings.Split(miniPlayer, "\n")...)
 
 	// Current tag detail card (selected item)
 	item := m.notesList.GetSelectedItem()
