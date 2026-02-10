@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/user/tagging-rugby-cli/pkg/timeutil"
 	"github.com/user/tagging-rugby-cli/tui/styles"
 )
 
@@ -184,6 +185,136 @@ func RenderControlBox(group ControlGroup, width int) string {
 	lines = append(lines, bottom)
 
 	return strings.Join(lines, "\n")
+}
+
+// RenderMiniPlayer renders a compact playback card for narrow terminals.
+// The card uses the same bordered tab-header style as RenderControlBox.
+//
+// Layout matches wireframe/mini-player.txt:
+//
+//	 ┌──────────┐
+//	┌┤ Playback ├┐
+//	│└──────────┘└────────────┐
+//	│ ⏸ Paused      Step: 30s │
+//	├─────────────────────────┤
+//	│ Time: 1:11:22 / 1:08:11 │
+//	└─────────────────────────┘
+func RenderMiniPlayer(state StatusBarState, termWidth int) string {
+	borderStyle := lipgloss.NewStyle().Foreground(styles.Purple)
+	headerStyle := lipgloss.NewStyle().Foreground(styles.Pink).Bold(true)
+	textStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
+	warningStyle := lipgloss.NewStyle().Foreground(styles.Lavender).Italic(true)
+
+	// Box-drawing characters
+	const (
+		hBar = "─"
+		vBar = "│"
+		tl   = "┌"
+		tr   = "┐"
+		bl   = "└"
+		br   = "┘"
+		teeL = "├"
+		teeR = "┤"
+	)
+
+	// Build content lines to determine card width
+	playState := "▶ Playing"
+	if state.Paused {
+		playState = "⏸ Paused"
+	}
+
+	stepStr := formatStepSize(state.StepSize)
+	statusLine := playState + "      Step: " + stepStr
+	if state.Muted {
+		statusLine += "  🔇"
+	}
+
+	timeLine := fmt.Sprintf("Time: %s / %s",
+		timeutil.FormatTime(state.TimePos),
+		timeutil.FormatTime(state.Duration))
+
+	// Card width: fit the widest content line + 4 (2 border chars + 2 padding spaces)
+	contentW := lipgloss.Width(statusLine)
+	if lipgloss.Width(timeLine) > contentW {
+		contentW = lipgloss.Width(timeLine)
+	}
+	cardWidth := contentW + 4 // │ + space + content + space + │
+
+	// Tab header label
+	tabLabel := " Playback "
+	tabInnerW := lipgloss.Width(tabLabel)
+
+	// Ensure card is at least wide enough for the tab
+	minCardW := tabInnerW + 7 // tab overhead: space+┌+┐ line1, ┌┤├┐ line2, │└┘└┐ line3
+	if cardWidth < minCardW {
+		cardWidth = minCardW
+	}
+
+	innerW := cardWidth - 2
+
+	// Line 1:  ┌──────────┐
+	line1 := " " + borderStyle.Render(tl+strings.Repeat(hBar, tabInnerW)+tr)
+
+	// Line 2: ┌┤ Playback ├┐
+	line2 := borderStyle.Render(tl+teeR) + headerStyle.Render(tabLabel) + borderStyle.Render(teeL+tr)
+
+	// Line 3: │└──────────┘└────────────┐
+	tabBottomW := tabInnerW
+	remainW := innerW - tabBottomW - 3
+	if remainW < 0 {
+		remainW = 0
+	}
+	line3 := borderStyle.Render(vBar+bl+strings.Repeat(hBar, tabBottomW)+br+bl+strings.Repeat(hBar, remainW)+tr)
+
+	// Content row helper
+	renderRow := func(content string) string {
+		visW := lipgloss.Width(content)
+		padRight := innerW - 2 - visW // -2 for leading and trailing space
+		if padRight < 0 {
+			padRight = 0
+		}
+		row := borderStyle.Render(vBar) + " " + content + strings.Repeat(" ", padRight) + " " + borderStyle.Render(vBar)
+		if lipgloss.Width(row) > cardWidth {
+			row = ansi.Truncate(row, cardWidth, "")
+		}
+		return row
+	}
+
+	// Divider
+	divider := borderStyle.Render(teeL + strings.Repeat(hBar, innerW) + teeR)
+
+	// Bottom border
+	bottom := borderStyle.Render(bl + strings.Repeat(hBar, innerW) + br)
+
+	var lines []string
+	lines = append(lines, line1, line2, line3)
+	lines = append(lines, renderRow(textStyle.Render(statusLine)))
+	lines = append(lines, divider)
+	lines = append(lines, renderRow(textStyle.Render(timeLine)))
+	lines = append(lines, bottom)
+
+	card := strings.Join(lines, "\n")
+
+	// Center the card horizontally if terminal is wider than card
+	if termWidth > cardWidth {
+		padding := (termWidth - cardWidth) / 2
+		padStr := strings.Repeat(" ", padding)
+		var centeredLines []string
+		for _, l := range strings.Split(card, "\n") {
+			centeredLines = append(centeredLines, padStr+l)
+		}
+		card = strings.Join(centeredLines, "\n")
+	}
+
+	// Warning line below card
+	warning := warningStyle.Render("Mini player mode - resize for full view")
+	warnW := lipgloss.Width(warning)
+	warnPad := (termWidth - warnW) / 2
+	if warnPad < 0 {
+		warnPad = 0
+	}
+
+	return card + "\n" + strings.Repeat(" ", warnPad) + warning
 }
 
 // ControlsDisplay renders the controls display component as a horizontal bar.
