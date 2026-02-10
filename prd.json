@@ -223,7 +223,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": ""
     }
   ]

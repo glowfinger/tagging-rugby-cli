@@ -35,6 +35,9 @@
 - Bordered control boxes: use `components.RenderControlBox(group, width)` — renders tab header + box-drawing border + horizontal dividers between sub-groups
 - db package cannot import tui/forms (circular dependency) — use db-package structs for return types, let TUI caller map to form result types
 - Edit tackle form: `forms.NewEditTackleForm(timestamp, endSeconds, result)` with `EditTackleFormResult` struct; load data with `db.LoadNoteForEdit(db, noteID)` returning `db.EditTackleData`
+- Edit flow uses `editingNoteID` field (0=create, >0=edit) to distinguish save paths; separate `editTackleFormResult` avoids state mixing with create flow
+- When reopening edit form after cancel, save/restore Timestamp and EndSeconds strings around `NewEditTackleForm()` constructor call
+- Mini player: `components.RenderMiniPlayer(statusBar, width)` renders compact bordered card for narrow terminals (< minTerminalWidth)
 
 ---
 
@@ -167,5 +170,51 @@
   - `EditTackleFormResult` embeds `TackleFormResult` — the TUI caller will need to pre-fill the embedded fields from `EditTackleData` before passing to `NewEditTackleForm()`
   - The form stores Timestamp and EndSeconds as strings (for huh input binding) — caller must convert float64 <-> string
   - `%g` format for float64->string avoids trailing zeros (e.g. "2" instead of "2.000000")
+---
+
+## 2026-02-10 - US-081
+- Added `editingNoteID` field to Model (0 = create mode, >0 = edit mode) and `editTackleFormResult` for edit form binding
+- Wired up `e`/`E` keybinding in normal mode to open edit tackle form via `openEditTackleInput()`
+- `openEditTackleInput()` checks item type (only tackles), calls `db.LoadNoteForEdit()`, maps `db.EditTackleData` to `forms.EditTackleFormResult`, opens `NewEditTackleForm()`
+- `saveEditTackleFromForm()` parses timestamp/endSeconds from form, calls `db.UpdateNoteWithChildren()` and `db.UpdateNoteTiming()`, reloads list and stats
+- Updated `handleTackleFormUpdate()` to route to `saveEditTackleFromForm()` when `editingNoteID > 0`
+- Updated confirm-discard flow: discard resets `editingNoteID`, go-back uses `reopenTackleForm()` helper that preserves user-edited timestamp/endSeconds values
+- Pressing `e` on a non-tackle item shows "Edit not supported for notes" message
+- Help overlay updated with `E - Edit selected tackle` in Navigation group
+- Files changed: tui/tui.go, tui/components/help.go
+- **Learnings for future iterations:**
+  - `NewEditTackleForm()` overwrites `result.Timestamp` and `result.EndSeconds` — when reopening after cancel, save/restore these values around the constructor call
+  - The `editTackleFormResult` is separate from `tackleFormResult` to avoid state mixing between create and edit flows
+  - `HasData()` on an edit form always returns true (pre-populated) — the confirm discard dialog will always show on Esc during edit, which is the correct behavior
+  - Import `strconv` was needed for `ParseFloat` on endSeconds
+---
+
+## 2026-02-10 - US-082
+- Added `RenderMiniPlayer(state StatusBarState, termWidth int) string` to `tui/components/controls.go` — renders a compact bordered card with tab header matching wireframe/mini-player.txt
+- Card shows play/pause state + step size on first line, horizontal divider, time position / duration on second line
+- Mute icon (🔇) appended to status line when muted
+- Card is horizontally centered when terminal width exceeds card width
+- Warning line "Mini player mode - resize for full view" in Lavender italic below the card
+- Replaced "Terminal too narrow" warning in View() with `components.RenderMiniPlayer()` call
+- Added `timeutil` import to controls.go for `FormatTime()`
+- Files changed: tui/components/controls.go, tui/tui.go
+- **Learnings for future iterations:**
+  - The mini player reuses the same box-drawing pattern as `RenderControlBox` (tab header 3 lines, content rows, dividers) — could potentially extract a shared "bordered card" builder but keeping them separate is simpler for now
+  - Card width is dynamically computed from content width (widest of status line and time line + 4 for borders/padding), not from terminal width
+  - `formatStepSize()` exists in both statusbar.go and tui.go (duplicate) — controls.go can access the one in statusbar.go since they're in the same package
+  - The tick loop continues running in mini player mode so playback state (play/pause, time position) stays updated live
+---
+
+## 2026-02-10 - US-083
+- Added early key filter in `tea.KeyMsg` handler: when `m.width > 0 && m.width < minTerminalWidth`, only playback-related keys pass through
+- Allowed keys: space (play/pause), h/H/left (seek back), l/L/right (seek fwd), comma/< (step-), period/> (step+), m/M (mute), ctrl+h (frame back), ctrl+l (frame fwd), ctrl+c (quit), ? (help)
+- All other keys (t, n, e, x, j, k, enter, colon, s, o, etc.) suppressed in mini player mode
+- Filter placed after help overlay handler (so help can still be dismissed) but before stats/form/command mode handlers
+- State preserved automatically: WindowSizeMsg only updates width/height, tick loop runs unconditionally
+- Files changed: tui/tui.go
+- **Learnings for future iterations:**
+  - Go switch with empty case body (`case ...: // fall through`) is the idiomatic way to whitelist specific values and suppress the rest via `default`
+  - The key filter must come after the help overlay handler so pressing any key while help is shown still dismisses it
+  - No state reset needed for mini/full transitions — the Model persists all state, only the View changes
 ---
 
