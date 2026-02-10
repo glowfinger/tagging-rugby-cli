@@ -377,6 +377,88 @@ func SelectNoteHighlightsByNote(database *sql.DB, noteID int64) ([]NoteHighlight
 	return highlights, rows.Err()
 }
 
+// EditTackleData holds all the data needed to populate an edit tackle form.
+type EditTackleData struct {
+	Player     string
+	Attempt    int
+	Outcome    string
+	Followed   string
+	Notes      string
+	Zone       string
+	Star       bool
+	Timestamp  float64
+	EndSeconds float64
+}
+
+// LoadNoteForEdit loads all tackle-related data for a note to populate an edit form.
+// Returns the tackle fields, timing (as timestamp + endSeconds), details, zone, and star highlight.
+func LoadNoteForEdit(database *sql.DB, noteID int64) (*EditTackleData, error) {
+	data := &EditTackleData{}
+
+	// Load tackle data
+	tackles, err := SelectNoteTacklesByNote(database, noteID)
+	if err != nil {
+		return nil, fmt.Errorf("load tackles: %w", err)
+	}
+	if len(tackles) > 0 {
+		data.Player = tackles[0].Player
+		data.Attempt = tackles[0].Attempt
+		data.Outcome = tackles[0].Outcome
+	}
+
+	// Load timing data
+	timings, err := SelectNoteTimingByNote(database, noteID)
+	if err != nil {
+		return nil, fmt.Errorf("load timing: %w", err)
+	}
+	if len(timings) > 0 {
+		data.Timestamp = timings[0].Start
+		endSecs := timings[0].End - timings[0].Start
+		if endSecs <= 0 {
+			endSecs = 2.0
+		}
+		data.EndSeconds = endSecs
+	} else {
+		data.EndSeconds = 2.0
+	}
+
+	// Load details (followed, notes)
+	details, err := SelectNoteDetailsByNote(database, noteID)
+	if err != nil {
+		return nil, fmt.Errorf("load details: %w", err)
+	}
+	for _, d := range details {
+		switch d.Type {
+		case "followed":
+			data.Followed = d.Note
+		case "notes":
+			data.Notes = d.Note
+		}
+	}
+
+	// Load zone
+	zones, err := SelectNoteZonesByNote(database, noteID)
+	if err != nil {
+		return nil, fmt.Errorf("load zones: %w", err)
+	}
+	if len(zones) > 0 {
+		data.Zone = zones[0].Horizontal
+	}
+
+	// Load highlights (star)
+	highlights, err := SelectNoteHighlightsByNote(database, noteID)
+	if err != nil {
+		return nil, fmt.Errorf("load highlights: %w", err)
+	}
+	for _, h := range highlights {
+		if h.Type == "star" {
+			data.Star = true
+		}
+	}
+
+	return data, nil
+}
+
 // DeleteNote deletes a note by ID. Cascade handles child records.
 func DeleteNote(database *sql.DB, id int64) error {
 	result, err := database.Exec(DeleteNoteSQL, id)

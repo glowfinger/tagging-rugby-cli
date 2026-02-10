@@ -33,6 +33,8 @@
 - Shared time formatting lives in `pkg/timeutil/timeutil.go` — use `timeutil.FormatTime(seconds)` everywhere instead of inline formatting
 - Shared time parsing lives in `pkg/timeutil/timeutil.go` — use `timeutil.ParseTimeToSeconds(str)` for HH:MM:SS, MM:SS, or raw seconds
 - Bordered control boxes: use `components.RenderControlBox(group, width)` — renders tab header + box-drawing border + horizontal dividers between sub-groups
+- db package cannot import tui/forms (circular dependency) — use db-package structs for return types, let TUI caller map to form result types
+- Edit tackle form: `forms.NewEditTackleForm(timestamp, endSeconds, result)` with `EditTackleFormResult` struct; load data with `db.LoadNoteForEdit(db, noteID)` returning `db.EditTackleData`
 
 ---
 
@@ -136,5 +138,34 @@
   - The RenderControlBox() function from US-076 made this change very simple — just iterate groups and call it
   - The old renderColumn1() had ~30 lines of manual control rendering that collapsed to ~6 lines
   - No import changes needed since all the removed local styles (subHeaderStyle, shortcutStyle, nameStyle) were local variables, and their underlying packages (lipgloss, styles) were still used elsewhere in the function
+---
+
+## 2026-02-10 - US-079
+- Added `x` / `X` keybinding in normal mode to delete the selected item from the notes list
+- New `deleteSelectedItem()` method calls `db.DeleteNote()` (cascade handles all child tables)
+- After deletion: reloads notes list via `loadNotesAndTackles()`, refreshes stats via `loadTackleStatsForPanel()`
+- Shows confirmation message in command bar (e.g. "Deleted tackle 42")
+- Graceful index reset: if list becomes empty sets index to 0, if index exceeds items length adjusts to last item
+- Help overlay updated with `X - Delete selected item` in Navigation group
+- Files changed: tui/tui.go, tui/components/help.go
+- **Learnings for future iterations:**
+  - `db.DeleteNote()` already exists with cascade delete — no new SQL needed for deletion
+  - `loadNotesAndTackles()` resets SelectedIndex to 0, so the manual adjustment handles cases where the last item was deleted
+  - The help overlay is in `tui/components/help.go` with inline struct definitions for groups and bindings
+---
+
+## 2026-02-10 - US-080
+- Added `EditTackleFormResult` struct extending `TackleFormResult` with `Timestamp` and `EndSeconds` string fields
+- Added `NewEditTackleForm(timestamp, endSeconds, result)` to `tui/forms/tackleform.go` — creates a pre-filled form with "Edit Tackle @ H:MM:SS" header, editable timestamp/end seconds fields, and all existing tackle fields
+- Timestamp field validates via `timeutil.ParseTimeToSeconds()`, end seconds validates as positive float
+- Added `EditTackleData` struct and `LoadNoteForEdit(db, noteID)` to `db/functions.go` — queries note_tackles, note_timing, note_details, note_zones, note_highlights and returns all data needed for the edit form
+- End seconds calculated as `timing.End - timing.Start`, falls back to 2.0 if difference is <= 0
+- Used `db.EditTackleData` instead of `forms.TackleFormResult` as return type to avoid circular dependency (db -> tui/forms)
+- Files changed: tui/forms/tackleform.go, db/functions.go
+- **Learnings for future iterations:**
+  - Cannot return `forms.TackleFormResult` from `db/functions.go` — that would create a circular dependency (db imports tui/forms which imports db). Use a db-package struct and let the caller map it
+  - `EditTackleFormResult` embeds `TackleFormResult` — the TUI caller will need to pre-fill the embedded fields from `EditTackleData` before passing to `NewEditTackleForm()`
+  - The form stores Timestamp and EndSeconds as strings (for huh input binding) — caller must convert float64 <-> string
+  - `%g` format for float64->string avoids trailing zeros (e.g. "2" instead of "2.000000")
 ---
 
