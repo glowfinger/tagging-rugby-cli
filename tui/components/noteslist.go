@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/user/tagging-rugby-cli/pkg/timeutil"
 	"github.com/user/tagging-rugby-cli/tui/styles"
 )
 
@@ -177,7 +178,7 @@ func renderTableRow(item ListItem, selected bool, idWidth, timeWidth, catWidth, 
 	}
 
 	// Format timestamp
-	timeStr := formatTime(item.TimestampSeconds)
+	timeStr := timeutil.FormatTime(item.TimestampSeconds)
 
 	// Get category (or type badge for tackles)
 	catStr := item.Category

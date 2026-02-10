@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/user/tagging-rugby-cli/pkg/timeutil"
 	"github.com/user/tagging-rugby-cli/tui/styles"
 )
 
@@ -37,8 +38,8 @@ func StatusBar(state StatusBarState, width int) string {
 	}
 
 	// Format timestamps as H:MM:SS
-	timeStr := formatTime(state.TimePos)
-	durationStr := formatTime(state.Duration)
+	timeStr := timeutil.FormatTime(state.TimePos)
+	durationStr := timeutil.FormatTime(state.Duration)
 
 	// Step size display
 	stepStr := formatStepSize(state.StepSize)
@@ -84,18 +85,6 @@ func StatusBar(state StatusBarState, width int) string {
 		Width(width)
 
 	return statusBarStyle.Render(content)
-}
-
-// formatTime formats seconds as H:MM:SS.
-func formatTime(seconds float64) string {
-	if seconds < 0 {
-		seconds = 0
-	}
-	totalSeconds := int(seconds)
-	hours := totalSeconds / 3600
-	mins := (totalSeconds % 3600) / 60
-	secs := totalSeconds % 60
-	return fmt.Sprintf("%d:%02d:%02d", hours, mins, secs)
 }
 
 // formatStepSize formats the step size for display.

@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/mpv"
+	"github.com/user/tagging-rugby-cli/pkg/timeutil"
 	"github.com/user/tagging-rugby-cli/tui/components"
 	"github.com/user/tagging-rugby-cli/tui/forms"
 	"github.com/user/tagging-rugby-cli/tui/styles"
@@ -446,7 +447,7 @@ func (m *Model) saveNoteFromForm() (tea.Model, tea.Cmd) {
 
 	// Reload list and show confirmation
 	m.loadNotesAndTackles()
-	m.commandInput.SetResult(fmt.Sprintf("Note %d added at %s", noteID, formatTimeString(timestamp)), false)
+	m.commandInput.SetResult(fmt.Sprintf("Note %d added at %s", noteID, timeutil.FormatTime(timestamp)), false)
 	return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
 		return clearResultMsg{}
 	})
@@ -689,7 +690,7 @@ func (m *Model) executeCommand(cmdStr string) (string, error) {
 		if err := m.client.Seek(seconds); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("Seeked to %s", formatTimeString(seconds)), nil
+		return fmt.Sprintf("Seeked to %s", timeutil.FormatTime(seconds)), nil
 	case "speed":
 		if len(args) < 1 {
 			speed, err := m.client.GetSpeed()
@@ -774,7 +775,7 @@ func (m *Model) executeClipCommand(args []string) (string, error) {
 		}
 		m.clipStartTimestamp = timestamp
 		m.clipStartSet = true
-		return fmt.Sprintf("Clip start marked at %s", formatTimeString(timestamp)), nil
+		return fmt.Sprintf("Clip start marked at %s", timeutil.FormatTime(timestamp)), nil
 
 	case "end":
 		if !m.clipStartSet {
@@ -968,7 +969,7 @@ func (m *Model) addNote(text, category, _, _ string) (string, error) {
 	// Reload notes list
 	m.loadNotesAndTackles()
 
-	return fmt.Sprintf("Note %d added at %s", noteID, formatTimeString(timestamp)), nil
+	return fmt.Sprintf("Note %d added at %s", noteID, timeutil.FormatTime(timestamp)), nil
 }
 
 // countNotes counts notes for the current video.
@@ -1261,18 +1262,6 @@ func parseTimeToSeconds(timeStr string) (float64, error) {
 	}
 
 	return 0, fmt.Errorf("expected MM:SS or seconds, got '%s'", timeStr)
-}
-
-// formatTimeString formats seconds as MM:SS.
-func formatTimeString(seconds float64) string {
-	if seconds < 0 {
-		seconds = 0
-	}
-	totalSeconds := int(seconds)
-	hours := totalSeconds / 3600
-	mins := (totalSeconds % 3600) / 60
-	secs := totalSeconds % 60
-	return fmt.Sprintf("%d:%02d:%02d", hours, mins, secs)
 }
 
 // overlayProximitySeconds is how close (in seconds) a note must be to current timestamp to display.
@@ -1584,8 +1573,8 @@ func (m *Model) renderColumn1(width, height int) string {
 	}
 	lines = append(lines, infoStyle.Render(" "+playState))
 	lines = append(lines, infoStyle.Render(fmt.Sprintf(" Time: %s / %s",
-		formatTimeString(m.statusBar.TimePos),
-		formatTimeString(m.statusBar.Duration))))
+		timeutil.FormatTime(m.statusBar.TimePos),
+		timeutil.FormatTime(m.statusBar.Duration))))
 	lines = append(lines, infoStyle.Render(fmt.Sprintf(" Step: %s", formatStepSize(m.statusBar.StepSize))))
 
 	if m.statusBar.Muted {
@@ -1616,7 +1605,7 @@ func (m *Model) renderColumn1(width, height int) string {
 			starStr = " ★"
 		}
 		lines = append(lines, detailStyle.Render(fmt.Sprintf(" #%d %s%s", item.ID, typeStr, starStr)))
-		lines = append(lines, dimStyle.Render(fmt.Sprintf(" @ %s", formatTimeString(item.TimestampSeconds))))
+		lines = append(lines, dimStyle.Render(fmt.Sprintf(" @ %s", timeutil.FormatTime(item.TimestampSeconds))))
 		if item.Category != "" {
 			lines = append(lines, dimStyle.Render(fmt.Sprintf(" [%s]", item.Category)))
 		}

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/user/tagging-rugby-cli/pkg/timeutil"
 	"github.com/user/tagging-rugby-cli/tui/styles"
 )
 
@@ -24,8 +25,8 @@ func Timeline(timePos, duration float64, items []ListItem, width int) string {
 	posStyle := lipgloss.NewStyle().Foreground(styles.Pink).Bold(true)
 
 	// Format timestamps
-	currentStr := formatTime(timePos)
-	totalStr := formatTime(duration)
+	currentStr := timeutil.FormatTime(timePos)
+	totalStr := timeutil.FormatTime(duration)
 	timeDisplay := fmt.Sprintf(" %s / %s", currentStr, totalStr)
 	timeDisplayWidth := lipgloss.Width(timeDisplay)
 

@@ -10,6 +10,7 @@ import (
 	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/deps"
 	"github.com/user/tagging-rugby-cli/mpv"
+	"github.com/user/tagging-rugby-cli/pkg/timeutil"
 	"github.com/user/tagging-rugby-cli/tui"
 )
 
@@ -111,9 +112,7 @@ var openCmd = &cobra.Command{
 		duration, err := client.GetDuration()
 		durationStr := ""
 		if err == nil {
-			minutes := int(duration) / 60
-			seconds := int(duration) % 60
-			durationStr = fmt.Sprintf(" (duration: %d:%02d)", minutes, seconds)
+			durationStr = fmt.Sprintf(" (duration: %s)", timeutil.FormatTime(duration))
 		}
 
 		// Print session info
