@@ -29,42 +29,31 @@
 - normalizeLines() ensures column line arrays are exactly the target height
 - Responsive layout: col3HideThreshold=90, col3MinWidth=18; at <90 cols, two-column layout with single border
 - Arrow keys ("left","right","up","down") and punctuation (",",".") added as alternatives in normal-mode switch
+- Use `ansi.Truncate()` from `charmbracelet/x/ansi` for ANSI+grapheme-aware truncation (handles emoji/wide chars)
+- Shared time formatting lives in `pkg/timeutil/timeutil.go` — use `timeutil.FormatTime(seconds)` everywhere instead of inline formatting
 
 ---
 
-## 2026-02-09 - US-065
-- Added "left"/"right" cases alongside "h"/"l" for seek backward/forward
-- Added "up"/"down" cases alongside "j"/"k" for notes list navigation
-- Files changed: tui/tui.go
-- **Learnings:** msg.String() returns "left", "right", "up", "down" for arrow keys in Bubble Tea
+## 2026-02-10 - US-071
+- Updated `formatTimeString()` in tui/tui.go from `%d:%02d` (M:SS) to `%d:%02d:%02d` (H:MM:SS)
+- Updated `formatTime()` in tui/components/statusbar.go from `%02d:%02d` (MM:SS) to `%d:%02d:%02d` (H:MM:SS)
+- Both functions now produce identical output for the same input
+- Files changed: tui/tui.go, tui/components/statusbar.go
+- **Learnings for future iterations:**
+  - Both formatTimeString (tui.go) and formatTime (statusbar.go) had slightly different format strings (%d vs %02d for minutes) — now unified to `%d:%02d:%02d`
+  - The hour component uses `totalSeconds / 3600`, minutes use `(totalSeconds % 3600) / 60`
 ---
 
-## 2026-02-09 - US-066
-- Added ","/"." cases alongside "<"/">" for step size decrease/increase
-- Files changed: tui/tui.go
-- **Learnings:** Comma and period don't conflict with command mode since command mode check happens first
+## 2026-02-10 - US-072
+- Created `pkg/timeutil/timeutil.go` with shared `FormatTime(seconds float64) string` function
+- Replaced all inline `int(x)/60`, `int(x)%60`, `%d:%02d` patterns in CLI commands with `timeutil.FormatTime()`
+- Updated `cmd/note.go` (noteAddCmd, noteListCmd, noteGotoCmd), `cmd/clip.go` (clipStartCmd, clipEndCmd, clipListCmd, clipPlayCmd), `cmd/tackle.go` (tackleAddCmd, tackleListCmd), `cmd/root.go` (openCmd duration display)
+- Replaced `formatTimeString()` in tui/tui.go and `formatTime()` in tui/components/statusbar.go with `timeutil.FormatTime()`
+- Also updated tui/components/timeline.go and tui/components/noteslist.go to use the shared function
+- Files changed: pkg/timeutil/timeutil.go (new), cmd/note.go, cmd/clip.go, cmd/root.go, cmd/tackle.go, tui/tui.go, tui/components/statusbar.go, tui/components/timeline.go, tui/components/noteslist.go
+- **Learnings for future iterations:**
+  - The `formatTime` function was also used in timeline.go and noteslist.go (same components package) — check all usages within a package before removing a function
+  - Using `replace_all` in Edit tool also replaces function definitions, not just calls — be careful with broad replacements
+  - cmd/root.go also had inline time formatting (duration display in open command) — search broadly for patterns like `int(x)/60`
 ---
 
-## 2026-02-09 - US-067
-- Updated GetControlGroups() shortcuts to show alternatives: "H/←", "L/→", "J/↑", "K/↓", ",/<", "./>"
-- Updated help overlay with "H / Left", "L / Right", "J / Up", "K / Down", ", / <", ". / >" bindings
-- Refactored renderColumn1() to use GetControlGroups() — removed duplicate hardcoded controls list
-- Files changed: tui/components/controls.go, tui/components/help.go, tui/tui.go
-- **Learnings:** Unicode arrows (←→↑↓) render well in terminal for compact shortcut display
----
-
-## 2026-02-09 - US-069
-- padToWidth() now truncates overflowing lines (not just pads short ones)
-- Added truncateToWidth() that preserves ANSI escape sequences while trimming visible chars
-- Added normalizeLines() to ensure column line arrays match target height exactly
-- Files changed: tui/tui.go
-- **Learnings:** ANSI escape sequences start with \x1b and end with a letter — must skip them during width measurement
----
-
-## 2026-02-09 - US-070
-- Replaced equal-thirds column calculation with responsive algorithm
-- Wide (120+): equal thirds; Medium (90-119): col3 shrinks to 18 chars; Narrow (<90): col3 hidden
-- Two-column fallback uses single border character, columns 1+2 split evenly
-- Files changed: tui/tui.go
-- **Learnings:** Keep layout constants as named consts (col3HideThreshold, col3MinWidth) for easy tuning
----

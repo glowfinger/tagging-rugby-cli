@@ -1,19 +1,19 @@
 {
   "project": "tagging-rugby-cli",
-  "branchName": "ralph/video-controls-ui-cleanup",
-  "description": "Add arrow key and punctuation key alternatives for video controls, and fix three-column layout alignment with responsive column sizing",
+  "branchName": "ralph/tidy-up-ui-2",
+  "description": "HH:MM:SS time format, bordered control containers, edit/delete tackles, and mini player for small terminals",
   "userStories": [
     {
-      "id": "US-065",
-      "title": "Add arrow key alternatives for seek and navigation",
-      "description": "As a user, I want to use Left/Right arrow keys to seek backward/forward and Up/Down arrow keys to navigate the notes list, so that I have intuitive controls alongside the vim-style H/J/K/L keys.",
+      "id": "US-071",
+      "title": "Update display format functions to H:MM:SS",
+      "description": "As a user, I want all timestamps displayed as H:MM:SS so I can quickly read times for long videos.",
       "acceptanceCriteria": [
-        "Left arrow key seeks backward by current step size (same as H key)",
-        "Right arrow key seeks forward by current step size (same as L key)",
-        "Up arrow key selects previous item in list (same as J key)",
-        "Down arrow key selects next item in list (same as K key)",
-        "Existing H/L/J/K bindings continue to work unchanged",
-        "Arrow keys do NOT trigger in command mode — left/right are already handled in handleCommandInput() for cursor movement, and up/down should be no-ops in command mode",
+        "formatTimeString() in tui/tui.go outputs H:MM:SS (e.g. 0:01:22, 1:11:22)",
+        "formatTime() in tui/components/statusbar.go outputs H:MM:SS",
+        "Both functions produce identical output for the same input",
+        "Zero seconds displays as 0:00:00",
+        "90 seconds displays as 0:01:30",
+        "4282 seconds displays as 1:11:22",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 1,
@@ -21,14 +21,14 @@
       "notes": ""
     },
     {
-      "id": "US-066",
-      "title": "Add comma/period alternatives for step size control",
-      "description": "As a user, I want to use comma and period keys (in addition to < and >) to decrease/increase step size, so I don't need to hold Shift.",
+      "id": "US-072",
+      "title": "Update inline time formatting in CLI commands",
+      "description": "As a developer, I need to replace all inline MM:SS formatting in CLI commands with H:MM:SS format.",
       "acceptanceCriteria": [
-        "Comma key (,) decreases step size by calling decreaseStepSize() — same as < key",
-        "Period key (.) increases step size by calling increaseStepSize() — same as > key",
-        "Existing < and > bindings continue to work unchanged",
-        "Comma and period do NOT trigger in command mode (only in normal mode)",
+        "cmd/note.go: fmt.Sprintf with minutes/seconds replaced with H:MM:SS format (note add output and note list display)",
+        "cmd/clip.go: clip timestamp display uses H:MM:SS",
+        "cmd/tackle.go: tackle add output and tackle list display use H:MM:SS",
+        "Extract a shared FormatTime() function in a common package (e.g. pkg/timeutil/ or similar) to avoid duplication between CLI and TUI — both tui/tui.go:formatTimeString() and tui/components/statusbar.go:formatTime() and cmd inline formatting should all call this one function",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 2,
@@ -36,49 +36,194 @@
       "notes": ""
     },
     {
-      "id": "US-067",
-      "title": "Update controls display and help overlay with new keybindings",
-      "description": "As a user, I want the controls panel and help overlay to show all available key alternatives so I can discover them.",
+      "id": "US-073",
+      "title": "Update form headers and notes list to H:MM:SS",
+      "description": "As a user, I want the tackle/note form headers and notes list time column to show H:MM:SS.",
       "acceptanceCriteria": [
-        "GetControlGroups() in tui/components/controls.go updated with combined shortcut text showing alternatives (e.g. Shortcut field becomes \"H/Left\" instead of just \"H\")",
-        "Help overlay in tui/components/help.go updated: Playback section shows H/Left and L/Right for seeking, ,/< and ./> for step size",
-        "Help overlay Navigation section shows J/Up for previous item and K/Down for next item",
-        "renderColumn1() in tui/tui.go refactored to use GetControlGroups() instead of its own hardcoded controls slice — remove the duplicate controls list around line 1528",
+        "tui/forms/tackleform.go NewTackleForm(): header shows Add Tackle @ H:MM:SS (e.g. Add Tackle @ 0:05:30)",
+        "tui/forms/noteform.go NewNoteForm(): header shows Add Note @ H:MM:SS (e.g. Add Note @ 0:05:30)",
+        "tui/components/noteslist.go: formatTime() call in time column produces H:MM:SS",
+        "Notes list time column width adjusted from 8 to 9 chars if needed to fit longer format",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
-      "id": "US-069",
-      "title": "Fix three-column layout alignment",
-      "description": "As a user, I want the three columns to always render inline at the same height so the layout doesn't break or misalign.",
+      "id": "US-074",
+      "title": "Update input parsers to accept HH:MM:SS",
+      "description": "As a user, I want to type times as HH:MM:SS, MM:SS, or raw seconds in seek commands and filter flags.",
       "acceptanceCriteria": [
-        "All three columns render at the same height regardless of content length — pad all column line arrays to colHeight before joining",
-        "Vertical border characters (│) align correctly on every row with no gaps or overflow",
-        "Each line in the row-by-row assembly is exactly the expected total width (col1 + border + col2 + border + col3)",
-        "Truncate column lines that exceed colWidth using lipgloss.Width() to measure ANSI-aware width, then trim excess",
+        "parseTimeToSeconds() in tui/tui.go accepts HH:MM:SS (e.g. 1:11:22 parses to 4282.0)",
+        "parseTimeToSeconds() in cmd/note.go accepts HH:MM:SS",
+        "Consider consolidating both parseTimeToSeconds into the shared time utility package",
+        "Parsing uses colon count: 2 colons = H:M:S, 1 colon = M:S, 0 colons = raw seconds",
+        "5:30 still parses as 330.0 (backward compatible)",
+        "90 still parses as 90.0 (backward compatible)",
+        "Error messages updated to mention HH:MM:SS as accepted format",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
-      "id": "US-070",
-      "title": "Responsive column widths — column 3 shrinks first",
-      "description": "As a user, I want the live stats panel (column 3) to shrink before columns 1 and 2 when the terminal is narrow, so that controls and notes list stay usable.",
+      "id": "US-075",
+      "title": "Reorganize control groups with sub-group support",
+      "description": "As a developer, I need to restructure GetControlGroups() data into three groups with sub-group support for horizontal dividers.",
       "acceptanceCriteria": [
-        "At wide terminals (120+ cols): columns split roughly equal thirds as they do today",
-        "At medium terminals (90-119 cols): column 3 gets a smaller share (minimum ~18 chars) while columns 1 and 2 share the remaining space equally",
-        "At narrow terminals (below 90 cols): column 3 is hidden entirely, only one border character is used, and columns 1 and 2 share the full width",
-        "Column width calculation happens in the View() method around the existing usableWidth/colWidth logic — replace the equal-thirds math with the responsive algorithm",
-        "Layout recalculates correctly when terminal is resized (WindowSizeMsg already updates m.width)",
+        "ControlGroup struct supports sub-groups (e.g. SubGroups [][]Control field) so renderer knows where to place horizontal dividers",
+        "Playback group has three sub-groups: Play/Back/Fwd, Step-/Step+, Frame-/Frame+",
+        "Navigation group contains: Prev, Next, Mute, Overlay (single sub-group, no dividers)",
+        "Views group contains: Stats, Help, Quit (single sub-group, no dividers)",
+        "Emoji field removed from Control struct or left unused",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-076",
+      "title": "Render bordered control container component",
+      "description": "As a developer, I need a reusable function that renders controls inside a bordered box with tab header and horizontal dividers.",
+      "acceptanceCriteria": [
+        "New RenderControlBox(group, width) function in tui/components/controls.go",
+        "Box uses box-drawing characters for outer border: top-left corner, top-right, bottom-left, bottom-right, vertical bar, horizontal bar",
+        "Tab-style header on top border (group name as tab extending from top-left corner)",
+        "Horizontal dividers separate sub-groups within the box",
+        "Each control renders as single line: Name left-aligned, [ Shortcut ] right-aligned",
+        "No emojis in output",
+        "Border color uses styles.Purple, header text uses styles.Pink or styles.Amber, control name uses styles.LightLavender, shortcut uses styles.Cyan",
+        "Box width adapts to available column width parameter",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-077",
+      "title": "Update column 1 and controls display bar to use bordered containers",
+      "description": "As a user, I want to see controls in bordered boxes in column 1 and updated horizontal bar during forms.",
+      "acceptanceCriteria": [
+        "renderColumn1() in tui/tui.go renders each control group as a bordered container using RenderControlBox()",
+        "Playback box shows three sub-groups separated by horizontal dividers matching wireframe/playback.txt",
+        "Navigation and Views boxes show items without internal dividers",
+        "1 blank line gap separates each bordered container",
+        "Existing Playback status card and Selected Tag detail card above controls remain unchanged",
+        "ControlsDisplay() horizontal bar (shown during forms) uses updated group data, no emojis, Name [Shortcut] format",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-078",
+      "title": "Add update DB functions for note children",
+      "description": "As a developer, I need database functions to update existing tackle records and child tables for the edit feature.",
+      "acceptanceCriteria": [
+        "Add UpdateNoteWithChildren(db, noteID, children) function that updates all child tables in a transaction",
+        "The function deletes existing child rows (details, zones, highlights, tackles) for the noteID and re-inserts from the provided NoteChildren struct",
+        "Add UpdateNoteTiming(db, noteID, start, end) function to update the timing record",
+        "Add corresponding SQL files in db/sql/ (e.g. update_note_timing.sql, delete_note_children.sql or inline)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-079",
+      "title": "Delete tackle from TUI notes list",
+      "description": "As a user, I want to press x on a selected item in the notes list to immediately delete it.",
+      "acceptanceCriteria": [
+        "Pressing x when an item is selected in the notes list deletes it immediately with no confirmation dialog",
+        "Deletion calls existing db.DeleteNote() which cascades to all child tables",
+        "After deletion the notes list reloads and stats panel refreshes via loadNotesAndTackles() and loadTackleStatsForPanel()",
+        "Confirmation message appears in command bar (e.g. Deleted tackle 42)",
+        "If list is empty after deletion selection resets gracefully with no index out of bounds",
+        "Help overlay updated to show x - Delete selected item",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-080",
+      "title": "Add edit tackle form variant and data loader",
+      "description": "As a developer, I need a pre-populated tackle form for editing and a function to load existing data.",
+      "acceptanceCriteria": [
+        "Add NewEditTackleForm(timestamp, endSeconds, result) to tui/forms/tackleform.go that creates a form pre-filled from TackleFormResult",
+        "Form header shows Edit Tackle @ H:MM:SS instead of Add Tackle",
+        "Add editable Timestamp field (displayed as H:MM:SS, stored as float64 string) to step 1",
+        "Add End (seconds) field to step 1 with default value 2 — sets how many seconds after start the end should be",
+        "Validation: end seconds must be a positive number",
+        "Add LoadNoteForEdit(db, noteID) function in db/functions.go that returns TackleFormResult + timestamp + endSeconds by querying note_tackles, note_timing, note_details, note_zones, note_highlights",
+        "End seconds calculated as timing.End - timing.Start (falls back to 2.0 if start == end)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-081",
+      "title": "Wire up edit tackle flow in TUI",
+      "description": "As a user, I want to press e on a selected tackle to open an edit form pre-filled with existing data.",
+      "acceptanceCriteria": [
+        "Pressing e when a tackle (ItemTypeTackle) is selected opens the edit tackle form",
+        "Form is pre-populated with all existing data: player, attempt, outcome, followed, notes, zone, star, timestamp, end seconds",
+        "On submit the note's child records are updated via UpdateNoteWithChildren and timing via UpdateNoteTiming with end = start + endSeconds",
+        "After save the notes list reloads and stats panel refreshes",
+        "Confirmation message appears (e.g. Updated tackle 42)",
+        "Esc on edit form with changes triggers existing confirm-discard dialog; without changes closes immediately",
+        "Pressing e on a note (non-tackle) item shows Edit not supported for notes message",
+        "Help overlay updated to show e - Edit selected tackle",
+        "Add editingNoteID field to Model (0 = create mode, >0 = edit mode) to distinguish create vs edit in save handler",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-082",
+      "title": "Render mini player view with warning",
+      "description": "As a user, I want a compact playback card when my terminal is too narrow so I can still monitor and control video playback.",
+      "acceptanceCriteria": [
+        "When terminal width is below minTerminalWidth (80 cols) the mini player renders instead of the Terminal too narrow warning",
+        "Mini player displays a bordered card matching wireframe/mini-player.txt: tab header Playback, play/pause state with step size, horizontal divider, time position / duration",
+        "Card uses the same RenderControlBox-style bordered rendering with box-drawing characters and tab header from US-076",
+        "Play/pause icon updates live",
+        "Step size displays current value (e.g. Step: 30s)",
+        "Time displays as H:MM:SS / H:MM:SS",
+        "Mute icon shown on status line when muted",
+        "Warning line below card: Mini player mode - resize for full view (styles.Lavender italic)",
+        "Card is horizontally centered if terminal width exceeds card width",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-083",
+      "title": "Enable playback keybindings in mini player mode",
+      "description": "As a user, I want basic playback controls to work in mini player mode so I can control the video without resizing.",
+      "acceptanceCriteria": [
+        "When m.width < minTerminalWidth, add early check in tea.KeyMsg handler that only allows playback keys through",
+        "Allowed keys: space (play/pause), h/left (seek back), l/right (seek fwd), comma/< (step-), period/> (step+), m (mute), ctrl+h (frame back), ctrl+l (frame fwd), ctrl+c (quit), ? (help)",
+        "All other keys (t, n, e, x, j, k, enter, colon, s, o) are suppressed in mini player mode",
+        "State is preserved across transitions between mini and full layout when resizing",
+        "Tick loop continues running so playback state stays up to date",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 13,
+      "passes": false,
       "notes": ""
     }
   ]

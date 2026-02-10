@@ -66,9 +66,9 @@ func NotesList(state NotesListState, width, height int, currentTimePos float64) 
 		Bold(true).
 		Underline(true)
 
-	// Column widths (ID: 6, Timestamp: 8, Category: 12, Text: rest)
+	// Column widths (ID: 6, Timestamp: 9 for H:MM:SS, Category: 12, Text: rest)
 	idWidth := 6
-	timeWidth := 8
+	timeWidth := 9
 	catWidth := 12
 	textWidth := width - idWidth - timeWidth - catWidth - 8 // 8 for spacing/borders
 	if textWidth < 10 {

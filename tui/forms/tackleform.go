@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/charmbracelet/huh"
+	"github.com/user/tagging-rugby-cli/pkg/timeutil"
 )
 
 // TackleFormResult holds the data returned by a completed tackle wizard.
@@ -29,13 +30,10 @@ func (r *TackleFormResult) HasData() bool {
 }
 
 // NewTackleForm creates a multi-step huh wizard form for tackle input.
-// The timestamp is displayed as a header in MM:SS format.
+// The timestamp is displayed as a header in H:MM:SS format.
 // The result pointer is bound to the form fields and will be populated on submit.
 func NewTackleForm(timestamp float64, result *TackleFormResult) *huh.Form {
-	totalSeconds := int(timestamp)
-	mins := totalSeconds / 60
-	secs := totalSeconds % 60
-	header := fmt.Sprintf("Add Tackle @ %d:%02d", mins, secs)
+	header := fmt.Sprintf("Add Tackle @ %s", timeutil.FormatTime(timestamp))
 
 	form := huh.NewForm(
 		// Step 1: Tackle fields (maps to note_tackles)
