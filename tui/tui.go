@@ -97,6 +97,7 @@ func NewModel(client *mpv.Client, db *sql.DB, videoPath string) *Model {
 		videoPath: videoPath,
 		statusBar: components.StatusBarState{
 			StepSize: defaultStepSize,
+			Speed:    1.0,
 		},
 	}
 }
@@ -1384,6 +1385,12 @@ func (m *Model) updateStatusFromMpv() {
 	duration, err := m.client.GetDuration()
 	if err == nil {
 		m.statusBar.Duration = duration
+	}
+
+	// Get playback speed
+	speed, err := m.client.GetSpeed()
+	if err == nil {
+		m.statusBar.Speed = speed
 	}
 }
 

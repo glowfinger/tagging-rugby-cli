@@ -20,6 +20,8 @@ type StatusBarState struct {
 	Duration float64
 	// StepSize is the current seek step size in seconds
 	StepSize float64
+	// Speed is the current playback speed multiplier
+	Speed float64
 	// OverlayEnabled indicates if the mpv overlay is enabled
 	OverlayEnabled bool
 }
@@ -43,6 +45,13 @@ func StatusBar(state StatusBarState, width int) string {
 	// Step size display
 	stepStr := formatStepSize(state.StepSize)
 
+	// Speed display
+	speed := state.Speed
+	if speed == 0 {
+		speed = 1.0
+	}
+	speedStr := fmt.Sprintf("%gx", speed)
+
 	// Mute icon (only shown when muted)
 	var muteIcon string
 	if state.Muted {
@@ -57,7 +66,7 @@ func StatusBar(state StatusBarState, width int) string {
 
 	// Build the status bar content
 	leftContent := fmt.Sprintf(" %s %s / %s", playIcon, timeStr, durationStr)
-	rightContent := fmt.Sprintf("Step: %s%s%s ", stepStr, muteIcon, overlayIcon)
+	rightContent := fmt.Sprintf("Step: %s  Speed: %s%s%s ", stepStr, speedStr, muteIcon, overlayIcon)
 
 	// Calculate padding between left and right content
 	leftWidth := lipgloss.Width(leftContent)

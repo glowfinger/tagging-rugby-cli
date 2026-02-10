@@ -89,3 +89,16 @@
   - col1Width is now a const in the View() function's layout section — all column width calcs reference it
   - Column 1 at 30 chars is compact but fits bordered control boxes well
 ---
+
+## 2026-02-10 - US-086
+- Added Speed float64 field to StatusBarState struct in tui/components/statusbar.go
+- Status bar right side now displays "Speed: 1x", "Speed: 1.5x", "Speed: 0.75x" etc. alongside step size
+- Uses %g format to avoid trailing zeros (1 not 1.0, 1.5 not 1.50, 0.75 stays 0.75)
+- updateStatusFromMpv() in tui/tui.go now polls client.GetSpeed() and updates statusBar.Speed
+- Default speed value set to 1.0 in NewModel() and guarded in StatusBar() render (0 → 1.0)
+- Files changed: tui/components/statusbar.go, tui/tui.go
+- **Learnings for future iterations:**
+  - StatusBarState.Speed defaults to 0 (Go zero value) so the render function guards with `if speed == 0 { speed = 1.0 }`
+  - GetSpeed()/SetSpeed() already exist in mpv/client.go — no new mpv client methods needed
+  - %g format is ideal for speed display: drops trailing zeros automatically
+---
