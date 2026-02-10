@@ -1526,8 +1526,8 @@ func (m *Model) View() string {
 		col3MinWidth      = 18  // minimum width for column 3 before hiding
 	)
 
-	// Available height for columns (total height minus status bar line, timeline 2 lines, and command input line)
-	colHeight := m.height - 5
+	// Available height for columns (total height minus status bar line, bordered timeline 6 lines, command input line, and newline separators)
+	colHeight := m.height - 9
 	if colHeight < 5 {
 		colHeight = 5
 	}
