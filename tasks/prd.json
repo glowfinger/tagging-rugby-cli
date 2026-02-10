@@ -117,7 +117,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "Final QA story. Check all components reference the shared palette. Grep for any remaining old colour values (#1a1a2e, #16213e, #4a347d, #7b2cbf, #c77dff, #e0aaff, #ff6b9d, #64dfdf)."
     }
   ]

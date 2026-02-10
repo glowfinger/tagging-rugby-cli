@@ -63,3 +63,17 @@
   - `ControlsDisplay()` is independent from the column 1 rendering — changes to one don't affect the other
   - Controls section clips naturally at column bottom since `renderColumn1` output is truncated to height by the column layout code
 ---
+
+## 2026-02-09 - US-007
+- Final QA verification — no code changes required
+- Verified: `CGO_ENABLED=0 go build ./...` passes cleanly
+- Verified: `CGO_ENABLED=0 go vet ./...` passes cleanly with no warnings
+- Verified: No hardcoded hex colour values outside `tui/styles/styles.go` (all 11 colours defined centrally)
+- Verified: No old palette values (#1a1a2e, #16213e, #4a347d, #7b2cbf, #c77dff, #e0aaff, #ff6b9d, #64dfdf) remain anywhere
+- Verified: StatusBar, Timeline, and CommandInput all use `.Width(width)` with full terminal width — no gaps
+- Files changed: tasks/prd.json (mark passes: true), tasks/progress.txt (this entry)
+- **Learnings for future iterations:**
+  - All full-width components (StatusBar, Timeline, CommandInput) use lipgloss `.Width(width)` pattern — maintain this for future components
+  - Colour centralisation via `styles.XXX` constants means a grep for `#[0-9a-fA-F]{6}` in tui/ .go files is a reliable QA check
+  - The column layout properly accounts for border characters (usableWidth = m.width - borderCount) so rows + borders + full-width bars all align
+---
