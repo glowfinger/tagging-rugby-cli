@@ -1,0 +1,85 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/video-controls-ui-cleanup",
+  "description": "Add arrow key and punctuation key alternatives for video controls, and fix three-column layout alignment with responsive column sizing",
+  "userStories": [
+    {
+      "id": "US-065",
+      "title": "Add arrow key alternatives for seek and navigation",
+      "description": "As a user, I want to use Left/Right arrow keys to seek backward/forward and Up/Down arrow keys to navigate the notes list, so that I have intuitive controls alongside the vim-style H/J/K/L keys.",
+      "acceptanceCriteria": [
+        "Left arrow key seeks backward by current step size (same as H key)",
+        "Right arrow key seeks forward by current step size (same as L key)",
+        "Up arrow key selects previous item in list (same as J key)",
+        "Down arrow key selects next item in list (same as K key)",
+        "Existing H/L/J/K bindings continue to work unchanged",
+        "Arrow keys do NOT trigger in command mode — left/right are already handled in handleCommandInput() for cursor movement, and up/down should be no-ops in command mode",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-066",
+      "title": "Add comma/period alternatives for step size control",
+      "description": "As a user, I want to use comma and period keys (in addition to < and >) to decrease/increase step size, so I don't need to hold Shift.",
+      "acceptanceCriteria": [
+        "Comma key (,) decreases step size by calling decreaseStepSize() — same as < key",
+        "Period key (.) increases step size by calling increaseStepSize() — same as > key",
+        "Existing < and > bindings continue to work unchanged",
+        "Comma and period do NOT trigger in command mode (only in normal mode)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-067",
+      "title": "Update controls display and help overlay with new keybindings",
+      "description": "As a user, I want the controls panel and help overlay to show all available key alternatives so I can discover them.",
+      "acceptanceCriteria": [
+        "GetControlGroups() in tui/components/controls.go updated with combined shortcut text showing alternatives (e.g. Shortcut field becomes \"H/Left\" instead of just \"H\")",
+        "Help overlay in tui/components/help.go updated: Playback section shows H/Left and L/Right for seeking, ,/< and ./> for step size",
+        "Help overlay Navigation section shows J/Up for previous item and K/Down for next item",
+        "renderColumn1() in tui/tui.go refactored to use GetControlGroups() instead of its own hardcoded controls slice — remove the duplicate controls list around line 1528",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-069",
+      "title": "Fix three-column layout alignment",
+      "description": "As a user, I want the three columns to always render inline at the same height so the layout doesn't break or misalign.",
+      "acceptanceCriteria": [
+        "All three columns render at the same height regardless of content length — pad all column line arrays to colHeight before joining",
+        "Vertical border characters (│) align correctly on every row with no gaps or overflow",
+        "Each line in the row-by-row assembly is exactly the expected total width (col1 + border + col2 + border + col3)",
+        "Truncate column lines that exceed colWidth using lipgloss.Width() to measure ANSI-aware width, then trim excess",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-070",
+      "title": "Responsive column widths — column 3 shrinks first",
+      "description": "As a user, I want the live stats panel (column 3) to shrink before columns 1 and 2 when the terminal is narrow, so that controls and notes list stay usable.",
+      "acceptanceCriteria": [
+        "At wide terminals (120+ cols): columns split roughly equal thirds as they do today",
+        "At medium terminals (90-119 cols): column 3 gets a smaller share (minimum ~18 chars) while columns 1 and 2 share the remaining space equally",
+        "At narrow terminals (below 90 cols): column 3 is hidden entirely, only one border character is used, and columns 1 and 2 share the full width",
+        "Column width calculation happens in the View() method around the existing usableWidth/colWidth logic — replace the equal-thirds math with the responsive algorithm",
+        "Layout recalculates correctly when terminal is resized (WindowSizeMsg already updates m.width)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}
