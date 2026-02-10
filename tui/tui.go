@@ -1642,16 +1642,17 @@ func (m *Model) renderColumn1(width, height int) string {
 	miniPlayer := components.RenderMiniPlayer(m.statusBar, width, false)
 	lines = append(lines, strings.Split(miniPlayer, "\n")...)
 
-	// Current tag detail card (selected item)
+	// Current tag detail card (selected item) — bordered box
 	item := m.notesList.GetSelectedItem()
 	if item != nil {
-		detailHeader := lipgloss.NewStyle().
-			Foreground(styles.Pink).
-			Bold(true)
-		lines = append(lines, detailHeader.Render(" Selected Tag"))
-
 		detailStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
 		dimStyle := lipgloss.NewStyle().Foreground(styles.Lavender)
+
+		// Inner width = column width - 4 (2 border chars + 2 padding/space)
+		innerW := width - 4
+		if innerW < 10 {
+			innerW = 10
+		}
 
 		typeStr := "Note"
 		if item.Type == components.ItemTypeTackle {
@@ -1661,29 +1662,29 @@ func (m *Model) renderColumn1(width, height int) string {
 		if item.Starred {
 			starStr = " ★"
 		}
-		lines = append(lines, detailStyle.Render(fmt.Sprintf(" #%d %s%s", item.ID, typeStr, starStr)))
-		lines = append(lines, dimStyle.Render(fmt.Sprintf(" @ %s", formatTimeString(item.TimestampSeconds))))
+
+		var contentLines []string
+		contentLines = append(contentLines, detailStyle.Render(fmt.Sprintf(" #%d %s%s", item.ID, typeStr, starStr)))
+		contentLines = append(contentLines, dimStyle.Render(fmt.Sprintf(" @ %s", formatTimeString(item.TimestampSeconds))))
 		if item.Category != "" {
-			lines = append(lines, dimStyle.Render(fmt.Sprintf(" [%s]", item.Category)))
+			contentLines = append(contentLines, dimStyle.Render(fmt.Sprintf(" [%s]", item.Category)))
 		}
 		if item.Player != "" {
-			lines = append(lines, dimStyle.Render(fmt.Sprintf(" Player: %s", item.Player)))
+			contentLines = append(contentLines, dimStyle.Render(fmt.Sprintf(" Player: %s", item.Player)))
 		}
 		if item.Team != "" {
-			lines = append(lines, dimStyle.Render(fmt.Sprintf(" Team: %s", item.Team)))
+			contentLines = append(contentLines, dimStyle.Render(fmt.Sprintf(" Team: %s", item.Team)))
 		}
 		if item.Text != "" {
 			text := item.Text
-			maxTextW := width - 3
-			if maxTextW < 10 {
-				maxTextW = 10
+			if len(text) > innerW {
+				text = text[:innerW-3] + "..."
 			}
-			if len(text) > maxTextW {
-				text = text[:maxTextW-3] + "..."
-			}
-			lines = append(lines, detailStyle.Render(" "+text))
+			contentLines = append(contentLines, detailStyle.Render(" "+text))
 		}
-		lines = append(lines, "")
+
+		infoBox := components.RenderInfoBox("Selected Tag", contentLines, width)
+		lines = append(lines, strings.Split(infoBox, "\n")...)
 	}
 
 	// Controls section
