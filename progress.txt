@@ -170,3 +170,29 @@
   - For full-height bordered containers, build the box in the render function rather than using RenderInfoBox (which is designed for variable-height content)
   - innerWidth for bordered column2 = width - 2 (just the 2 │ border chars, no extra padding needed since table already has internal spacing)
 ---
+
+## 2026-02-10 - US-092
+- Removed borderStr variable (purple vertical bar separator) from View() layout assembly in tui/tui.go
+- Three-column row assembly changed from c1+borderStr+c2+borderStr+c3 to c1+c2+c3
+- Two-column row assembly changed from c1+borderStr+c2 to c1+c2
+- usableWidth calculation updated: was m.width-2 (3-col) / m.width-1 (2-col), now m.width for both
+- Reclaimed 1-2 characters distributed to col2 and col3 widths (they grow slightly)
+- Files changed: tui/tui.go
+- **Learnings for future iterations:**
+  - With bordered containers on all sections, column separators are redundant — borders provide visual separation
+  - Removing separators is a simple subtraction: remove borderStr, stop subtracting border chars from usableWidth
+  - padToWidth + normalizeLines still ensure columns tile exactly to fill full terminal width with no gaps
+---
+
+## 2026-02-10 - US-093
+- Wrapped Timeline() output in bordered box with tab-style "Timeline" header using box-drawing chars (╭╮╰╯│─)
+- Removed DarkPurple background style from bar/indicator lines — bordered box provides framing
+- Bar width now calculates against inner box width (width - 4 for borders + padding) instead of raw width
+- Added padding lines above and below content for 6-line total height: top border + padding + bar + indicator + padding + bottom border
+- Adjusted colHeight in View() from m.height-5 to m.height-9 to account for taller bordered timeline
+- Files changed: tui/components/timeline.go, tui/tui.go
+- **Learnings for future iterations:**
+  - Timeline box uses boxInner = width - 2 for border chars, but bar content uses innerWidth = width - 4 (borders + padding spaces)
+  - Adding padding lines inside a bordered box (empty wrapLine calls) is a simple way to increase vertical breathing room
+  - colHeight formula: m.height - statusBarLines - timelineLines - commandInputLine - newlineSeparators
+---
