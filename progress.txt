@@ -69,6 +69,16 @@
 - **Learnings:** Keep layout constants as named consts (col3HideThreshold, col3MinWidth) for easy tuning
 ---
 
+## 2026-02-10 - US-085
+- Removed hint text ("Press : to enter command mode, ? for help, q to quit") and hintStyle from the default branch in CommandInput()
+- Replaced with empty styled line: `lineStyle.Render(" ")` using existing DarkPurple background
+- Command mode prompt and result message rendering unchanged
+- Files changed: tui/components/commandinput.go
+- **Learnings for future iterations:**
+  - The CommandInput function has three branches: active (prompt), result message, and default (now empty bar)
+  - lineStyle with DarkPurple background and Width(width) is the standard pattern for the bottom bar
+---
+
 ## 2026-02-10 - US-084
 - Fixed column 1 to 30 characters wide using a `col1Width = 30` constant
 - Three-column wide (>=120): col1=30, remaining split between col2/col3
