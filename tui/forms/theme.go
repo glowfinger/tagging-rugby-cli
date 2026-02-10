@@ -14,7 +14,7 @@ func Theme() *huh.Theme {
 	t.Focused.Base = t.Focused.Base.
 		BorderStyle(lipgloss.ThickBorder()).
 		BorderLeft(true).
-		BorderForeground(styles.BrightPurple).
+		BorderForeground(styles.Purple).
 		PaddingLeft(1)
 
 	t.Focused.Title = lipgloss.NewStyle().
@@ -25,11 +25,11 @@ func Theme() *huh.Theme {
 		Foreground(styles.Lavender)
 
 	t.Focused.ErrorIndicator = lipgloss.NewStyle().
-		Foreground(styles.Pink).
+		Foreground(styles.Red).
 		Bold(true)
 
 	t.Focused.ErrorMessage = lipgloss.NewStyle().
-		Foreground(styles.Pink)
+		Foreground(styles.Red)
 
 	t.Focused.SelectSelector = lipgloss.NewStyle().
 		SetString("▸ ").
@@ -109,10 +109,10 @@ func Theme() *huh.Theme {
 		Foreground(styles.Purple)
 
 	t.Blurred.ErrorIndicator = lipgloss.NewStyle().
-		Foreground(styles.Pink)
+		Foreground(styles.Red)
 
 	t.Blurred.ErrorMessage = lipgloss.NewStyle().
-		Foreground(styles.Pink)
+		Foreground(styles.Red)
 
 	t.Blurred.SelectSelector = lipgloss.NewStyle().
 		SetString("  ")
@@ -161,7 +161,7 @@ func Theme() *huh.Theme {
 
 	t.Blurred.Card = lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(styles.DeepPurple).
+		BorderForeground(styles.Purple).
 		Padding(0, 1)
 
 	t.Blurred.NoteTitle = lipgloss.NewStyle().

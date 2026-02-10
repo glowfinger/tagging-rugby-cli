@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/mpv"
 	"github.com/user/tagging-rugby-cli/tui/components"
@@ -1533,7 +1534,8 @@ func (m *Model) View() string {
 }
 
 // padToWidth pads or truncates a string to exactly the specified width.
-// Uses lipgloss.Width for ANSI-aware measurement. Truncates with ellipsis if too wide.
+// Uses ansi.Truncate for ANSI-aware, grapheme-aware truncation that correctly
+// handles double-width characters (emoji, East-Asian).
 func padToWidth(s string, width int) string {
 	if width <= 0 {
 		return ""
@@ -1542,17 +1544,14 @@ func padToWidth(s string, width int) string {
 	if currentWidth == width {
 		return s
 	}
+	if currentWidth > width {
+		s = ansi.Truncate(s, width, "")
+		currentWidth = lipgloss.Width(s)
+	}
 	if currentWidth < width {
 		return s + strings.Repeat(" ", width-currentWidth)
 	}
-	// Truncate: walk runes and measure visible width
-	truncated := truncateToWidth(s, width)
-	// Pad in case truncation left us short (due to wide chars)
-	truncWidth := lipgloss.Width(truncated)
-	if truncWidth < width {
-		truncated += strings.Repeat(" ", width-truncWidth)
-	}
-	return truncated
+	return s
 }
 
 // normalizeLines pads or truncates a slice of strings to exactly the given height.
@@ -1566,68 +1565,9 @@ func normalizeLines(lines []string, height int) []string {
 	return lines
 }
 
-// truncateToWidth truncates a string to fit within the given visible width,
-// preserving ANSI escape sequences.
-func truncateToWidth(s string, maxWidth int) string {
-	if maxWidth <= 0 {
-		return ""
-	}
-	var result strings.Builder
-	visibleWidth := 0
-	inEscape := false
-
-	for _, r := range s {
-		if r == '\x1b' {
-			inEscape = true
-			result.WriteRune(r)
-			continue
-		}
-		if inEscape {
-			result.WriteRune(r)
-			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
-				inEscape = false
-			}
-			continue
-		}
-		// Normal visible character
-		if visibleWidth >= maxWidth {
-			break
-		}
-		result.WriteRune(r)
-		visibleWidth++
-	}
-	return result.String()
-}
-
-// renderColumn1 renders Column 1: Controls, playback status, tag detail card.
+// renderColumn1 renders Column 1: Playback status, selected tag detail, controls.
 func (m *Model) renderColumn1(width, height int) string {
 	var lines []string
-
-	// Section header
-	headerStyle := lipgloss.NewStyle().
-		Foreground(styles.Cyan).
-		Bold(true)
-	lines = append(lines, headerStyle.Render(" Controls"))
-	lines = append(lines, "")
-
-	// Compact controls display (vertical list for column) using shared control groups
-	shortcutStyle := lipgloss.NewStyle().
-		Foreground(styles.Cyan).
-		Bold(true)
-	nameStyle := lipgloss.NewStyle().
-		Foreground(styles.LightLavender)
-
-	groups := components.GetControlGroups()
-	for _, group := range groups {
-		for _, c := range group.Controls {
-			line := fmt.Sprintf(" %s %s %s",
-				c.Emoji,
-				nameStyle.Render(fmt.Sprintf("%-10s", c.Name)),
-				shortcutStyle.Render("["+c.Shortcut+"]"))
-			lines = append(lines, line)
-		}
-	}
-	lines = append(lines, "")
 
 	// Playback status card
 	statusHeader := lipgloss.NewStyle().
@@ -1696,17 +1636,51 @@ func (m *Model) renderColumn1(width, height int) string {
 			}
 			lines = append(lines, detailStyle.Render(" "+text))
 		}
+		lines = append(lines, "")
 	}
 
-	content := strings.Join(lines, "\n")
+	// Controls section
+	controlsHeader := lipgloss.NewStyle().
+		Foreground(styles.Cyan).
+		Bold(true)
+	lines = append(lines, controlsHeader.Render(" Controls"))
+	lines = append(lines, "")
 
-	// Apply column style
-	colStyle := lipgloss.NewStyle().
-		Width(width).
-		Height(height).
-		Background(styles.DeepPurple)
+	// Two-line controls display with sub-headers per group
+	subHeaderStyle := lipgloss.NewStyle().
+		Foreground(styles.Amber).
+		Bold(true)
+	shortcutStyle := lipgloss.NewStyle().
+		Foreground(styles.Cyan).
+		Bold(true)
+	nameStyle := lipgloss.NewStyle().
+		Foreground(styles.LightLavender)
 
-	return colStyle.Render(content)
+	groups := components.GetControlGroups()
+	for i, group := range groups {
+		// Group sub-header
+		lines = append(lines, subHeaderStyle.Render(" "+group.Name))
+		lines = append(lines, "")
+
+		for j, c := range group.Controls {
+			// Line 1: emoji  Name
+			lines = append(lines, nameStyle.Render(fmt.Sprintf(" %s  %s", c.Emoji, c.Name)))
+			// Line 2: indented [Key]
+			lines = append(lines, shortcutStyle.Render(fmt.Sprintf("     [%s]", c.Shortcut)))
+
+			// Blank line between controls (but not after the last in the last group)
+			if j < len(group.Controls)-1 || i < len(groups)-1 {
+				lines = append(lines, "")
+			}
+		}
+
+		// Extra blank line between groups
+		if i < len(groups)-1 {
+			lines = append(lines, "")
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // renderColumn2 renders Column 2: Scrollable list of all tags/events.
@@ -1717,26 +1691,12 @@ func (m *Model) renderColumn2(width, height int) string {
 		listHeight = 3
 	}
 
-	notesList := components.NotesList(m.notesList, width, listHeight, m.statusBar.TimePos)
-
-	colStyle := lipgloss.NewStyle().
-		Width(width).
-		Height(height).
-		Background(styles.DeepPurple)
-
-	return colStyle.Render(notesList)
+	return components.NotesList(m.notesList, width, listHeight, m.statusBar.TimePos)
 }
 
 // renderColumn3 renders Column 3: Live stats summary, bar graph, top players leaderboard.
 func (m *Model) renderColumn3(width, height int) string {
-	content := components.StatsPanel(m.statsView.Stats, m.notesList.Items, width, height)
-
-	colStyle := lipgloss.NewStyle().
-		Width(width).
-		Height(height).
-		Background(styles.DeepPurple)
-
-	return colStyle.Render(content)
+	return components.StatsPanel(m.statsView.Stats, m.notesList.Items, width, height)
 }
 
 // formatStepSize formats the step size for display.
