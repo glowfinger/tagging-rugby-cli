@@ -1448,8 +1448,9 @@ func (m *Model) View() string {
 	}
 
 	// --- Three-column layout with responsive sizing ---
-	// Column 3 (live stats) shrinks first; hides entirely at narrow widths.
+	// Column 1 is fixed at 30 characters. Column 3 shrinks first; hides at narrow widths.
 	const (
+		col1Width         = 30  // fixed width for column 1
 		col3HideThreshold = 90  // below this width, hide column 3 entirely
 		col3MinWidth      = 18  // minimum width for column 3 before hiding
 	)
@@ -1470,21 +1471,19 @@ func (m *Model) View() string {
 	var columnsView string
 
 	if showCol3 {
-		// Three-column layout: account for 2 border characters
+		// Three-column layout: col1 fixed at 30, account for 2 border characters
 		usableWidth := m.width - 2
-		var col1Width, col2Width, col3Width int
+		var col2Width, col3Width int
 
 		if m.width >= 120 {
-			// Wide: equal thirds
-			col1Width = usableWidth / 3
-			col2Width = usableWidth / 3
-			col3Width = usableWidth - col1Width - col2Width
+			// Wide: col1 = 30, col2 and col3 split the remaining space
+			remaining := usableWidth - col1Width
+			col2Width = remaining / 2
+			col3Width = remaining - col2Width
 		} else {
-			// Medium: column 3 gets minimum, rest splits between 1 and 2
+			// Medium (90-119): col1 = 30, col3 = col3MinWidth, col2 gets the rest
 			col3Width = col3MinWidth
-			remaining := usableWidth - col3Width
-			col1Width = remaining / 2
-			col2Width = remaining - col1Width
+			col2Width = usableWidth - col1Width - col3Width
 		}
 
 		col1Content := m.renderColumn1(col1Width, colHeight)
@@ -1504,9 +1503,8 @@ func (m *Model) View() string {
 		}
 		columnsView = strings.Join(rows, "\n")
 	} else {
-		// Two-column layout: column 3 hidden, 1 border character
+		// Two-column layout: col1 fixed at 30, column 3 hidden, 1 border character
 		usableWidth := m.width - 1
-		col1Width := usableWidth / 2
 		col2Width := usableWidth - col1Width
 
 		col1Content := m.renderColumn1(col1Width, colHeight)
