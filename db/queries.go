@@ -69,6 +69,25 @@ var SelectNoteDetailsByNoteSQL string
 //go:embed sql/select_note_highlights_by_note.sql
 var SelectNoteHighlightsByNoteSQL string
 
+// Note child table delete queries
+
+//go:embed sql/delete_note_details.sql
+var DeleteNoteDetailsSQL string
+
+//go:embed sql/delete_note_zones.sql
+var DeleteNoteZonesSQL string
+
+//go:embed sql/delete_note_highlights.sql
+var DeleteNoteHighlightsSQL string
+
+//go:embed sql/delete_note_tackles.sql
+var DeleteNoteTacklesSQL string
+
+// Note child table update queries
+
+//go:embed sql/update_note_timing.sql
+var UpdateNoteTimingSQL string
+
 // Joined queries for TUI views
 
 //go:embed sql/select_notes_with_timing.sql

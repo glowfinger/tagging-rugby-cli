@@ -32,6 +32,7 @@
 - Use `ansi.Truncate()` from `charmbracelet/x/ansi` for ANSI+grapheme-aware truncation (handles emoji/wide chars)
 - Shared time formatting lives in `pkg/timeutil/timeutil.go` — use `timeutil.FormatTime(seconds)` everywhere instead of inline formatting
 - Shared time parsing lives in `pkg/timeutil/timeutil.go` — use `timeutil.ParseTimeToSeconds(str)` for HH:MM:SS, MM:SS, or raw seconds
+- Bordered control boxes: use `components.RenderControlBox(group, width)` — renders tab header + box-drawing border + horizontal dividers between sub-groups
 
 ---
 
@@ -92,5 +93,48 @@
   - The old 4-group structure (Playback, Navigation, Step/Overlay, Views) merged into 3 groups — Step controls moved into Playback as sub-group, Overlay moved to Navigation
   - `ControlsDisplay()` is used as a horizontal bar during forms — it also needed updating to iterate `SubGroups` instead of `Controls`
   - `renderColumn1()` directly iterated `group.Controls` — needed refactoring to use nested sub-group iteration
+---
+
+## 2026-02-10 - US-076
+- Added `RenderControlBox(group ControlGroup, width int) string` to tui/components/controls.go
+- Renders bordered box with tab-style header using box-drawing characters (┌┐└┘│─├┤)
+- Tab header spans 3 lines: tab top, tab bracket with styled name, tab bottom extending to full width
+- Horizontal dividers (├───┤) separate sub-groups within the box
+- Control rows: name left-aligned, [ Shortcut ] right-aligned with proper padding
+- Colors: borders=Purple, header=Pink, names=LightLavender, shortcuts=Cyan
+- Uses ansi.Truncate() for safe width truncation
+- Files changed: tui/components/controls.go
+- **Learnings for future iterations:**
+  - The tab header design requires 3 lines: the tab top (offset by 1 space), the bracket line (┌┤ Name ├┐), and the connecting line (│└─┘└───┐) that ties the tab to the full-width box
+  - Inner width = total width - 2 (for left and right border chars)
+  - For the connecting line (line 3), remainW = innerW - tabInnerW - 3 accounts for the └, ┘, and └ characters between tab bottom and right extension
+  - `lipgloss.Width()` is essential for measuring strings with ANSI escape codes when calculating padding
+---
+
+## 2026-02-10 - US-078
+- Added `UpdateNoteWithChildren(db, noteID, children)` function to `db/functions.go` — deletes existing child rows (details, zones, highlights, tackles) and re-inserts from NoteChildren struct, all in a transaction
+- Added `UpdateNoteTiming(db, noteID, start, end)` function to `db/functions.go` — updates the timing record for a given note, returns `sql.ErrNoRows` if no timing row exists
+- Created SQL files: `delete_note_details.sql`, `delete_note_zones.sql`, `delete_note_highlights.sql`, `delete_note_tackles.sql`, `update_note_timing.sql`
+- Added `go:embed` vars in `db/queries.go` for all new SQL files
+- Files changed: db/functions.go, db/queries.go, db/sql/delete_note_details.sql (new), db/sql/delete_note_zones.sql (new), db/sql/delete_note_highlights.sql (new), db/sql/delete_note_tackles.sql (new), db/sql/update_note_timing.sql (new)
+- **Learnings for future iterations:**
+  - The delete-then-reinsert pattern is simpler than individual UPDATE statements for child tables since there can be varying numbers of child rows
+  - `UpdateNoteTiming` uses positional args `(start, end, noteID)` matching the SQL `SET start=?, end=? WHERE note_id=?` — parameter order differs from InsertNoteTiming
+  - The child tables all have ON DELETE CASCADE from notes, but for updating children without deleting the parent note, explicit DELETE per child table is needed
+---
+
+## 2026-02-10 - US-077
+- Replaced flat controls list in renderColumn1() with bordered container boxes using RenderControlBox()
+- Each of the 3 control groups (Playback, Navigation, Views) now renders as a bordered box with tab header
+- Playback box shows 3 sub-groups separated by horizontal dividers matching wireframe/playback.txt
+- Navigation and Views boxes show single sub-groups without internal dividers
+- 1 blank line gap separates each bordered container
+- Playback status card and Selected Tag detail card remain unchanged above controls
+- ControlsDisplay() horizontal bar already correctly uses Name [Shortcut] format with no emojis (from US-075)
+- Files changed: tui/tui.go
+- **Learnings for future iterations:**
+  - The RenderControlBox() function from US-076 made this change very simple — just iterate groups and call it
+  - The old renderColumn1() had ~30 lines of manual control rendering that collapsed to ~6 lines
+  - No import changes needed since all the removed local styles (subHeaderStyle, shortcutStyle, nameStyle) were local variables, and their underlying packages (lipgloss, styles) were still used elsewhere in the function
 ---
 

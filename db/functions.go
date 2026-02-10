@@ -149,6 +149,72 @@ func InsertNoteWithChildren(database *sql.DB, category string, children NoteChil
 	return noteID, nil
 }
 
+// UpdateNoteWithChildren deletes existing child rows and re-inserts from the provided NoteChildren struct in a transaction.
+func UpdateNoteWithChildren(database *sql.DB, noteID int64, children NoteChildren) error {
+	tx, err := database.Begin()
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Delete existing child rows
+	if _, err := tx.Exec(DeleteNoteDetailsSQL, noteID); err != nil {
+		return fmt.Errorf("delete note details: %w", err)
+	}
+	if _, err := tx.Exec(DeleteNoteZonesSQL, noteID); err != nil {
+		return fmt.Errorf("delete note zones: %w", err)
+	}
+	if _, err := tx.Exec(DeleteNoteHighlightsSQL, noteID); err != nil {
+		return fmt.Errorf("delete note highlights: %w", err)
+	}
+	if _, err := tx.Exec(DeleteNoteTacklesSQL, noteID); err != nil {
+		return fmt.Errorf("delete note tackles: %w", err)
+	}
+
+	// Re-insert child records
+	for _, t := range children.Tackles {
+		if _, err := tx.Exec(InsertNoteTackleSQL, noteID, t.Player, t.Attempt, t.Outcome); err != nil {
+			return fmt.Errorf("insert note tackle: %w", err)
+		}
+	}
+	for _, z := range children.Zones {
+		if _, err := tx.Exec(InsertNoteZoneSQL, noteID, z.Horizontal, z.Vertical); err != nil {
+			return fmt.Errorf("insert note zone: %w", err)
+		}
+	}
+	for _, d := range children.Details {
+		if _, err := tx.Exec(InsertNoteDetailSQL, noteID, d.Type, d.Note); err != nil {
+			return fmt.Errorf("insert note detail: %w", err)
+		}
+	}
+	for _, h := range children.Highlights {
+		if _, err := tx.Exec(InsertNoteHighlightSQL, noteID, h.Type); err != nil {
+			return fmt.Errorf("insert note highlight: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+	return nil
+}
+
+// UpdateNoteTiming updates the timing record for a given note.
+func UpdateNoteTiming(database *sql.DB, noteID int64, start, end float64) error {
+	result, err := database.Exec(UpdateNoteTimingSQL, start, end, noteID)
+	if err != nil {
+		return fmt.Errorf("update note timing: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check rows affected: %w", err)
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 // SelectNoteByID returns a single note by ID.
 func SelectNoteByID(database *sql.DB, id int64) (*Note, error) {
 	var n Note
