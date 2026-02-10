@@ -10,63 +10,67 @@ import (
 
 // Control represents a single control with its display info.
 type Control struct {
-	Emoji    string
 	Name     string
 	Shortcut string
 }
 
-// ControlGroup represents a group of related controls.
+// ControlGroup represents a group of related controls with sub-group support.
+// SubGroups allows the renderer to place horizontal dividers between sub-groups.
 type ControlGroup struct {
-	Name     string
-	Controls []Control
+	Name      string
+	SubGroups [][]Control
 }
 
 // GetControlGroups returns the control groups for display.
 func GetControlGroups() []ControlGroup {
 	return []ControlGroup{
-		// Playback controls
+		// Playback controls — three sub-groups separated by dividers
 		{
 			Name: "Playback",
-			Controls: []Control{
-				{Emoji: "\u23ea", Name: "Back", Shortcut: "H/\u2190"},
-				{Emoji: "\u23e9", Name: "Fwd", Shortcut: "L/\u2192"},
-				{Emoji: "\u23ef\ufe0f", Name: "Play", Shortcut: "Space"},
-				{Emoji: "\U0001F3AC", Name: "Frame-", Shortcut: "C-h"},
-				{Emoji: "\U0001F3AC", Name: "Frame+", Shortcut: "C-l"},
+			SubGroups: [][]Control{
+				{
+					{Name: "Play", Shortcut: "Space"},
+					{Name: "Back", Shortcut: "H / \u2190"},
+					{Name: "Fwd", Shortcut: "L / \u2192"},
+				},
+				{
+					{Name: "Step -", Shortcut: ", / <"},
+					{Name: "Step +", Shortcut: ". / >"},
+				},
+				{
+					{Name: "Frame -", Shortcut: "Ctrl+h"},
+					{Name: "Frame +", Shortcut: "Ctrl+l"},
+				},
 			},
 		},
-		// Navigation controls
+		// Navigation controls — single sub-group, no dividers
 		{
 			Name: "Navigation",
-			Controls: []Control{
-				{Emoji: "\u23ee", Name: "Prev", Shortcut: "J/\u2191"},
-				{Emoji: "\u23ed", Name: "Next", Shortcut: "K/\u2193"},
-				{Emoji: "\U0001F507", Name: "Mute", Shortcut: "M"},
+			SubGroups: [][]Control{
+				{
+					{Name: "Prev", Shortcut: "J / \u2191"},
+					{Name: "Next", Shortcut: "K / \u2193"},
+					{Name: "Mute", Shortcut: "M"},
+					{Name: "Overlay", Shortcut: "O"},
+				},
 			},
 		},
-		// Step/overlay controls
-		{
-			Name: "Step / Overlay",
-			Controls: []Control{
-				{Emoji: "\u2796", Name: "Step-", Shortcut: ",/<"},
-				{Emoji: "\u2795", Name: "Step+", Shortcut: "./>"},
-				{Emoji: "\U0001F4DD", Name: "Overlay", Shortcut: "O"},
-			},
-		},
-		// View controls
+		// View controls — single sub-group, no dividers
 		{
 			Name: "Views",
-			Controls: []Control{
-				{Emoji: "\U0001F4CA", Name: "Stats", Shortcut: "S"},
-				{Emoji: "\u2753", Name: "Help", Shortcut: "?"},
-				{Emoji: "\U0001F6AA", Name: "Quit", Shortcut: "Ctrl+C"},
+			SubGroups: [][]Control{
+				{
+					{Name: "Stats", Shortcut: "S"},
+					{Name: "Help", Shortcut: "?"},
+					{Name: "Quit", Shortcut: "Ctrl+C"},
+				},
 			},
 		},
 	}
 }
 
-// ControlsDisplay renders the controls display component.
-// It shows all available controls grouped by function with emoji, name, and shortcut key.
+// ControlsDisplay renders the controls display component as a horizontal bar.
+// It shows all available controls grouped by function with Name [Shortcut] format.
 func ControlsDisplay(width int) string {
 	groups := GetControlGroups()
 
@@ -82,10 +86,11 @@ func ControlsDisplay(width int) string {
 	var groupStrings []string
 	for _, group := range groups {
 		var controlStrs []string
-		for _, ctrl := range group.Controls {
-			// Format: emoji Name [shortcut]
-			ctrlStr := ctrl.Emoji + " " + ctrl.Name + " " + shortcutStyle.Render("["+ctrl.Shortcut+"]")
-			controlStrs = append(controlStrs, controlStyle.Render(ctrlStr))
+		for _, subGroup := range group.SubGroups {
+			for _, ctrl := range subGroup {
+				ctrlStr := ctrl.Name + " " + shortcutStyle.Render("["+ctrl.Shortcut+"]")
+				controlStrs = append(controlStrs, controlStyle.Render(ctrlStr))
+			}
 		}
 		groupStrings = append(groupStrings, strings.Join(controlStrs, "  "))
 	}

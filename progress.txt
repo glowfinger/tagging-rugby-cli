@@ -23,7 +23,7 @@
 - Confirm discard pattern: intercept StateAborted, check HasData(), show confirm form, reopen original form if user cancels
 - Normal-mode keybindings in Update() switch: msg.String() returns "left", "right", "up", "down" for arrow keys and "," "." for punctuation
 - Command mode already handles "left"/"right" for cursor movement — normal-mode arrow cases only fire when commandInput.Active is false
-- Column 1 renderColumn1() now uses GetControlGroups() from controls.go (single source of truth)
+- Column 1 renderColumn1() now uses GetControlGroups() from controls.go (single source of truth) — ControlGroup uses SubGroups [][]Control for divider placement
 - padToWidth() uses lipgloss.Width() to ANSI-aware pad AND truncate lines to exact column width
 - truncateToWidth() preserves ANSI escape sequences while trimming visible width
 - normalizeLines() ensures column line arrays are exactly the target height
@@ -31,6 +31,7 @@
 - Arrow keys ("left","right","up","down") and punctuation (",",".") added as alternatives in normal-mode switch
 - Use `ansi.Truncate()` from `charmbracelet/x/ansi` for ANSI+grapheme-aware truncation (handles emoji/wide chars)
 - Shared time formatting lives in `pkg/timeutil/timeutil.go` — use `timeutil.FormatTime(seconds)` everywhere instead of inline formatting
+- Shared time parsing lives in `pkg/timeutil/timeutil.go` — use `timeutil.ParseTimeToSeconds(str)` for HH:MM:SS, MM:SS, or raw seconds
 
 ---
 
@@ -55,5 +56,41 @@
   - The `formatTime` function was also used in timeline.go and noteslist.go (same components package) — check all usages within a package before removing a function
   - Using `replace_all` in Edit tool also replaces function definitions, not just calls — be careful with broad replacements
   - cmd/root.go also had inline time formatting (duration display in open command) — search broadly for patterns like `int(x)/60`
+---
+
+## 2026-02-10 - US-073
+- Replaced inline MM:SS formatting in tackleform.go and noteform.go with `timeutil.FormatTime()`
+- Both form headers now show H:MM:SS format (e.g. "Add Tackle @ 0:05:30", "Add Note @ 0:05:30")
+- Increased notes list time column width from 8 to 9 chars to accommodate H:MM:SS format
+- noteslist.go already used `timeutil.FormatTime()` from US-072, no change needed there
+- Files changed: tui/forms/tackleform.go, tui/forms/noteform.go, tui/components/noteslist.go
+- **Learnings for future iterations:**
+  - The forms package had its own inline time formatting separate from the components package — always search for `int(timestamp)`, `/ 60`, `% 60` patterns across all packages
+  - noteslist.go time column was 8 chars wide which could truncate H:MM:SS for videos >= 10 hours — bumped to 9
+---
+
+## 2026-02-10 - US-074
+- Added `ParseTimeToSeconds()` to `pkg/timeutil/timeutil.go` with colon-count based parsing: 2 colons = H:M:S, 1 colon = M:S, 0 colons = raw seconds
+- Replaced local `parseTimeToSeconds()` in `tui/tui.go` with `timeutil.ParseTimeToSeconds()`
+- Removed unused local `parseTimeToSeconds()` from `cmd/note.go` (was defined but never called)
+- Updated seek error message to mention HH:MM:SS format
+- Files changed: pkg/timeutil/timeutil.go, tui/tui.go, cmd/note.go
+- **Learnings for future iterations:**
+  - The `parseTimeToSeconds()` in cmd/note.go was dead code — never called anywhere. Always check for actual call sites before assuming a function is in use
+  - `strings.Count(timeStr, ":")` is a clean way to dispatch on time format rather than trying to parse each format sequentially
+  - Consolidating parse + format in the same `pkg/timeutil` package keeps all time handling in one place
+---
+
+## 2026-02-10 - US-075
+- Restructured `ControlGroup` to use `SubGroups [][]Control` instead of flat `Controls []Control`
+- Removed `Emoji` field from `Control` struct — no longer used anywhere
+- Reorganized into 3 groups: Playback (3 sub-groups: Play/Back/Fwd, Step-/Step+, Frame-/Frame+), Navigation (Prev/Next/Mute/Overlay), Views (Stats/Help/Quit)
+- Updated `ControlsDisplay()` horizontal bar to iterate sub-groups, format as `Name [Shortcut]` without emojis
+- Updated `renderColumn1()` in tui.go to iterate sub-groups with blank line separators between sub-groups
+- Files changed: tui/components/controls.go, tui/tui.go
+- **Learnings for future iterations:**
+  - The old 4-group structure (Playback, Navigation, Step/Overlay, Views) merged into 3 groups — Step controls moved into Playback as sub-group, Overlay moved to Navigation
+  - `ControlsDisplay()` is used as a horizontal bar during forms — it also needed updating to iterate `SubGroups` instead of `Controls`
+  - `renderColumn1()` directly iterated `group.Controls` — needed refactoring to use nested sub-group iteration
 ---
 
