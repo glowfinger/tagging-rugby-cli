@@ -1481,17 +1481,9 @@ func (m *Model) View() string {
 		return components.StatsView(m.statsView, m.width, m.height)
 	}
 
-	// Minimum width warning
+	// Narrow terminal: show standalone mini player with warning
 	if m.width > 0 && m.width < minTerminalWidth {
-		warningStyle := lipgloss.NewStyle().
-			Foreground(styles.Pink).
-			Bold(true)
-		hintStyle := lipgloss.NewStyle().
-			Foreground(styles.Lavender).
-			Italic(true)
-		return warningStyle.Render(fmt.Sprintf("Terminal too narrow (%d cols)", m.width)) + "\n" +
-			hintStyle.Render(fmt.Sprintf("Minimum width: %d columns", minTerminalWidth)) + "\n" +
-			hintStyle.Render("Please resize your terminal.")
+		return components.RenderMiniPlayer(m.statusBar, 0, true)
 	}
 
 	// Render status bar at top (full width)

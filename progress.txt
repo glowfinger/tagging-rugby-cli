@@ -196,3 +196,15 @@
   - Adding padding lines inside a bordered box (empty wrapLine calls) is a simple way to increase vertical breathing room
   - colHeight formula: m.height - statusBarLines - timelineLines - commandInputLine - newlineSeparators
 ---
+
+## 2026-02-10 - US-094
+- Replaced narrow terminal "too narrow" warning with standalone mini player (RenderMiniPlayer with fixedWidth=0, showWarning=true)
+- The mini player already displays speed (Speed: %gx) from US-089 implementation — no changes needed to miniplayer.go
+- Auto-sizing (fixedWidth=0) adjusts card width based on content including speed text
+- showWarning=true renders "⚠ Not connected" line when mpv is disconnected
+- Files changed: tui/tui.go
+- **Learnings for future iterations:**
+  - RenderMiniPlayer with fixedWidth=0 auto-sizes based on widest content line + 4 (borders + padding)
+  - The narrow terminal view (< 80 cols) now shows a useful mini player instead of just a resize warning
+  - All keybindings (including speed controls) already work in narrow mode since Update() doesn't restrict by terminal width
+---
