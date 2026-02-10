@@ -36,7 +36,7 @@ func StatusBar(state StatusBarState, width int) string {
 		playIcon = "▶"
 	}
 
-	// Format timestamps as MM:SS
+	// Format timestamps as H:MM:SS
 	timeStr := formatTime(state.TimePos)
 	durationStr := formatTime(state.Duration)
 
@@ -86,15 +86,16 @@ func StatusBar(state StatusBarState, width int) string {
 	return statusBarStyle.Render(content)
 }
 
-// formatTime formats seconds as MM:SS.
+// formatTime formats seconds as H:MM:SS.
 func formatTime(seconds float64) string {
 	if seconds < 0 {
 		seconds = 0
 	}
 	totalSeconds := int(seconds)
-	mins := totalSeconds / 60
+	hours := totalSeconds / 3600
+	mins := (totalSeconds % 3600) / 60
 	secs := totalSeconds % 60
-	return fmt.Sprintf("%02d:%02d", mins, secs)
+	return fmt.Sprintf("%d:%02d:%02d", hours, mins, secs)
 }
 
 // formatStepSize formats the step size for display.

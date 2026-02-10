@@ -1269,9 +1269,10 @@ func formatTimeString(seconds float64) string {
 		seconds = 0
 	}
 	totalSeconds := int(seconds)
-	mins := totalSeconds / 60
+	hours := totalSeconds / 3600
+	mins := (totalSeconds % 3600) / 60
 	secs := totalSeconds % 60
-	return fmt.Sprintf("%d:%02d", mins, secs)
+	return fmt.Sprintf("%d:%02d:%02d", hours, mins, secs)
 }
 
 // overlayProximitySeconds is how close (in seconds) a note must be to current timestamp to display.
