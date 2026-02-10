@@ -287,6 +287,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "t", "T":
 			// T opens quick tackle input prompt
 			return m.openTackleInput()
+		case "x", "X":
+			// X deletes the selected item
+			return m.deleteSelectedItem()
 		}
 	}
 
@@ -1141,6 +1144,43 @@ func (m *Model) countTackles() (int, error) {
 		count++
 	}
 	return count, rows.Err()
+}
+
+// deleteSelectedItem deletes the currently selected item from the database and refreshes the list.
+func (m *Model) deleteSelectedItem() (tea.Model, tea.Cmd) {
+	item := m.notesList.GetSelectedItem()
+	if item == nil {
+		m.commandInput.SetResult("No item selected", true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Delete from database (cascade handles child tables)
+	if err := db.DeleteNote(m.db, item.ID); err != nil {
+		m.commandInput.SetResult("Error: "+err.Error(), true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	deletedID := item.ID
+
+	// Reload list and stats
+	m.loadNotesAndTackles()
+	m.loadTackleStatsForPanel()
+
+	// Adjust selection index after deletion
+	if len(m.notesList.Items) == 0 {
+		m.notesList.SelectedIndex = 0
+	} else if m.notesList.SelectedIndex >= len(m.notesList.Items) {
+		m.notesList.SelectedIndex = len(m.notesList.Items) - 1
+	}
+
+	m.commandInput.SetResult(fmt.Sprintf("Deleted tackle %d", deletedID), false)
+	return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+		return clearResultMsg{}
+	})
 }
 
 // jumpToSelectedItem seeks mpv to the selected item's timestamp and displays details.

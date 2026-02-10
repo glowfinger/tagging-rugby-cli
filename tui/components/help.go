@@ -44,6 +44,7 @@ func HelpOverlay(width, height int) string {
 				{"J / Up", "Select previous item"},
 				{"K / Down", "Select next item"},
 				{"Enter", "Jump to selected item"},
+				{"X", "Delete selected item"},
 			},
 		},
 		{
