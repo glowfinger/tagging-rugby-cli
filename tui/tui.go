@@ -3,6 +3,7 @@ package tui
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -88,6 +89,10 @@ type Model struct {
 	confirmDiscard bool
 	// confirmDiscardTarget tracks which form triggered the confirm ("note" or "tackle")
 	confirmDiscardTarget string
+	// editingNoteID tracks which note is being edited (0 = create mode, >0 = edit mode)
+	editingNoteID int64
+	// editTackleFormResult holds the bound values for the edit tackle form
+	editTackleFormResult forms.EditTackleFormResult
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -287,6 +292,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "t", "T":
 			// T opens quick tackle input prompt
 			return m.openTackleInput()
+		case "e", "E":
+			// E opens edit form for selected tackle
+			return m.openEditTackleInput()
 		case "x", "X":
 			// X deletes the selected item
 			return m.deleteSelectedItem()
@@ -482,6 +490,53 @@ func (m *Model) openTackleInput() (tea.Model, tea.Cmd) {
 	return m, m.tackleForm.Init()
 }
 
+// openEditTackleInput opens the edit tackle form pre-populated with existing data.
+func (m *Model) openEditTackleInput() (tea.Model, tea.Cmd) {
+	item := m.notesList.GetSelectedItem()
+	if item == nil {
+		m.commandInput.SetResult("No item selected", true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Only tackles can be edited
+	if item.Type != components.ItemTypeTackle {
+		m.commandInput.SetResult("Edit not supported for notes", true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Load existing data from database
+	data, err := db.LoadNoteForEdit(m.db, item.ID)
+	if err != nil {
+		m.commandInput.SetResult("Error: "+err.Error(), true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Map db.EditTackleData to forms.EditTackleFormResult
+	m.editTackleFormResult = forms.EditTackleFormResult{
+		TackleFormResult: forms.TackleFormResult{
+			Player:   data.Player,
+			Attempt:  fmt.Sprintf("%d", data.Attempt),
+			Outcome:  data.Outcome,
+			Followed: data.Followed,
+			Notes:    data.Notes,
+			Zone:     data.Zone,
+			Star:     data.Star,
+		},
+	}
+
+	m.editingNoteID = item.ID
+	m.tackleFormTimestamp = data.Timestamp
+	m.tackleForm = forms.NewEditTackleForm(data.Timestamp, data.EndSeconds, &m.editTackleFormResult)
+
+	return m, m.tackleForm.Init()
+}
+
 // handleTackleFormUpdate delegates messages to the huh tackle form and handles completion.
 func (m *Model) handleTackleFormUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	form, cmd := m.tackleForm.Update(msg)
@@ -491,14 +546,24 @@ func (m *Model) handleTackleFormUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Check if form was completed or cancelled
 	if m.tackleForm.State == huh.StateCompleted {
+		if m.editingNoteID > 0 {
+			return m.saveEditTackleFromForm()
+		}
 		return m.saveTackleFromForm()
 	}
 	if m.tackleForm.State == huh.StateAborted {
 		// If form has data, show confirm discard dialog
-		if m.tackleFormResult.HasData() {
+		hasData := false
+		if m.editingNoteID > 0 {
+			hasData = m.editTackleFormResult.HasData()
+		} else {
+			hasData = m.tackleFormResult.HasData()
+		}
+		if hasData {
 			return m.openConfirmDiscard("tackle")
 		}
 		m.tackleForm = nil
+		m.editingNoteID = 0
 		return m, nil
 	}
 
@@ -529,6 +594,7 @@ func (m *Model) handleConfirmDiscardUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.noteForm = nil
 			} else {
 				m.tackleForm = nil
+				m.editingNoteID = 0
 			}
 			return m, nil
 		}
@@ -537,8 +603,7 @@ func (m *Model) handleConfirmDiscardUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.noteForm = forms.NewNoteForm(m.noteFormTimestamp, &m.noteFormResult)
 			return m, m.noteForm.Init()
 		}
-		m.tackleForm = forms.NewTackleForm(m.tackleFormTimestamp, &m.tackleFormResult)
-		return m, m.tackleForm.Init()
+		return m, m.reopenTackleForm()
 	}
 
 	if m.confirmDiscardForm.State == huh.StateAborted {
@@ -548,11 +613,26 @@ func (m *Model) handleConfirmDiscardUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.noteForm = forms.NewNoteForm(m.noteFormTimestamp, &m.noteFormResult)
 			return m, m.noteForm.Init()
 		}
-		m.tackleForm = forms.NewTackleForm(m.tackleFormTimestamp, &m.tackleFormResult)
-		return m, m.tackleForm.Init()
+		return m, m.reopenTackleForm()
 	}
 
 	return m, cmd
+}
+
+// reopenTackleForm reopens the appropriate tackle form (create or edit) from saved state.
+func (m *Model) reopenTackleForm() tea.Cmd {
+	if m.editingNoteID > 0 {
+		// Save current user-edited values before NewEditTackleForm overwrites them
+		savedTimestamp := m.editTackleFormResult.Timestamp
+		savedEndSeconds := m.editTackleFormResult.EndSeconds
+		m.tackleForm = forms.NewEditTackleForm(m.tackleFormTimestamp, 0, &m.editTackleFormResult)
+		// Restore user's values
+		m.editTackleFormResult.Timestamp = savedTimestamp
+		m.editTackleFormResult.EndSeconds = savedEndSeconds
+	} else {
+		m.tackleForm = forms.NewTackleForm(m.tackleFormTimestamp, &m.tackleFormResult)
+	}
+	return m.tackleForm.Init()
 }
 
 // saveTackleFromForm saves the tackle data from the completed huh form.
@@ -626,6 +706,100 @@ func (m *Model) saveTackleFromForm() (tea.Model, tea.Cmd) {
 		starSymbol = " ★"
 	}
 	m.commandInput.SetResult(fmt.Sprintf("Tackle %d recorded: %s %s%s", noteID, result.Player, result.Outcome, starSymbol), false)
+	return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+		return clearResultMsg{}
+	})
+}
+
+// saveEditTackleFromForm saves the edited tackle data from the completed edit form.
+func (m *Model) saveEditTackleFromForm() (tea.Model, tea.Cmd) {
+	result := m.editTackleFormResult
+	noteID := m.editingNoteID
+
+	// Parse timestamp from the form
+	timestamp, err := timeutil.ParseTimeToSeconds(result.Timestamp)
+	if err != nil {
+		m.tackleForm = nil
+		m.editingNoteID = 0
+		m.commandInput.SetResult("Error: invalid timestamp", true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Parse end seconds
+	endSeconds, err := strconv.ParseFloat(result.EndSeconds, 64)
+	if err != nil || endSeconds <= 0 {
+		endSeconds = 2.0
+	}
+
+	// Parse attempt as integer
+	var attempt int
+	fmt.Sscanf(result.Attempt, "%d", &attempt)
+
+	// Build children for update
+	children := db.NoteChildren{
+		Tackles: []db.NoteTackle{
+			{Player: result.Player, Attempt: attempt, Outcome: result.Outcome},
+		},
+	}
+
+	// Add followed detail if provided
+	if result.Followed != "" {
+		children.Details = append(children.Details, db.NoteDetail{
+			Type: "followed", Note: result.Followed,
+		})
+	}
+
+	// Add notes detail if provided
+	if result.Notes != "" {
+		children.Details = append(children.Details, db.NoteDetail{
+			Type: "notes", Note: result.Notes,
+		})
+	}
+
+	// Add zone if provided
+	if result.Zone != "" {
+		children.Zones = []db.NoteZone{
+			{Horizontal: result.Zone},
+		}
+	}
+
+	// Add highlight if starred
+	if result.Star {
+		children.Highlights = []db.NoteHighlight{
+			{Type: "star"},
+		}
+	}
+
+	// Update children in database
+	if err := db.UpdateNoteWithChildren(m.db, noteID, children); err != nil {
+		m.tackleForm = nil
+		m.editingNoteID = 0
+		m.commandInput.SetResult("Error: "+err.Error(), true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Update timing
+	if err := db.UpdateNoteTiming(m.db, noteID, timestamp, timestamp+endSeconds); err != nil {
+		m.tackleForm = nil
+		m.editingNoteID = 0
+		m.commandInput.SetResult("Error: "+err.Error(), true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	m.tackleForm = nil
+	m.editingNoteID = 0
+
+	// Reload list and stats
+	m.loadNotesAndTackles()
+	m.loadTackleStatsForPanel()
+
+	m.commandInput.SetResult(fmt.Sprintf("Updated tackle %d", noteID), false)
 	return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
 		return clearResultMsg{}
 	})
