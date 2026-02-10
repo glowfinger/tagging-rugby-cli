@@ -171,6 +171,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Mini player mode: only allow playback keys through
+		if m.width > 0 && m.width < minTerminalWidth {
+			switch msg.String() {
+			case " ", "h", "H", "left", "l", "L", "right",
+				",", "<", ".", ">",
+				"m", "M",
+				"ctrl+h", "ctrl+l",
+				"ctrl+c",
+				"?":
+				// Allow these keys to fall through to normal handling
+			default:
+				// Suppress all other keys in mini player mode
+				return m, nil
+			}
+		}
+
 		// Handle stats view input
 		if m.statsView.Active {
 			return m.handleStatsViewInput(msg)
