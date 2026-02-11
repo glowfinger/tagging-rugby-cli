@@ -91,6 +91,8 @@ type Model struct {
 	confirmDiscard bool
 	// confirmDiscardTarget tracks which form triggered the confirm ("note" or "tackle")
 	confirmDiscardTarget string
+	// tackleSortColumn tracks the sort column for the tackle stats table in column 3
+	tackleSortColumn components.SortColumn
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -103,6 +105,7 @@ func NewModel(client *mpv.Client, db *sql.DB, videoPath string) *Model {
 			StepSize: defaultStepSize,
 			Speed:    1.0,
 		},
+		tackleSortColumn: components.SortByTotal,
 	}
 }
 
@@ -1759,7 +1762,7 @@ func (m *Model) renderColumn2(width, height int) string {
 
 // renderColumn3 renders Column 3: Live stats summary, bar graph, top players leaderboard.
 func (m *Model) renderColumn3(width, height int) string {
-	return components.StatsPanel(m.statsView.Stats, m.notesList.Items, width, height)
+	return components.StatsPanel(m.statsView.Stats, m.notesList.Items, width, height, m.tackleSortColumn)
 }
 
 // formatStepSize formats the step size for display.

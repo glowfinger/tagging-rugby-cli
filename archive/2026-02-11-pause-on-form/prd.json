@@ -1,0 +1,25 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/pause-on-form",
+  "description": "Pause mpv video automatically when any form is open",
+  "userStories": [
+    {
+      "id": "US-101",
+      "title": "Pause mpv when a form opens",
+      "description": "As a user, I want the video to automatically pause when I open any form (note, tackle, or confirm discard) so that I don't miss action while entering data.",
+      "acceptanceCriteria": [
+        "In openNoteInput(), after capturing the timestamp, call m.client.Pause() if the client is connected and video is currently playing",
+        "In openTackleInput(), after capturing the timestamp, call m.client.Pause() if the client is connected and video is currently playing",
+        "When the confirm discard form is opened (in handleNoteFormUpdate and handleTackleFormUpdate), call m.client.Pause() if the client is connected and video is currently playing",
+        "Check m.client.GetPaused() before calling Pause() — only pause if currently playing (to preserve user's existing pause state)",
+        "Guard with m.client != nil && m.client.IsConnected() before any mpv calls",
+        "Errors from Pause() are silently ignored (consistent with existing _ = m.client.TogglePause() pattern)",
+        "Video does NOT auto-resume when form is closed (submitted, cancelled, or discarded)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

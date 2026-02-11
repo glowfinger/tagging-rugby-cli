@@ -1,0 +1,104 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/tidy-up-ui-3",
+  "description": "UI polish: remove pictographic emojis, redesign controls bar, disable mpv default keybindings",
+  "userStories": [
+    {
+      "id": "US-095",
+      "title": "Redesign controls bar with bordered group containers and no emojis",
+      "description": "As a user, I want the controls bar to show [Key] Label on one line per control, grouped inside bordered containers, without emoji icons.",
+      "acceptanceCriteria": [
+        "Remove the Emoji field from the Control struct in tui/components/controls.go",
+        "Remove all emoji values from GetControlGroups() control definitions",
+        "Each control renders as a single line: [Key] Label (e.g. [Space] Play, [H/←] Back)",
+        "Each control group is wrapped in a bordered container using RenderInfoBox with the group name as header (Playback, Navigation, Step / Overlay, Views)",
+        "Groups are stacked vertically in Column 1",
+        "Controls within a group are listed one per line inside the container",
+        "Update ControlsDisplay() to use the new format (used for wide-view controls bar if applicable)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-096",
+      "title": "Remove pictographic emojis from status bar",
+      "description": "As a user, I want the status bar to use short text labels instead of pictographic emojis for mute and overlay indicators.",
+      "acceptanceCriteria": [
+        "Keep ▶ (play) and ⏸ (pause) icons in statusbar.go — these are simple Unicode symbols",
+        "Replace mute emoji 🔇 with text MUTED",
+        "Replace overlay emoji 📺 with text OVL",
+        "Status bar left/right content alignment still works at all terminal widths",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-097",
+      "title": "Remove pictographic emojis from mini player",
+      "description": "As a user, I want the mini player to use text labels instead of pictographic emojis.",
+      "acceptanceCriteria": [
+        "Keep ▶ and ⏸ play/pause icons in miniplayer.go — same as status bar",
+        "Replace mute emoji 🔇 with text MUTED",
+        "Replace warning emoji ⚠ with text ! or WARNING:",
+        "Mini player auto-sizing (fixedWidth=0) still works correctly with new text widths",
+        "Fixed-width mode (column 1) still renders correctly",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-098",
+      "title": "Remove medal emojis from stats panel leaderboard",
+      "description": "As a user, I want the stats panel leaderboard to use plain text rank numbers instead of medal emojis.",
+      "acceptanceCriteria": [
+        "Replace 🥇 with #1 in the medalIcons array in tui/components/statspanel.go",
+        "Replace 🥈 with #2",
+        "Replace 🥉 with #3",
+        "Update ranks 4 and 5 to #4 and #5 for consistent formatting",
+        "Bar graph █ character is kept unchanged (block element not emoji)",
+        "Column alignment in leaderboard is preserved — all rank labels same display width",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-099",
+      "title": "Embed minimal mpv input.conf in Go binary",
+      "description": "As a developer, I need a minimal mpv input configuration embedded in the binary so it can be written to disk at launch time without requiring external config files.",
+      "acceptanceCriteria": [
+        "Create an input.conf file in the mpv/ package directory with exactly three bindings: space cycle pause, q quit, f cycle fullscreen",
+        "Embed the file using go:embed in the mpv package (in launch.go or a new config.go file)",
+        "The embedded content is accessible as a []byte or string variable",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-100",
+      "title": "Launch mpv with disabled default keybindings and embedded input.conf",
+      "description": "As a user, I want mpv to launch with only space, q, and f keybindings so I don't accidentally trigger disruptive actions like subtitle cycling or screenshots.",
+      "acceptanceCriteria": [
+        "LaunchMpv() writes the embedded input.conf content to a temporary file (e.g. /tmp/tagging-rugby-input.conf or os.CreateTemp)",
+        "mpv is launched with --no-input-default-bindings flag to strip all built-in defaults",
+        "mpv is launched with --input-conf=<temp-file-path> pointing to the written config",
+        "The temp file is cleaned up when the mpv process exits or the app shuts down (best effort via defer os.Remove)",
+        "mpv only responds to space (pause), q (quit), and f (fullscreen) — all other keys ignored by mpv",
+        "All existing IPC-based controls (seek, speed, mute, frame step, overlay, A-B loop) continue to work exactly as before",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

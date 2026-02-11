@@ -1,0 +1,261 @@
+## Codebase Patterns
+- Use `CGO_ENABLED=0` for all Go build/vet commands (required for modernc.org/sqlite)
+- Go binary is at `/home/node/go/bin/go` - use `export PATH="$PATH:/home/node/go/bin"` before Go commands
+- Database connection uses modernc.org/sqlite (pure Go implementation, no CGO)
+- Add new table migrations to the `migrate()` function in db/db.go - always use `CREATE TABLE IF NOT EXISTS`
+- Bubble Tea key strings: use "esc" (not "escape"), "enter", "tab", "backspace", "left", "right" for key handling
+- SQL queries live in `db/sql/*.sql` files, embedded via `go:embed` in `db/queries.go` — reference as `db.InsertNoteSQL` etc.
+- go:embed can only access files within the same package directory or subdirectories (no `../` paths)
+- Three-column TUI layout uses padToWidth helper + manual row-by-row assembly (split lines, pad, join with border chars)
+- lipgloss.Width() accounts for ANSI escape sequences when measuring rendered string width
+- Column 3 live stats use loadTackleStatsForPanel() on tick — only updates when stats view is not active to avoid conflicts
+- Go structs for all tables in db/models.go; database functions (insert/select/delete) in db/functions.go
+- Use `db.InsertNoteWithChildren(database, category, db.NoteChildren{...})` for transactional insert of note + child records
+- CLI commands create notes with category field ("clip", "tackle", or user-provided) plus child rows for timing, video, and type-specific data
+- TUI note/tackle/clip creation also uses `db.InsertNoteWithChildren()` — same pattern as CLI commands
+- Tackle stats in TUI use inline SQL queries joining note_tackles, notes, note_videos, and note_highlights (not embedded SQL files)
+- loadNotesAndTackles() uses inline SQL joining notes, note_videos, note_timing, then loads child details/tackles/highlights per note
+- Star highlights are stored as note_highlights rows with type="star", not as a column on notes
+- huh forms package lives in tui/forms/ — theme, note form, and tackle form go here
+- huh form integration pattern: store *huh.Form + result struct in Model, delegate Update/View, check State for completion
+- huh forms need ALL message types delegated (not just KeyMsg) — cursor blink, focus msgs are internal
+- huh Select auto-sets value to first option on Init() — exclude from HasData() checks for "empty form" detection
+- Confirm discard pattern: intercept StateAborted, check HasData(), show confirm form, reopen original form if user cancels
+- Normal-mode keybindings in Update() switch: msg.String() returns "left", "right", "up", "down" for arrow keys and "," "." for punctuation
+- Command mode already handles "left"/"right" for cursor movement — normal-mode arrow cases only fire when commandInput.Active is false
+- Column 1 renderColumn1() now uses GetControlGroups() from controls.go (single source of truth)
+- padToWidth() uses lipgloss.Width() to ANSI-aware pad AND truncate lines to exact column width
+- truncateToWidth() preserves ANSI escape sequences while trimming visible width
+- normalizeLines() ensures column line arrays are exactly the target height
+- Responsive layout: col1Width=30 (fixed), col3HideThreshold=90, col3MinWidth=18; at <90 cols, two-column layout with single border
+- Arrow keys ("left","right","up","down") and punctuation (",",".") added as alternatives in normal-mode switch
+- RenderInfoBox(title, contentLines, width) in controls.go — generic bordered box; pass pre-styled lines, box handles borders only
+- LaunchMpv returns (*exec.Cmd, func(), error) — caller must `defer cleanup()` to remove temp input.conf
+
+---
+
+## 2026-02-09 - US-065
+- Added "left"/"right" cases alongside "h"/"l" for seek backward/forward
+- Added "up"/"down" cases alongside "j"/"k" for notes list navigation
+- Files changed: tui/tui.go
+- **Learnings:** msg.String() returns "left", "right", "up", "down" for arrow keys in Bubble Tea
+---
+
+## 2026-02-09 - US-066
+- Added ","/"." cases alongside "<"/">" for step size decrease/increase
+- Files changed: tui/tui.go
+- **Learnings:** Comma and period don't conflict with command mode since command mode check happens first
+---
+
+## 2026-02-09 - US-067
+- Updated GetControlGroups() shortcuts to show alternatives: "H/←", "L/→", "J/↑", "K/↓", ",/<", "./>"
+- Updated help overlay with "H / Left", "L / Right", "J / Up", "K / Down", ", / <", ". / >" bindings
+- Refactored renderColumn1() to use GetControlGroups() — removed duplicate hardcoded controls list
+- Files changed: tui/components/controls.go, tui/components/help.go, tui/tui.go
+- **Learnings:** Unicode arrows (←→↑↓) render well in terminal for compact shortcut display
+---
+
+## 2026-02-09 - US-069
+- padToWidth() now truncates overflowing lines (not just pads short ones)
+- Added truncateToWidth() that preserves ANSI escape sequences while trimming visible chars
+- Added normalizeLines() to ensure column line arrays match target height exactly
+- Files changed: tui/tui.go
+- **Learnings:** ANSI escape sequences start with \x1b and end with a letter — must skip them during width measurement
+---
+
+## 2026-02-09 - US-070
+- Replaced equal-thirds column calculation with responsive algorithm
+- Wide (120+): equal thirds; Medium (90-119): col3 shrinks to 18 chars; Narrow (<90): col3 hidden
+- Two-column fallback uses single border character, columns 1+2 split evenly
+- Files changed: tui/tui.go
+- **Learnings:** Keep layout constants as named consts (col3HideThreshold, col3MinWidth) for easy tuning
+---
+
+## 2026-02-10 - US-085
+- Removed hint text ("Press : to enter command mode, ? for help, q to quit") and hintStyle from the default branch in CommandInput()
+- Replaced with empty styled line: `lineStyle.Render(" ")` using existing DarkPurple background
+- Command mode prompt and result message rendering unchanged
+- Files changed: tui/components/commandinput.go
+- **Learnings for future iterations:**
+  - The CommandInput function has three branches: active (prompt), result message, and default (now empty bar)
+  - lineStyle with DarkPurple background and Width(width) is the standard pattern for the bottom bar
+---
+
+## 2026-02-10 - US-084
+- Fixed column 1 to 30 characters wide using a `col1Width = 30` constant
+- Three-column wide (>=120): col1=30, remaining split between col2/col3
+- Three-column medium (90-119): col1=30, col3=col3MinWidth(18), col2 gets rest
+- Two-column narrow (80-89): col1=30, col2 gets rest
+- Files changed: tui/tui.go
+- **Learnings for future iterations:**
+  - col1Width is now a const in the View() function's layout section — all column width calcs reference it
+  - Column 1 at 30 chars is compact but fits bordered control boxes well
+---
+
+## 2026-02-10 - US-086
+- Added Speed float64 field to StatusBarState struct in tui/components/statusbar.go
+- Status bar right side now displays "Speed: 1x", "Speed: 1.5x", "Speed: 0.75x" etc. alongside step size
+- Uses %g format to avoid trailing zeros (1 not 1.0, 1.5 not 1.50, 0.75 stays 0.75)
+- updateStatusFromMpv() in tui/tui.go now polls client.GetSpeed() and updates statusBar.Speed
+- Default speed value set to 1.0 in NewModel() and guarded in StatusBar() render (0 → 1.0)
+- Files changed: tui/components/statusbar.go, tui/tui.go
+- **Learnings for future iterations:**
+  - StatusBarState.Speed defaults to 0 (Go zero value) so the render function guards with `if speed == 0 { speed = 1.0 }`
+  - GetSpeed()/SetSpeed() already exist in mpv/client.go — no new mpv client methods needed
+  - %g format is ideal for speed display: drops trailing zeros automatically
+---
+
+## 2026-02-10 - US-087
+- Added `speedSizes` package-level var: []float64{0.5, 0.75, 1.0, 1.25, 1.5, 2.0}
+- Added `increaseSpeed()` and `decreaseSpeed()` methods on Model that cycle through speedSizes and call client.SetSpeed()
+- Added `findSpeedIndex()` helper (mirrors findStepSizeIndex pattern) with closest-match fallback
+- Key bindings: `[` and `{` decrease speed, `]` and `}` increase speed, `\` resets to 1.0x
+- All speed keys in normal mode switch only (not active during command input, forms, or stats view)
+- Mini player mode doesn't exist yet (US-089) — speed keys will be added to its key filter when it's implemented
+- Files changed: tui/tui.go
+- **Learnings for future iterations:**
+  - speedSizes follows the same pattern as stepSizes — package-level var + find index + cycle methods
+  - Backslash key string in Bubble Tea is `"\\"` (Go string escape)
+  - Mini player doesn't exist yet — US-089 will create it; speed key integration deferred to that story
+---
+
+## 2026-02-10 - US-088
+- Added Speed-, Speed+, Speed1x controls to Playback group in GetControlGroups()
+- Added speed keybindings ([ / {, ] / }, \) to Playback section of help overlay
+- Files changed: tui/components/controls.go, tui/components/help.go
+- **Learnings for future iterations:**
+  - Speed controls use same emoji style as existing playback controls (⏪ for decrease, ⏩ for increase, 🔄 for reset)
+  - Help overlay key column is 12 chars wide — "[ / {" and "] / }" fit well within that
+  - GetControlGroups() is the single source of truth for controls — both column 1 display and ControlsDisplay() use it
+---
+
+## 2026-02-10 - US-089
+- Created RenderMiniPlayer() in tui/components/miniplayer.go — bordered card with tab-style "Playback" header
+- Accepts fixedWidth (use column width) and showWarning bool parameters
+- Shows play/pause icon, step size, speed, time/duration, mute icon (when muted)
+- Replaced plain-text Playback section in renderColumn1() with bordered mini player card
+- Uses box-drawing chars (╭╮╰╯│─) with styles.Purple border color and styles.Pink header
+- Files changed: tui/components/miniplayer.go (new), tui/tui.go
+- **Learnings for future iterations:**
+  - Box-drawing pattern for bordered cards: top line = ╭─ + header + fill + ╮, content = │ + text + pad + │, bottom = ╰ + fill + ╯
+  - innerWidth = cardWidth - 2 (for the two │ border chars); content padding = innerWidth - lipgloss.Width(content)
+  - formatTime() and formatStepSize() are reusable helpers already in statusbar.go (same package)
+  - RenderMiniPlayer can be reused for narrow terminal mini player (US-094) with fixedWidth=0 for auto-sizing
+---
+
+## 2026-02-10 - US-090
+- Created generic RenderInfoBox(title, contentLines, width) in tui/components/controls.go
+- Replaced plain-text Selected Tag section in renderColumn1() with bordered box via RenderInfoBox
+- Box uses tab-style header (╭─ Selected Tag ─╮) with same box-drawing chars as RenderMiniPlayer
+- Content lines are pre-styled by the caller (LightLavender for primary, Lavender for dim)
+- Text truncation uses innerW = width - 4 (2 border + 2 padding) for accurate clipping
+- Box is hidden entirely when no item is selected (preserves existing behavior)
+- Files changed: tui/components/controls.go, tui/tui.go
+- **Learnings for future iterations:**
+  - RenderInfoBox is generic and reusable — pass pre-styled content lines, box handles borders only
+  - Inner width for text truncation = column width - 4 (2 border chars + 2 spaces for content padding)
+  - RenderInfoBox can be reused for US-091 (notes list border) or any future bordered section
+---
+
+## 2026-02-10 - US-091
+- Wrapped notes list in bordered container with tab-style "Notes" header in renderColumn2()
+- Built box directly in renderColumn2() wrapping NotesList output (simpler than reusing RenderInfoBox since table fills full height)
+- List height shrinks by 4 (3 tab header lines + 1 bottom border) to account for box chrome
+- Replaced hardcoded `tableRows = 10` with dynamic `visibleRows` derived from height parameter
+- Updated scrollToCurrentTime() to accept visibleRows parameter instead of using constant
+- Box pads empty rows with bordered empty lines to fill full column height
+- Files changed: tui/tui.go, tui/components/noteslist.go
+- **Learnings for future iterations:**
+  - NotesList now uses height parameter dynamically — no more hardcoded tableRows constant
+  - scrollToCurrentTime() signature changed: now takes (currentTimePos, visibleRows) instead of just (currentTimePos)
+  - For full-height bordered containers, build the box in the render function rather than using RenderInfoBox (which is designed for variable-height content)
+  - innerWidth for bordered column2 = width - 2 (just the 2 │ border chars, no extra padding needed since table already has internal spacing)
+---
+
+## 2026-02-10 - US-092
+- Removed borderStr variable (purple vertical bar separator) from View() layout assembly in tui/tui.go
+- Three-column row assembly changed from c1+borderStr+c2+borderStr+c3 to c1+c2+c3
+- Two-column row assembly changed from c1+borderStr+c2 to c1+c2
+- usableWidth calculation updated: was m.width-2 (3-col) / m.width-1 (2-col), now m.width for both
+- Reclaimed 1-2 characters distributed to col2 and col3 widths (they grow slightly)
+- Files changed: tui/tui.go
+- **Learnings for future iterations:**
+  - With bordered containers on all sections, column separators are redundant — borders provide visual separation
+  - Removing separators is a simple subtraction: remove borderStr, stop subtracting border chars from usableWidth
+  - padToWidth + normalizeLines still ensure columns tile exactly to fill full terminal width with no gaps
+---
+
+## 2026-02-10 - US-093
+- Wrapped Timeline() output in bordered box with tab-style "Timeline" header using box-drawing chars (╭╮╰╯│─)
+- Removed DarkPurple background style from bar/indicator lines — bordered box provides framing
+- Bar width now calculates against inner box width (width - 4 for borders + padding) instead of raw width
+- Added padding lines above and below content for 6-line total height: top border + padding + bar + indicator + padding + bottom border
+- Adjusted colHeight in View() from m.height-5 to m.height-9 to account for taller bordered timeline
+- Files changed: tui/components/timeline.go, tui/tui.go
+- **Learnings for future iterations:**
+  - Timeline box uses boxInner = width - 2 for border chars, but bar content uses innerWidth = width - 4 (borders + padding spaces)
+  - Adding padding lines inside a bordered box (empty wrapLine calls) is a simple way to increase vertical breathing room
+  - colHeight formula: m.height - statusBarLines - timelineLines - commandInputLine - newlineSeparators
+---
+
+## 2026-02-10 - US-094
+- Replaced narrow terminal "too narrow" warning with standalone mini player (RenderMiniPlayer with fixedWidth=0, showWarning=true)
+- The mini player already displays speed (Speed: %gx) from US-089 implementation — no changes needed to miniplayer.go
+- Auto-sizing (fixedWidth=0) adjusts card width based on content including speed text
+- showWarning=true renders "⚠ Not connected" line when mpv is disconnected
+- Files changed: tui/tui.go
+- **Learnings for future iterations:**
+  - RenderMiniPlayer with fixedWidth=0 auto-sizes based on widest content line + 4 (borders + padding)
+  - The narrow terminal view (< 80 cols) now shows a useful mini player instead of just a resize warning
+  - All keybindings (including speed controls) already work in narrow mode since Update() doesn't restrict by terminal width
+---
+
+## 2026-02-10 - US-095
+- Removed Emoji field from Control struct in controls.go
+- Removed all emoji values from GetControlGroups() control definitions
+- Each control now renders as [Key] Label on one line (e.g. [Space] Play, [H/←] Back)
+- Each control group is wrapped in a RenderInfoBox bordered container with group name as header
+- Groups stack vertically in column 1 (Playback, Navigation, Step / Overlay, Views)
+- Updated ControlsDisplay() to use [Key] Label format instead of emoji Name [shortcut]
+- Removed old multi-line emoji+name/key controls layout from renderColumn1()
+- Files changed: tui/components/controls.go, tui/tui.go
+- **Learnings for future iterations:**
+  - RenderInfoBox works well for control groups — pass pre-styled "[Key] Label" lines, box handles borders
+  - Removing Emoji field is a clean breaking change since nothing else references Control.Emoji
+  - The ControlsDisplay() wide-view format now matches the column 1 format style ([Key] Label)
+---
+
+## 2026-02-10 - US-096
+- Replaced mute emoji 🔇 with text " MUTED" in status bar
+- Replaced overlay emoji 📺 with text " OVL" in status bar
+- Kept ▶ (play) and ⏸ (pause) Unicode symbols unchanged
+- Renamed variables from muteIcon/overlayIcon to muteIndicator/overlayIndicator
+- Files changed: tui/components/statusbar.go
+- **Learnings for future iterations:**
+  - Status bar uses lipgloss.Width() for left/right alignment — plain ASCII text is more reliable than emojis for width calculation
+  - The padding logic (width - leftWidth - rightWidth) handles any content length dynamically, so swapping emojis for text just works
+  - Mute/overlay indicators use leading space (" MUTED", " OVL") for separation from adjacent content
+---
+
+## 2026-02-11 - US-099
+- Created mpv/input.conf with three bindings: space cycle pause, q quit, f cycle fullscreen
+- Created mpv/config.go with go:embed to expose InputConf as []byte
+- Files changed: mpv/input.conf (new), mpv/config.go (new)
+- **Learnings for future iterations:**
+  - go:embed in Go only works for files in the same package directory or subdirectories
+  - Using a separate config.go file keeps embed concerns isolated from launch logic
+  - InputConf is exported as []byte so launch.go can write it to a temp file in US-100
+---
+
+## 2026-02-11 - US-100
+- Modified LaunchMpv() to write embedded InputConf to temp file via os.CreateTemp
+- Added --no-input-default-bindings and --input-conf=<tmpPath> flags to mpv launch
+- Changed LaunchMpv signature to return cleanup func: (*exec.Cmd, func(), error)
+- Caller in cmd/root.go updated to use `defer cleanup()` for temp file removal
+- Files changed: mpv/launch.go, cmd/root.go
+- **Learnings for future iterations:**
+  - Don't call cmd.Wait() in a goroutine if the caller also calls process.Wait() — Go's exec.Cmd.Wait is not safe for concurrent calls
+  - Returning a cleanup func is cleaner than goroutine-based cleanup — lets caller control timing
+  - --no-input-default-bindings only affects keyboard input, NOT IPC commands — all SetProperty/Seek/etc. still work
+  - os.CreateTemp with pattern "tagging-rugby-input-*.conf" creates unique temp files safely
+---

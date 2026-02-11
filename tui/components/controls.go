@@ -60,6 +60,7 @@ func GetControlGroups() []ControlGroup {
 			Name: "Views",
 			Controls: []Control{
 				{Name: "Stats", Shortcut: "S"},
+				{Name: "Sort", Shortcut: "X"},
 				{Name: "Help", Shortcut: "?"},
 				{Name: "Quit", Shortcut: "Ctrl+C"},
 			},
@@ -162,3 +163,4 @@ func ControlsDisplay(width int) string {
 
 	return containerStyle.Render(paddingStr + allControls)
 }
+
