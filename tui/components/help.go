@@ -46,6 +46,7 @@ func HelpOverlay(width, height int) string {
 				{"Enter", "Jump to selected item"},
 				{"E", "Edit selected tackle"},
 				{"X", "Delete selected item"},
+				{"Ctrl+E", "Export player clips"},
 			},
 		},
 		{

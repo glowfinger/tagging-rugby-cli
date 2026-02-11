@@ -1,0 +1,15 @@
+# Ralph Progress Log
+Started: Wed Feb 11 2026
+---
+
+## Codebase Patterns
+- Use `CGO_ENABLED=0` for all Go build/vet commands (modernc.org/sqlite requirement)
+- Go binary at `/home/node/go/bin/go` - export PATH before commands
+- Column layout: renderColumn functions return raw content, wrapped in Container component for height enforcement
+- Container component (tui/components/container.go) ensures exact height output - ALWAYS use for column rendering
+- Use `ansi.Truncate()` from `charmbracelet/x/ansi` for ANSI+grapheme-aware truncation (handles emoji/wide chars)
+- External commands: Follow mpv package pattern (exec.Command, handle errors, provide cleanup)
+- Database queries: Embedded SQL files in db/sql/, use //go:embed for loading
+- TUI keybindings: Add to help overlay, update MEMORY.md with pattern
+---
+

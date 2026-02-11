@@ -314,6 +314,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "x", "X":
 			// X deletes the selected item
 			return m.deleteSelectedItem()
+		case "ctrl+e":
+			// Ctrl+E triggers clip export for current video
+			return m.startExportClips()
 		}
 	}
 
@@ -2170,4 +2173,12 @@ func (m *Model) loadTackleStatsForPanel() {
 	if !m.statsView.Active {
 		m.statsView.Stats = stats
 	}
+}
+
+// startExportClips initiates the clip export flow for the current video.
+func (m *Model) startExportClips() (tea.Model, tea.Cmd) {
+	m.commandInput.SetResult("Export clips: not yet implemented", true)
+	return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+		return clearResultMsg{}
+	})
 }
