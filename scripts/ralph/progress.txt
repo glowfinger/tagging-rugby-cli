@@ -50,3 +50,14 @@ Started: Wed Feb 11 15:13:55 PST 2026
   - Existing ffmpeg pattern in cmd/clip.go uses similar args but with -to instead of -t (both work the same with -ss before -i)
   - -y flag needed to overwrite existing files without prompting
 ---
+
+## 2026-02-11 - US-005
+- Created pkg/cliputil/paths.go with file organization helpers
+- SanitizePlayerName, FormatTimestamp, GetOutputDir, GetPlayerClipPath
+- Empty player name falls back to "Unknown"
+- Files changed: pkg/cliputil/paths.go (new)
+- **Learnings for future iterations:**
+  - FormatTimestamp uses hyphens instead of colons (filesystem-safe): 0-26-42 vs 0:26:42
+  - GetOutputDir strips extension and appends "-clips" to video basename
+  - filepath.Join handles cross-platform separators
+---
