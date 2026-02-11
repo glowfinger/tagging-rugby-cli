@@ -2,69 +2,24 @@
 - Use `CGO_ENABLED=0` for all Go build/vet commands (required for modernc.org/sqlite)
 - Go binary is at `/home/node/go/bin/go` - use `export PATH="$PATH:/home/node/go/bin"` before Go commands
 - Database connection uses modernc.org/sqlite (pure Go implementation, no CGO)
-- Add new table migrations to the `migrate()` function in db/db.go - always use `CREATE TABLE IF NOT EXISTS`
 - Bubble Tea key strings: use "esc" (not "escape"), "enter", "tab", "backspace", "left", "right" for key handling
-- SQL queries live in `db/sql/*.sql` files, embedded via `go:embed` in `db/queries.go` — reference as `db.InsertNoteSQL` etc.
-- go:embed can only access files within the same package directory or subdirectories (no `../` paths)
+- SQL queries live in `db/sql/*.sql` files, embedded via `go:embed` in `db/queries.go`
 - Three-column TUI layout uses padToWidth helper + manual row-by-row assembly (split lines, pad, join with border chars)
 - lipgloss.Width() accounts for ANSI escape sequences when measuring rendered string width
-- Column 3 live stats use loadTackleStatsForPanel() on tick — only updates when stats view is not active to avoid conflicts
-- Go structs for all tables in db/models.go; database functions (insert/select/delete) in db/functions.go
-- Use `db.InsertNoteWithChildren(database, category, db.NoteChildren{...})` for transactional insert of note + child records
-- CLI commands create notes with category field ("clip", "tackle", or user-provided) plus child rows for timing, video, and type-specific data
-- TUI note/tackle/clip creation also uses `db.InsertNoteWithChildren()` — same pattern as CLI commands
-- Tackle stats in TUI use inline SQL queries joining note_tackles, notes, note_videos, and note_highlights (not embedded SQL files)
-- loadNotesAndTackles() uses inline SQL joining notes, note_videos, note_timing, then loads child details/tackles/highlights per note
-- Star highlights are stored as note_highlights rows with type="star", not as a column on notes
-- huh forms package lives in tui/forms/ — theme, note form, and tackle form go here
-- huh form integration pattern: store *huh.Form + result struct in Model, delegate Update/View, check State for completion
-- huh forms need ALL message types delegated (not just KeyMsg) — cursor blink, focus msgs are internal
-- huh Select auto-sets value to first option on Init() — exclude from HasData() checks for "empty form" detection
-- Confirm discard pattern: intercept StateAborted, check HasData(), show confirm form, reopen original form if user cancels
-- Normal-mode keybindings in Update() switch: msg.String() returns "left", "right", "up", "down" for arrow keys and "," "." for punctuation
-- Command mode already handles "left"/"right" for cursor movement — normal-mode arrow cases only fire when commandInput.Active is false
-- Column 1 renderColumn1() now uses GetControlGroups() from controls.go (single source of truth)
+- Column 1 renderColumn1() uses GetControlGroups() from controls.go — ControlGroup uses SubGroups [][]Control for divider placement
 - padToWidth() uses lipgloss.Width() to ANSI-aware pad AND truncate lines to exact column width
-- truncateToWidth() preserves ANSI escape sequences while trimming visible width
 - normalizeLines() ensures column line arrays are exactly the target height
 - Responsive layout: col3HideThreshold=90, col3MinWidth=18; at <90 cols, two-column layout with single border
-- Arrow keys ("left","right","up","down") and punctuation (",",".") added as alternatives in normal-mode switch
+- Use `ansi.Truncate()` from `charmbracelet/x/ansi` for ANSI+grapheme-aware truncation
+- Shared time formatting in `pkg/timeutil/timeutil.go` — `timeutil.FormatTime(seconds)` for H:MM:SS
+- Shared time parsing in `pkg/timeutil/timeutil.go` — `timeutil.ParseTimeToSeconds(str)` for HH:MM:SS, MM:SS, or raw seconds
+- Bordered control boxes: `components.RenderControlBox(group, width)` — tab header + box-drawing border + horizontal dividers between sub-groups
+- Mini player: `components.RenderMiniPlayer(statusBar, width)` renders compact bordered card for narrow terminals (< minTerminalWidth)
+- mpv client has SetSpeed(float64) and GetSpeed() methods already implemented
+- huh form integration: store *huh.Form + result struct in Model, delegate Update/View, check State for completion
+- Edit tackle form: `forms.NewEditTackleForm(timestamp, endSeconds, result)` with `EditTackleFormResult`
+- Edit flow uses `editingNoteID` field (0=create, >0=edit) to distinguish save paths
+- db package cannot import tui/forms (circular dependency) — use db-package structs, let TUI map to form types
 
 ---
 
-## 2026-02-09 - US-065
-- Added "left"/"right" cases alongside "h"/"l" for seek backward/forward
-- Added "up"/"down" cases alongside "j"/"k" for notes list navigation
-- Files changed: tui/tui.go
-- **Learnings:** msg.String() returns "left", "right", "up", "down" for arrow keys in Bubble Tea
----
-
-## 2026-02-09 - US-066
-- Added ","/"." cases alongside "<"/">" for step size decrease/increase
-- Files changed: tui/tui.go
-- **Learnings:** Comma and period don't conflict with command mode since command mode check happens first
----
-
-## 2026-02-09 - US-067
-- Updated GetControlGroups() shortcuts to show alternatives: "H/←", "L/→", "J/↑", "K/↓", ",/<", "./>"
-- Updated help overlay with "H / Left", "L / Right", "J / Up", "K / Down", ", / <", ". / >" bindings
-- Refactored renderColumn1() to use GetControlGroups() — removed duplicate hardcoded controls list
-- Files changed: tui/components/controls.go, tui/components/help.go, tui/tui.go
-- **Learnings:** Unicode arrows (←→↑↓) render well in terminal for compact shortcut display
----
-
-## 2026-02-09 - US-069
-- padToWidth() now truncates overflowing lines (not just pads short ones)
-- Added truncateToWidth() that preserves ANSI escape sequences while trimming visible chars
-- Added normalizeLines() to ensure column line arrays match target height exactly
-- Files changed: tui/tui.go
-- **Learnings:** ANSI escape sequences start with \x1b and end with a letter — must skip them during width measurement
----
-
-## 2026-02-09 - US-070
-- Replaced equal-thirds column calculation with responsive algorithm
-- Wide (120+): equal thirds; Medium (90-119): col3 shrinks to 18 chars; Narrow (<90): col3 hidden
-- Two-column fallback uses single border character, columns 1+2 split evenly
-- Files changed: tui/tui.go
-- **Learnings:** Keep layout constants as named consts (col3HideThreshold, col3MinWidth) for easy tuning
----

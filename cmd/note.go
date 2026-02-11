@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/mpv"
+	"github.com/user/tagging-rugby-cli/pkg/timeutil"
 )
 
 var noteCmd = &cobra.Command{
@@ -82,11 +83,7 @@ var noteAddCmd = &cobra.Command{
 			return fmt.Errorf("failed to insert note: %w", err)
 		}
 
-		// Format timestamp as MM:SS
-		minutes := int(timestamp) / 60
-		seconds := int(timestamp) % 60
-
-		fmt.Printf("Note added: ID %d at %d:%02d\n", noteID, minutes, seconds)
+		fmt.Printf("Note added: ID %d at %s\n", noteID, timeutil.FormatTime(timestamp))
 		return nil
 	},
 }
@@ -148,10 +145,7 @@ var noteListCmd = &cobra.Command{
 				return fmt.Errorf("failed to scan note: %w", err)
 			}
 
-			// Format timestamp as MM:SS
-			minutes := int(startTime) / 60
-			seconds := int(startTime) % 60
-			timeStr := fmt.Sprintf("%d:%02d", minutes, seconds)
+			timeStr := timeutil.FormatTime(startTime)
 
 			catStr := nullStringValue(category)
 
@@ -224,11 +218,7 @@ var noteGotoCmd = &cobra.Command{
 			return fmt.Errorf("failed to seek to timestamp: %w", err)
 		}
 
-		// Format timestamp
-		minutes := int(seekPos) / 60
-		seconds := int(seekPos) % 60
-
-		fmt.Printf("Jumped to note %d at %d:%02d\n", noteID, minutes, seconds)
+		fmt.Printf("Jumped to note %d at %s\n", noteID, timeutil.FormatTime(seekPos))
 		if note.Category != "" {
 			fmt.Printf("  Category: %s\n", note.Category)
 		}
@@ -307,23 +297,6 @@ func joinStrings(strs []string, sep string) string {
 		result += sep + strs[i]
 	}
 	return result
-}
-
-// parseTimeToSeconds parses a time string in MM:SS or seconds format.
-func parseTimeToSeconds(timeStr string) (float64, error) {
-	// Try MM:SS format first
-	var minutes, seconds int
-	if n, err := fmt.Sscanf(timeStr, "%d:%d", &minutes, &seconds); n == 2 && err == nil {
-		return float64(minutes*60 + seconds), nil
-	}
-
-	// Try seconds format (float)
-	var secs float64
-	if n, err := fmt.Sscanf(timeStr, "%f", &secs); n == 1 && err == nil {
-		return secs, nil
-	}
-
-	return 0, fmt.Errorf("expected MM:SS or seconds, got '%s'", timeStr)
 }
 
 func init() {

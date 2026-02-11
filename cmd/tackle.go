@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/mpv"
+	"github.com/user/tagging-rugby-cli/pkg/timeutil"
 )
 
 // Valid outcome values for tackles
@@ -94,11 +95,7 @@ var tackleAddCmd = &cobra.Command{
 			return fmt.Errorf("failed to insert tackle: %w", err)
 		}
 
-		// Format timestamp as MM:SS
-		minutes := int(timestamp) / 60
-		seconds := int(timestamp) % 60
-
-		fmt.Printf("Tackle recorded: Note ID %d at %d:%02d\n", noteID, minutes, seconds)
+		fmt.Printf("Tackle recorded: Note ID %d at %s\n", noteID, timeutil.FormatTime(timestamp))
 		fmt.Printf("  Player: %s, Attempt: %d, Outcome: %s\n", player, attempt, outcome)
 		return nil
 	},
@@ -180,10 +177,7 @@ var tackleListCmd = &cobra.Command{
 				return fmt.Errorf("failed to scan tackle: %w", err)
 			}
 
-			// Format timestamp as MM:SS
-			minutes := int(timestamp) / 60
-			seconds := int(timestamp) % 60
-			timeStr := fmt.Sprintf("%d:%02d", minutes, seconds)
+			timeStr := timeutil.FormatTime(timestamp)
 
 			playerStr := nullStringValue(player)
 			outcomeStr := nullStringValue(outcome)

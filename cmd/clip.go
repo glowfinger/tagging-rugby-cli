@@ -13,6 +13,7 @@ import (
 	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/deps"
 	"github.com/user/tagging-rugby-cli/mpv"
+	"github.com/user/tagging-rugby-cli/pkg/timeutil"
 )
 
 // clipStartState holds the temporary clip start timestamp.
@@ -65,11 +66,7 @@ var clipStartCmd = &cobra.Command{
 		clipStartState.isSet = true
 		clipStartState.mu.Unlock()
 
-		// Format timestamp as MM:SS
-		minutes := int(timestamp) / 60
-		seconds := int(timestamp) % 60
-
-		fmt.Printf("Clip start marked at %d:%02d\n", minutes, seconds)
+		fmt.Printf("Clip start marked at %s\n", timeutil.FormatTime(timestamp))
 		fmt.Println("Use 'clip end <name>' to complete the clip.")
 		return nil
 	},
@@ -124,9 +121,9 @@ var clipEndCmd = &cobra.Command{
 
 		// Validate start < end
 		if startTimestamp >= endTimestamp {
-			return fmt.Errorf("clip end time (%d:%02d) must be after start time (%d:%02d)",
-				int(endTimestamp)/60, int(endTimestamp)%60,
-				int(startTimestamp)/60, int(startTimestamp)%60)
+			return fmt.Errorf("clip end time (%s) must be after start time (%s)",
+				timeutil.FormatTime(endTimestamp),
+				timeutil.FormatTime(startTimestamp))
 		}
 
 		// Open database
@@ -157,13 +154,7 @@ var clipEndCmd = &cobra.Command{
 			return fmt.Errorf("failed to insert clip: %w", err)
 		}
 
-		// Format timestamps
-		startMin := int(startTimestamp) / 60
-		startSec := int(startTimestamp) % 60
-		endMin := int(endTimestamp) / 60
-		endSec := int(endTimestamp) % 60
-
-		fmt.Printf("Clip saved: Note ID %d (%d:%02d - %d:%02d, %.1fs)\n", noteID, startMin, startSec, endMin, endSec, duration)
+		fmt.Printf("Clip saved: Note ID %d (%s - %s, %.1fs)\n", noteID, timeutil.FormatTime(startTimestamp), timeutil.FormatTime(endTimestamp), duration)
 		return nil
 	},
 }
@@ -226,14 +217,8 @@ var clipListCmd = &cobra.Command{
 				return fmt.Errorf("failed to scan clip: %w", err)
 			}
 
-			// Format timestamps
-			startMin := int(startSec) / 60
-			startSecInt := int(startSec) % 60
-			endMin := int(endSec) / 60
-			endSecInt := int(endSec) % 60
-
-			startStr := fmt.Sprintf("%d:%02d", startMin, startSecInt)
-			endStr := fmt.Sprintf("%d:%02d", endMin, endSecInt)
+			startStr := timeutil.FormatTime(startSec)
+			endStr := timeutil.FormatTime(endSec)
 			durationStr := fmt.Sprintf("%.1fs", duration)
 
 			// Truncate name if too long
@@ -318,15 +303,10 @@ var clipPlayCmd = &cobra.Command{
 			return fmt.Errorf("failed to set A-B loop: %w", err)
 		}
 
-		// Format timestamps
-		startMin := int(startSec) / 60
-		startSecInt := int(startSec) % 60
-		endMin := int(endSec) / 60
-		endSecInt := int(endSec) % 60
 		duration := endSec - startSec
 
 		fmt.Printf("Playing clip (note %d): %s\n", noteID, clipName)
-		fmt.Printf("Looping %d:%02d - %d:%02d (%.1fs)\n", startMin, startSecInt, endMin, endSecInt, duration)
+		fmt.Printf("Looping %s - %s (%.1fs)\n", timeutil.FormatTime(startSec), timeutil.FormatTime(endSec), duration)
 		fmt.Println("Use 'clip stop' to clear the loop.")
 		return nil
 	},

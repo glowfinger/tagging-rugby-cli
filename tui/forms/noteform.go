@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/huh"
+	"github.com/user/tagging-rugby-cli/pkg/timeutil"
 )
 
 // NoteFormResult holds the data returned by a completed note form.
@@ -20,13 +21,10 @@ func (r *NoteFormResult) HasData() bool {
 }
 
 // NewNoteForm creates a huh form for note input with the given timestamp.
-// The timestamp is displayed as a header in MM:SS format.
+// The timestamp is displayed as a header in H:MM:SS format.
 // The result pointer is bound to the form fields and will be populated on submit.
 func NewNoteForm(timestamp float64, result *NoteFormResult) *huh.Form {
-	totalSeconds := int(timestamp)
-	mins := totalSeconds / 60
-	secs := totalSeconds % 60
-	header := fmt.Sprintf("Add Note @ %d:%02d", mins, secs)
+	header := fmt.Sprintf("Add Note @ %s", timeutil.FormatTime(timestamp))
 
 	form := huh.NewForm(
 		huh.NewGroup(

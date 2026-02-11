@@ -3,6 +3,7 @@ package tui
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/mpv"
+	"github.com/user/tagging-rugby-cli/pkg/timeutil"
 	"github.com/user/tagging-rugby-cli/tui/components"
 	"github.com/user/tagging-rugby-cli/tui/forms"
 	"github.com/user/tagging-rugby-cli/tui/styles"
@@ -87,6 +89,10 @@ type Model struct {
 	confirmDiscard bool
 	// confirmDiscardTarget tracks which form triggered the confirm ("note" or "tackle")
 	confirmDiscardTarget string
+	// editingNoteID tracks which note is being edited (0 = create mode, >0 = edit mode)
+	editingNoteID int64
+	// editTackleFormResult holds the bound values for the edit tackle form
+	editTackleFormResult forms.EditTackleFormResult
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -163,6 +169,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.showHelp {
 			m.showHelp = false
 			return m, nil
+		}
+
+		// Mini player mode: only allow playback keys through
+		if m.width > 0 && m.width < minTerminalWidth {
+			switch msg.String() {
+			case " ", "h", "H", "left", "l", "L", "right",
+				",", "<", ".", ">",
+				"m", "M",
+				"ctrl+h", "ctrl+l",
+				"ctrl+c",
+				"?":
+				// Allow these keys to fall through to normal handling
+			default:
+				// Suppress all other keys in mini player mode
+				return m, nil
+			}
 		}
 
 		// Handle stats view input
@@ -286,6 +308,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "t", "T":
 			// T opens quick tackle input prompt
 			return m.openTackleInput()
+		case "e", "E":
+			// E opens edit form for selected tackle
+			return m.openEditTackleInput()
+		case "x", "X":
+			// X deletes the selected item
+			return m.deleteSelectedItem()
 		}
 	}
 
@@ -446,7 +474,7 @@ func (m *Model) saveNoteFromForm() (tea.Model, tea.Cmd) {
 
 	// Reload list and show confirmation
 	m.loadNotesAndTackles()
-	m.commandInput.SetResult(fmt.Sprintf("Note %d added at %s", noteID, formatTimeString(timestamp)), false)
+	m.commandInput.SetResult(fmt.Sprintf("Note %d added at %s", noteID, timeutil.FormatTime(timestamp)), false)
 	return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
 		return clearResultMsg{}
 	})
@@ -478,6 +506,53 @@ func (m *Model) openTackleInput() (tea.Model, tea.Cmd) {
 	return m, m.tackleForm.Init()
 }
 
+// openEditTackleInput opens the edit tackle form pre-populated with existing data.
+func (m *Model) openEditTackleInput() (tea.Model, tea.Cmd) {
+	item := m.notesList.GetSelectedItem()
+	if item == nil {
+		m.commandInput.SetResult("No item selected", true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Only tackles can be edited
+	if item.Type != components.ItemTypeTackle {
+		m.commandInput.SetResult("Edit not supported for notes", true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Load existing data from database
+	data, err := db.LoadNoteForEdit(m.db, item.ID)
+	if err != nil {
+		m.commandInput.SetResult("Error: "+err.Error(), true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Map db.EditTackleData to forms.EditTackleFormResult
+	m.editTackleFormResult = forms.EditTackleFormResult{
+		TackleFormResult: forms.TackleFormResult{
+			Player:   data.Player,
+			Attempt:  fmt.Sprintf("%d", data.Attempt),
+			Outcome:  data.Outcome,
+			Followed: data.Followed,
+			Notes:    data.Notes,
+			Zone:     data.Zone,
+			Star:     data.Star,
+		},
+	}
+
+	m.editingNoteID = item.ID
+	m.tackleFormTimestamp = data.Timestamp
+	m.tackleForm = forms.NewEditTackleForm(data.Timestamp, data.EndSeconds, &m.editTackleFormResult)
+
+	return m, m.tackleForm.Init()
+}
+
 // handleTackleFormUpdate delegates messages to the huh tackle form and handles completion.
 func (m *Model) handleTackleFormUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	form, cmd := m.tackleForm.Update(msg)
@@ -487,14 +562,24 @@ func (m *Model) handleTackleFormUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Check if form was completed or cancelled
 	if m.tackleForm.State == huh.StateCompleted {
+		if m.editingNoteID > 0 {
+			return m.saveEditTackleFromForm()
+		}
 		return m.saveTackleFromForm()
 	}
 	if m.tackleForm.State == huh.StateAborted {
 		// If form has data, show confirm discard dialog
-		if m.tackleFormResult.HasData() {
+		hasData := false
+		if m.editingNoteID > 0 {
+			hasData = m.editTackleFormResult.HasData()
+		} else {
+			hasData = m.tackleFormResult.HasData()
+		}
+		if hasData {
 			return m.openConfirmDiscard("tackle")
 		}
 		m.tackleForm = nil
+		m.editingNoteID = 0
 		return m, nil
 	}
 
@@ -525,6 +610,7 @@ func (m *Model) handleConfirmDiscardUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.noteForm = nil
 			} else {
 				m.tackleForm = nil
+				m.editingNoteID = 0
 			}
 			return m, nil
 		}
@@ -533,8 +619,7 @@ func (m *Model) handleConfirmDiscardUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.noteForm = forms.NewNoteForm(m.noteFormTimestamp, &m.noteFormResult)
 			return m, m.noteForm.Init()
 		}
-		m.tackleForm = forms.NewTackleForm(m.tackleFormTimestamp, &m.tackleFormResult)
-		return m, m.tackleForm.Init()
+		return m, m.reopenTackleForm()
 	}
 
 	if m.confirmDiscardForm.State == huh.StateAborted {
@@ -544,11 +629,26 @@ func (m *Model) handleConfirmDiscardUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.noteForm = forms.NewNoteForm(m.noteFormTimestamp, &m.noteFormResult)
 			return m, m.noteForm.Init()
 		}
-		m.tackleForm = forms.NewTackleForm(m.tackleFormTimestamp, &m.tackleFormResult)
-		return m, m.tackleForm.Init()
+		return m, m.reopenTackleForm()
 	}
 
 	return m, cmd
+}
+
+// reopenTackleForm reopens the appropriate tackle form (create or edit) from saved state.
+func (m *Model) reopenTackleForm() tea.Cmd {
+	if m.editingNoteID > 0 {
+		// Save current user-edited values before NewEditTackleForm overwrites them
+		savedTimestamp := m.editTackleFormResult.Timestamp
+		savedEndSeconds := m.editTackleFormResult.EndSeconds
+		m.tackleForm = forms.NewEditTackleForm(m.tackleFormTimestamp, 0, &m.editTackleFormResult)
+		// Restore user's values
+		m.editTackleFormResult.Timestamp = savedTimestamp
+		m.editTackleFormResult.EndSeconds = savedEndSeconds
+	} else {
+		m.tackleForm = forms.NewTackleForm(m.tackleFormTimestamp, &m.tackleFormResult)
+	}
+	return m.tackleForm.Init()
 }
 
 // saveTackleFromForm saves the tackle data from the completed huh form.
@@ -627,6 +727,100 @@ func (m *Model) saveTackleFromForm() (tea.Model, tea.Cmd) {
 	})
 }
 
+// saveEditTackleFromForm saves the edited tackle data from the completed edit form.
+func (m *Model) saveEditTackleFromForm() (tea.Model, tea.Cmd) {
+	result := m.editTackleFormResult
+	noteID := m.editingNoteID
+
+	// Parse timestamp from the form
+	timestamp, err := timeutil.ParseTimeToSeconds(result.Timestamp)
+	if err != nil {
+		m.tackleForm = nil
+		m.editingNoteID = 0
+		m.commandInput.SetResult("Error: invalid timestamp", true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Parse end seconds
+	endSeconds, err := strconv.ParseFloat(result.EndSeconds, 64)
+	if err != nil || endSeconds <= 0 {
+		endSeconds = 2.0
+	}
+
+	// Parse attempt as integer
+	var attempt int
+	fmt.Sscanf(result.Attempt, "%d", &attempt)
+
+	// Build children for update
+	children := db.NoteChildren{
+		Tackles: []db.NoteTackle{
+			{Player: result.Player, Attempt: attempt, Outcome: result.Outcome},
+		},
+	}
+
+	// Add followed detail if provided
+	if result.Followed != "" {
+		children.Details = append(children.Details, db.NoteDetail{
+			Type: "followed", Note: result.Followed,
+		})
+	}
+
+	// Add notes detail if provided
+	if result.Notes != "" {
+		children.Details = append(children.Details, db.NoteDetail{
+			Type: "notes", Note: result.Notes,
+		})
+	}
+
+	// Add zone if provided
+	if result.Zone != "" {
+		children.Zones = []db.NoteZone{
+			{Horizontal: result.Zone},
+		}
+	}
+
+	// Add highlight if starred
+	if result.Star {
+		children.Highlights = []db.NoteHighlight{
+			{Type: "star"},
+		}
+	}
+
+	// Update children in database
+	if err := db.UpdateNoteWithChildren(m.db, noteID, children); err != nil {
+		m.tackleForm = nil
+		m.editingNoteID = 0
+		m.commandInput.SetResult("Error: "+err.Error(), true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Update timing
+	if err := db.UpdateNoteTiming(m.db, noteID, timestamp, timestamp+endSeconds); err != nil {
+		m.tackleForm = nil
+		m.editingNoteID = 0
+		m.commandInput.SetResult("Error: "+err.Error(), true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	m.tackleForm = nil
+	m.editingNoteID = 0
+
+	// Reload list and stats
+	m.loadNotesAndTackles()
+	m.loadTackleStatsForPanel()
+
+	m.commandInput.SetResult(fmt.Sprintf("Updated tackle %d", noteID), false)
+	return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+		return clearResultMsg{}
+	})
+}
+
 // executeCommand parses and executes a command string.
 // Returns a result message or an error.
 func (m *Model) executeCommand(cmdStr string) (string, error) {
@@ -680,16 +874,16 @@ func (m *Model) executeCommand(cmdStr string) (string, error) {
 		return "Unmuted", nil
 	case "seek":
 		if len(args) < 1 {
-			return "", fmt.Errorf("seek requires a time argument (e.g., seek 1:30 or seek 90)")
+			return "", fmt.Errorf("seek requires a time argument (e.g., seek 1:11:22 or seek 1:30 or seek 90)")
 		}
-		seconds, err := parseTimeToSeconds(args[0])
+		seconds, err := timeutil.ParseTimeToSeconds(args[0])
 		if err != nil {
 			return "", err
 		}
 		if err := m.client.Seek(seconds); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("Seeked to %s", formatTimeString(seconds)), nil
+		return fmt.Sprintf("Seeked to %s", timeutil.FormatTime(seconds)), nil
 	case "speed":
 		if len(args) < 1 {
 			speed, err := m.client.GetSpeed()
@@ -774,7 +968,7 @@ func (m *Model) executeClipCommand(args []string) (string, error) {
 		}
 		m.clipStartTimestamp = timestamp
 		m.clipStartSet = true
-		return fmt.Sprintf("Clip start marked at %s", formatTimeString(timestamp)), nil
+		return fmt.Sprintf("Clip start marked at %s", timeutil.FormatTime(timestamp)), nil
 
 	case "end":
 		if !m.clipStartSet {
@@ -968,7 +1162,7 @@ func (m *Model) addNote(text, category, _, _ string) (string, error) {
 	// Reload notes list
 	m.loadNotesAndTackles()
 
-	return fmt.Sprintf("Note %d added at %s", noteID, formatTimeString(timestamp)), nil
+	return fmt.Sprintf("Note %d added at %s", noteID, timeutil.FormatTime(timestamp)), nil
 }
 
 // countNotes counts notes for the current video.
@@ -1142,6 +1336,43 @@ func (m *Model) countTackles() (int, error) {
 	return count, rows.Err()
 }
 
+// deleteSelectedItem deletes the currently selected item from the database and refreshes the list.
+func (m *Model) deleteSelectedItem() (tea.Model, tea.Cmd) {
+	item := m.notesList.GetSelectedItem()
+	if item == nil {
+		m.commandInput.SetResult("No item selected", true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Delete from database (cascade handles child tables)
+	if err := db.DeleteNote(m.db, item.ID); err != nil {
+		m.commandInput.SetResult("Error: "+err.Error(), true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	deletedID := item.ID
+
+	// Reload list and stats
+	m.loadNotesAndTackles()
+	m.loadTackleStatsForPanel()
+
+	// Adjust selection index after deletion
+	if len(m.notesList.Items) == 0 {
+		m.notesList.SelectedIndex = 0
+	} else if m.notesList.SelectedIndex >= len(m.notesList.Items) {
+		m.notesList.SelectedIndex = len(m.notesList.Items) - 1
+	}
+
+	m.commandInput.SetResult(fmt.Sprintf("Deleted tackle %d", deletedID), false)
+	return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+		return clearResultMsg{}
+	})
+}
+
 // jumpToSelectedItem seeks mpv to the selected item's timestamp and displays details.
 func (m *Model) jumpToSelectedItem() (tea.Model, tea.Cmd) {
 	item := m.notesList.GetSelectedItem()
@@ -1244,34 +1475,6 @@ func (m *Model) findStepSizeIndex() int {
 		}
 	}
 	return len(stepSizes) - 1
-}
-
-// parseTimeToSeconds parses a time string in MM:SS or seconds format.
-func parseTimeToSeconds(timeStr string) (float64, error) {
-	// Try MM:SS format first
-	var minutes, seconds int
-	if n, err := fmt.Sscanf(timeStr, "%d:%d", &minutes, &seconds); n == 2 && err == nil {
-		return float64(minutes*60 + seconds), nil
-	}
-
-	// Try seconds format (float)
-	var secs float64
-	if n, err := fmt.Sscanf(timeStr, "%f", &secs); n == 1 && err == nil {
-		return secs, nil
-	}
-
-	return 0, fmt.Errorf("expected MM:SS or seconds, got '%s'", timeStr)
-}
-
-// formatTimeString formats seconds as MM:SS.
-func formatTimeString(seconds float64) string {
-	if seconds < 0 {
-		seconds = 0
-	}
-	totalSeconds := int(seconds)
-	mins := totalSeconds / 60
-	secs := totalSeconds % 60
-	return fmt.Sprintf("%d:%02d", mins, secs)
 }
 
 // overlayProximitySeconds is how close (in seconds) a note must be to current timestamp to display.
@@ -1410,17 +1613,9 @@ func (m *Model) View() string {
 		return components.StatsView(m.statsView, m.width, m.height)
 	}
 
-	// Minimum width warning
+	// Mini player for narrow terminals
 	if m.width > 0 && m.width < minTerminalWidth {
-		warningStyle := lipgloss.NewStyle().
-			Foreground(styles.Pink).
-			Bold(true)
-		hintStyle := lipgloss.NewStyle().
-			Foreground(styles.Lavender).
-			Italic(true)
-		return warningStyle.Render(fmt.Sprintf("Terminal too narrow (%d cols)", m.width)) + "\n" +
-			hintStyle.Render(fmt.Sprintf("Minimum width: %d columns", minTerminalWidth)) + "\n" +
-			hintStyle.Render("Please resize your terminal.")
+		return components.RenderMiniPlayer(m.statusBar, m.width)
 	}
 
 	// Render status bar at top (full width)
@@ -1583,8 +1778,8 @@ func (m *Model) renderColumn1(width, height int) string {
 	}
 	lines = append(lines, infoStyle.Render(" "+playState))
 	lines = append(lines, infoStyle.Render(fmt.Sprintf(" Time: %s / %s",
-		formatTimeString(m.statusBar.TimePos),
-		formatTimeString(m.statusBar.Duration))))
+		timeutil.FormatTime(m.statusBar.TimePos),
+		timeutil.FormatTime(m.statusBar.Duration))))
 	lines = append(lines, infoStyle.Render(fmt.Sprintf(" Step: %s", formatStepSize(m.statusBar.StepSize))))
 
 	if m.statusBar.Muted {
@@ -1615,7 +1810,7 @@ func (m *Model) renderColumn1(width, height int) string {
 			starStr = " ★"
 		}
 		lines = append(lines, detailStyle.Render(fmt.Sprintf(" #%d %s%s", item.ID, typeStr, starStr)))
-		lines = append(lines, dimStyle.Render(fmt.Sprintf(" @ %s", formatTimeString(item.TimestampSeconds))))
+		lines = append(lines, dimStyle.Render(fmt.Sprintf(" @ %s", timeutil.FormatTime(item.TimestampSeconds))))
 		if item.Category != "" {
 			lines = append(lines, dimStyle.Render(fmt.Sprintf(" [%s]", item.Category)))
 		}
@@ -1639,42 +1834,13 @@ func (m *Model) renderColumn1(width, height int) string {
 		lines = append(lines, "")
 	}
 
-	// Controls section
-	controlsHeader := lipgloss.NewStyle().
-		Foreground(styles.Cyan).
-		Bold(true)
-	lines = append(lines, controlsHeader.Render(" Controls"))
-	lines = append(lines, "")
-
-	// Two-line controls display with sub-headers per group
-	subHeaderStyle := lipgloss.NewStyle().
-		Foreground(styles.Amber).
-		Bold(true)
-	shortcutStyle := lipgloss.NewStyle().
-		Foreground(styles.Cyan).
-		Bold(true)
-	nameStyle := lipgloss.NewStyle().
-		Foreground(styles.LightLavender)
-
+	// Controls section — bordered containers per group
 	groups := components.GetControlGroups()
 	for i, group := range groups {
-		// Group sub-header
-		lines = append(lines, subHeaderStyle.Render(" "+group.Name))
-		lines = append(lines, "")
+		box := components.RenderControlBox(group, width)
+		lines = append(lines, box)
 
-		for j, c := range group.Controls {
-			// Line 1: emoji  Name
-			lines = append(lines, nameStyle.Render(fmt.Sprintf(" %s  %s", c.Emoji, c.Name)))
-			// Line 2: indented [Key]
-			lines = append(lines, shortcutStyle.Render(fmt.Sprintf("     [%s]", c.Shortcut)))
-
-			// Blank line between controls (but not after the last in the last group)
-			if j < len(group.Controls)-1 || i < len(groups)-1 {
-				lines = append(lines, "")
-			}
-		}
-
-		// Extra blank line between groups
+		// 1 blank line gap between bordered containers
 		if i < len(groups)-1 {
 			lines = append(lines, "")
 		}
