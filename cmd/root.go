@@ -65,10 +65,11 @@ var openCmd = &cobra.Command{
 
 		// Launch mpv with video file
 		fmt.Printf("Opening video: %s\n", filepath.Base(absPath))
-		process, err := mpv.LaunchMpv(absPath)
+		process, cleanup, err := mpv.LaunchMpv(absPath)
 		if err != nil {
 			return fmt.Errorf("failed to launch mpv: %w", err)
 		}
+		defer cleanup()
 
 		// Wait briefly for socket to be ready
 		client := mpv.NewClient("")
