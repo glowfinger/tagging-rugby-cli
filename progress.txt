@@ -34,3 +34,18 @@
 
 ---
 
+## 2026-02-11 - US-102
+- Implemented full Tackle Stats table to replace Top Players leaderboard
+- Created RenderInfoBox() function in tui/components/controls.go for bordered containers
+- Modified renderTackleStatsTable() in tui/components/statspanel.go to show all players with totals row
+- Files changed:
+  - tui/components/controls.go (added RenderInfoBox function)
+  - tui/components/statspanel.go (replaced Top Players with full table)
+- **Learnings for future iterations:**
+  - RenderInfoBox is a reusable component for bordered boxes in the TUI - takes title, content lines, and width
+  - Tackle stats table uses flexible column widths: fixed widths for numeric columns, flexible for player names
+  - Totals row uses bold cyan styling (totalsStyle) to distinguish from player rows
+  - Table header uses headerStyle (pink/bold), player names use nameStyle (light lavender), numbers use numStyle (cyan)
+  - truncateStr() is available in statspanel.go for truncating player names to fit column width
+  - The bordered box from RenderInfoBox adds 2 chars width (1 for each border), so contentWidth = width - 2
+---
