@@ -32,7 +32,7 @@
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

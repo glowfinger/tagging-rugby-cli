@@ -71,3 +71,12 @@ type NoteHighlight struct {
 	NoteID int64
 	Type   string
 }
+
+// TackleClipData holds the data needed to export a tackle clip.
+type TackleClipData struct {
+	Player    string
+	Timestamp float64
+	ClipStart float64
+	ClipEnd   float64
+	NoteID    int64
+}

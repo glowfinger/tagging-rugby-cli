@@ -14,3 +14,16 @@ Started: Wed Feb 11 15:13:55 PST 2026
   - Help overlay entries use `{key, desc}` struct literals in grouped slices in help.go
   - Mini player mode whitelist (line ~176) doesn't need export key since export isn't relevant at small widths
 ---
+
+## 2026-02-11 - US-002
+- Created SQL query `select_tackles_for_export.sql` joining note_tackles, note_timing, note_videos
+- Added `TackleClipData` struct to db/models.go
+- Added `SelectTacklesForExport` function to db/functions.go
+- Added embed directive to db/queries.go
+- Files changed: db/sql/select_tackles_for_export.sql (new), db/models.go, db/queries.go, db/functions.go
+- **Learnings for future iterations:**
+  - Tackles store timing as note_timing.start = note_timing.end = video timestamp (both same value initially)
+  - Video path filtering requires JOIN to note_videos table (path stored there, not on notes or tackles)
+  - note_details JOIN not needed for export — player/timing is sufficient
+  - Follow existing pattern: embed SQL in queries.go, function in functions.go, struct in models.go
+---
