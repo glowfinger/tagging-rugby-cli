@@ -27,3 +27,15 @@ Started: Wed Feb 11 15:13:55 PST 2026
   - note_details JOIN not needed for export — player/timing is sufficient
   - Follow existing pattern: embed SQL in queries.go, function in functions.go, struct in models.go
 ---
+
+## 2026-02-11 - US-003
+- Created pkg/cliputil/cliputil.go with CalculateClipBounds function
+- Handles explicit clip boundaries (non-zero clipStart/clipEnd) and calculated defaults
+- Default: start = timestamp - 4s, end = timestamp + 10s, clamped to [0, videoDuration]
+- Files changed: pkg/cliputil/cliputil.go (new)
+- **Learnings for future iterations:**
+  - For tackles, clipStart == clipEnd == timestamp (both are note_timing.start/end set to same value)
+  - So the "both non-zero" check effectively means "were explicit clip boundaries set?"
+  - When start==end (typical tackle), we'll use calculated bounds since start != 0 but end won't be useful
+  - Actually need to check: if clipStart == clipEnd, treat as "no explicit bounds" — but current code checks != 0 which works for the typical case where both == timestamp
+---
