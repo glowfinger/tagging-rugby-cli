@@ -77,3 +77,30 @@
   - Colour centralisation via `styles.XXX` constants means a grep for `#[0-9a-fA-F]{6}` in tui/ .go files is a reliable QA check
   - The column layout properly accounts for border characters (usableWidth = m.width - borderCount) so rows + borders + full-width bars all align
 ---
+
+## 2026-02-10 - US-097
+- Replaced pictographic emojis in `tui/components/miniplayer.go`:
+  - `🔇 Muted` → `MUTED` (line 47)
+  - `⚠ Not connected` → `! Not connected` (line 53)
+- Kept `▶` and `⏸` play/pause icons (simple Unicode symbols, not pictographic emojis)
+- Mini player auto-sizing still works correctly — uses `lipgloss.Width()` which handles text widths properly
+- Build and vet pass cleanly
+- Files changed: tui/components/miniplayer.go
+- **Learnings for future iterations:**
+  - Mini player uses `lipgloss.Width()` for auto-sizing, so changing emoji → text doesn't break layout
+  - The `RenderMiniPlayer` function builds content lines then measures them for the card width — text replacement is straightforward
+---
+
+## 2026-02-10 - US-098
+- Replaced medal emojis in `tui/components/statspanel.go` leaderboard:
+  - `🥇` → `#1`, `🥈` → `#2`, `🥉` → `#3`
+  - `" 4"` → `#4`, `" 5"` → `#5` (now consistent formatting across all ranks)
+- Renamed `medalIcons` → `rankLabels` and `medal` → `rank` for clarity
+- Bar graph `█` character kept unchanged (block element, not emoji)
+- Column alignment preserved: all rank labels are 2 characters wide, same as the old medal emojis
+- Build and vet pass cleanly
+- Files changed: tui/components/statspanel.go
+- **Learnings for future iterations:**
+  - Medal emojis have visual width 2 (emoji width), same as `#N` text — so column alignment is preserved automatically
+  - The `nameWidth` calculation in the leaderboard accounts for rank(2) + total(4) + pct(6) + padding(6) = 18 chars subtracted from width
+---
