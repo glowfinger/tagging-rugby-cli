@@ -142,23 +142,23 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 		nameStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
 		numStyle := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
 		pctStyle := lipgloss.NewStyle().Foreground(styles.Lavender)
-		medalIcons := []string{"🥇", "🥈", "🥉", " 4", " 5"}
+		rankLabels := []string{"#1", "#2", "#3", "#4", "#5"}
 
-		nameWidth := width - 18 // medal(2) + total(4) + pct(6) + padding(6)
+		nameWidth := width - 18 // rank(2) + total(4) + pct(6) + padding(6)
 		if nameWidth < 6 {
 			nameWidth = 6
 		}
 
 		for i := 0; i < maxPlayers; i++ {
 			p := sorted[i]
-			medal := medalIcons[i]
+			rank := rankLabels[i]
 			name := truncateStr(p.Player, nameWidth)
 			pctStr := "-"
 			if p.Completed+p.Missed > 0 {
 				pctStr = fmt.Sprintf("%.0f%%", p.Percentage)
 			}
 			sections = append(sections, fmt.Sprintf(" %s %s %s %s",
-				medal,
+				rank,
 				nameStyle.Render(fmt.Sprintf("%-*s", nameWidth, name)),
 				numStyle.Render(fmt.Sprintf("%3d", p.Total)),
 				pctStyle.Render(fmt.Sprintf("%4s", pctStr)),
