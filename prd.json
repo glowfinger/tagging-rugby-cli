@@ -1,7 +1,7 @@
 {
   "project": "tagging-rugby-cli",
   "branchName": "ralph/tidy-up-ui-3",
-  "description": "Remove pictographic emojis from TUI — redesign controls bar with bordered containers and [Key] Label format, replace emoji status indicators with text",
+  "description": "UI polish: remove pictographic emojis, redesign controls bar, disable mpv default keybindings",
   "userStories": [
     {
       "id": "US-095",
@@ -49,7 +49,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -66,6 +66,37 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-099",
+      "title": "Embed minimal mpv input.conf in Go binary",
+      "description": "As a developer, I need a minimal mpv input configuration embedded in the binary so it can be written to disk at launch time without requiring external config files.",
+      "acceptanceCriteria": [
+        "Create an input.conf file in the mpv/ package directory with exactly three bindings: space cycle pause, q quit, f cycle fullscreen",
+        "Embed the file using go:embed in the mpv package (in launch.go or a new config.go file)",
+        "The embedded content is accessible as a []byte or string variable",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-100",
+      "title": "Launch mpv with disabled default keybindings and embedded input.conf",
+      "description": "As a user, I want mpv to launch with only space, q, and f keybindings so I don't accidentally trigger disruptive actions like subtitle cycling or screenshots.",
+      "acceptanceCriteria": [
+        "LaunchMpv() writes the embedded input.conf content to a temporary file (e.g. /tmp/tagging-rugby-input.conf or os.CreateTemp)",
+        "mpv is launched with --no-input-default-bindings flag to strip all built-in defaults",
+        "mpv is launched with --input-conf=<temp-file-path> pointing to the written config",
+        "The temp file is cleaned up when the mpv process exits or the app shuts down (best effort via defer os.Remove)",
+        "mpv only responds to space (pause), q (quit), and f (fullscreen) — all other keys ignored by mpv",
+        "All existing IPC-based controls (seek, speed, mute, frame step, overlay, A-B loop) continue to work exactly as before",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 6,
       "passes": false,
       "notes": ""
     }

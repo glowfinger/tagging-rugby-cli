@@ -235,3 +235,13 @@
   - The padding logic (width - leftWidth - rightWidth) handles any content length dynamically, so swapping emojis for text just works
   - Mute/overlay indicators use leading space (" MUTED", " OVL") for separation from adjacent content
 ---
+
+## 2026-02-11 - US-099
+- Created mpv/input.conf with three bindings: space cycle pause, q quit, f cycle fullscreen
+- Created mpv/config.go with go:embed to expose InputConf as []byte
+- Files changed: mpv/input.conf (new), mpv/config.go (new)
+- **Learnings for future iterations:**
+  - go:embed in Go only works for files in the same package directory or subdirectories
+  - Using a separate config.go file keeps embed concerns isolated from launch logic
+  - InputConf is exported as []byte so launch.go can write it to a temp file in US-100
+---
