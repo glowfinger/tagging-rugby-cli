@@ -42,15 +42,15 @@ func RenderMiniPlayer(state StatusBarState, fixedWidth int, showWarning bool) st
 	line2 := fmt.Sprintf(" %s / %s", timeStr, durationStr)
 	contentLines = append(contentLines, line2)
 
-	// Line 3: mute icon (only when muted)
+	// Line 3: mute label (only when muted)
 	if state.Muted {
-		contentLines = append(contentLines, " 🔇 Muted")
+		contentLines = append(contentLines, " MUTED")
 	}
 
 	// Warning line (e.g. "mpv not connected")
 	if showWarning {
 		warnStyle := lipgloss.NewStyle().Foreground(styles.Red)
-		contentLines = append(contentLines, warnStyle.Render(" ⚠ Not connected"))
+		contentLines = append(contentLines, warnStyle.Render(" ! Not connected"))
 	}
 
 	// Determine card width
