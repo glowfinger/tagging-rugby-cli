@@ -208,3 +208,30 @@
   - The narrow terminal view (< 80 cols) now shows a useful mini player instead of just a resize warning
   - All keybindings (including speed controls) already work in narrow mode since Update() doesn't restrict by terminal width
 ---
+
+## 2026-02-10 - US-095
+- Removed Emoji field from Control struct in controls.go
+- Removed all emoji values from GetControlGroups() control definitions
+- Each control now renders as [Key] Label on one line (e.g. [Space] Play, [H/←] Back)
+- Each control group is wrapped in a RenderInfoBox bordered container with group name as header
+- Groups stack vertically in column 1 (Playback, Navigation, Step / Overlay, Views)
+- Updated ControlsDisplay() to use [Key] Label format instead of emoji Name [shortcut]
+- Removed old multi-line emoji+name/key controls layout from renderColumn1()
+- Files changed: tui/components/controls.go, tui/tui.go
+- **Learnings for future iterations:**
+  - RenderInfoBox works well for control groups — pass pre-styled "[Key] Label" lines, box handles borders
+  - Removing Emoji field is a clean breaking change since nothing else references Control.Emoji
+  - The ControlsDisplay() wide-view format now matches the column 1 format style ([Key] Label)
+---
+
+## 2026-02-10 - US-096
+- Replaced mute emoji 🔇 with text " MUTED" in status bar
+- Replaced overlay emoji 📺 with text " OVL" in status bar
+- Kept ▶ (play) and ⏸ (pause) Unicode symbols unchanged
+- Renamed variables from muteIcon/overlayIcon to muteIndicator/overlayIndicator
+- Files changed: tui/components/statusbar.go
+- **Learnings for future iterations:**
+  - Status bar uses lipgloss.Width() for left/right alignment — plain ASCII text is more reliable than emojis for width calculation
+  - The padding logic (width - leftWidth - rightWidth) handles any content length dynamically, so swapping emojis for text just works
+  - Mute/overlay indicators use leading space (" MUTED", " OVL") for separation from adjacent content
+---

@@ -52,21 +52,21 @@ func StatusBar(state StatusBarState, width int) string {
 	}
 	speedStr := fmt.Sprintf("%gx", speed)
 
-	// Mute icon (only shown when muted)
-	var muteIcon string
+	// Mute indicator (only shown when muted)
+	var muteIndicator string
 	if state.Muted {
-		muteIcon = " 🔇"
+		muteIndicator = " MUTED"
 	}
 
-	// Overlay icon (only shown when enabled)
-	var overlayIcon string
+	// Overlay indicator (only shown when enabled)
+	var overlayIndicator string
 	if state.OverlayEnabled {
-		overlayIcon = " 📺"
+		overlayIndicator = " OVL"
 	}
 
 	// Build the status bar content
 	leftContent := fmt.Sprintf(" %s %s / %s", playIcon, timeStr, durationStr)
-	rightContent := fmt.Sprintf("Step: %s  Speed: %s%s%s ", stepStr, speedStr, muteIcon, overlayIcon)
+	rightContent := fmt.Sprintf("Step: %s  Speed: %s%s%s ", stepStr, speedStr, muteIndicator, overlayIndicator)
 
 	// Calculate padding between left and right content
 	leftWidth := lipgloss.Width(leftContent)
