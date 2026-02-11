@@ -30,6 +30,7 @@
 - Responsive layout: col1Width=30 (fixed), col3HideThreshold=90, col3MinWidth=18; at <90 cols, two-column layout with single border
 - Arrow keys ("left","right","up","down") and punctuation (",",".") added as alternatives in normal-mode switch
 - RenderInfoBox(title, contentLines, width) in controls.go — generic bordered box; pass pre-styled lines, box handles borders only
+- LaunchMpv returns (*exec.Cmd, func(), error) — caller must `defer cleanup()` to remove temp input.conf
 
 ---
 
@@ -244,4 +245,17 @@
   - go:embed in Go only works for files in the same package directory or subdirectories
   - Using a separate config.go file keeps embed concerns isolated from launch logic
   - InputConf is exported as []byte so launch.go can write it to a temp file in US-100
+---
+
+## 2026-02-11 - US-100
+- Modified LaunchMpv() to write embedded InputConf to temp file via os.CreateTemp
+- Added --no-input-default-bindings and --input-conf=<tmpPath> flags to mpv launch
+- Changed LaunchMpv signature to return cleanup func: (*exec.Cmd, func(), error)
+- Caller in cmd/root.go updated to use `defer cleanup()` for temp file removal
+- Files changed: mpv/launch.go, cmd/root.go
+- **Learnings for future iterations:**
+  - Don't call cmd.Wait() in a goroutine if the caller also calls process.Wait() — Go's exec.Cmd.Wait is not safe for concurrent calls
+  - Returning a cleanup func is cleaner than goroutine-based cleanup — lets caller control timing
+  - --no-input-default-bindings only affects keyboard input, NOT IPC commands — all SetProperty/Seek/etc. still work
+  - os.CreateTemp with pattern "tagging-rugby-input-*.conf" creates unique temp files safely
 ---
