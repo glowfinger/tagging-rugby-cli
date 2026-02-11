@@ -60,6 +60,7 @@ func HelpOverlay(width, height int) string {
 				{"O", "Toggle overlay on video"},
 				{"N", "Quick add note"},
 				{"T", "Quick add tackle"},
+				{"X", "Cycle tackle stats sort"},
 				{"Backspace", "Return to main view"},
 				{"/ (stats)", "Filter players by name/initials"},
 				{"Esc (stats)", "Clear player filters"},

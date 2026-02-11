@@ -308,6 +308,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_ = m.client.SetSpeed(1.0)
 			}
 			return m, nil
+		case "x", "X":
+			// X cycles through tackle stats sort columns
+			m.cycleTackleSortColumn()
+			return m, nil
 		}
 	}
 
@@ -1230,6 +1234,25 @@ func (m *Model) jumpToSelectedItem() (tea.Model, tea.Cmd) {
 	return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
 		return clearResultMsg{}
 	})
+}
+
+// cycleTackleSortColumn cycles to the next sort column for the tackle stats table.
+// Order: Total -> Completed -> Missed -> Percentage -> Player -> Total (loops)
+func (m *Model) cycleTackleSortColumn() {
+	switch m.tackleSortColumn {
+	case components.SortByTotal:
+		m.tackleSortColumn = components.SortByCompleted
+	case components.SortByCompleted:
+		m.tackleSortColumn = components.SortByMissed
+	case components.SortByMissed:
+		m.tackleSortColumn = components.SortByPercentage
+	case components.SortByPercentage:
+		m.tackleSortColumn = components.SortByPlayer
+	case components.SortByPlayer:
+		m.tackleSortColumn = components.SortByTotal
+	default:
+		m.tackleSortColumn = components.SortByTotal
+	}
 }
 
 // decreaseStepSize cycles to the previous (smaller) step size.
