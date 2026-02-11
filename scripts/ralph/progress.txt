@@ -39,3 +39,14 @@ Started: Wed Feb 11 15:13:55 PST 2026
   - When start==end (typical tackle), we'll use calculated bounds since start != 0 but end won't be useful
   - Actually need to check: if clipStart == clipEnd, treat as "no explicit bounds" — but current code checks != 0 which works for the typical case where both == timestamp
 ---
+
+## 2026-02-11 - US-004
+- Created pkg/cliputil/export.go with ExtractClip function
+- Uses exec.Command with -y flag, -ss before -i for fast seeking, H.264/AAC encoding
+- Captures stderr via bytes.Buffer for error reporting
+- Files changed: pkg/cliputil/export.go (new)
+- **Learnings for future iterations:**
+  - exec.Command handles path quoting automatically — no manual quoting needed for spaces in paths
+  - Existing ffmpeg pattern in cmd/clip.go uses similar args but with -to instead of -t (both work the same with -ss before -i)
+  - -y flag needed to overwrite existing files without prompting
+---
