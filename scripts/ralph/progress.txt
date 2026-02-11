@@ -61,3 +61,16 @@ Started: Wed Feb 11 15:13:55 PST 2026
   - GetOutputDir strips extension and appends "-clips" to video basename
   - filepath.Join handles cross-platform separators
 ---
+
+## 2026-02-11 - US-006
+- Created tui/export.go with export orchestration (startExportGoroutine, message types, channel listener)
+- Updated tui/tui.go: added exportCh field, export message handlers, form delegation guard
+- Uses channel-based Bubbletea pattern for async progress updates
+- Files changed: tui/export.go (new), tui/tui.go
+- **Learnings for future iterations:**
+  - Can't put export in cmd/ — cmd imports tui, would create circular dependency
+  - Channel-based Bubbletea pattern: goroutine sends to chan, waitForExportMsg reads one message, returns tea.Cmd to read next
+  - Must store channel on Model to keep reading after first message
+  - Form delegation guard must exclude export messages so they aren't swallowed by huh forms
+  - startExportGoroutine does sync validation (LookPath, Stat, DB query) before spawning goroutine
+---

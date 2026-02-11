@@ -103,8 +103,8 @@
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created in tui/export.go instead of cmd/export.go to avoid circular dependency"
     },
     {
       "id": "US-007",

@@ -93,6 +93,8 @@ type Model struct {
 	editingNoteID int64
 	// editTackleFormResult holds the bound values for the edit tackle form
 	editTackleFormResult forms.EditTackleFormResult
+	// exportCh receives progress messages from the export goroutine
+	exportCh <-chan tea.Msg
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -128,13 +130,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if _, isTick := msg.(tickMsg); !isTick {
 				if _, isClear := msg.(clearResultMsg); !isClear {
 					if _, isResize := msg.(tea.WindowSizeMsg); !isResize {
-						if m.confirmDiscardForm != nil {
-							return m.handleConfirmDiscardUpdate(msg)
+						// Let export messages pass through to the main handler
+						switch msg.(type) {
+						case exportProgressMsg, exportCompleteMsg, exportErrorMsg:
+							// Fall through to main switch
+						default:
+							if m.confirmDiscardForm != nil {
+								return m.handleConfirmDiscardUpdate(msg)
+							}
+							if m.noteForm != nil {
+								return m.handleNoteFormUpdate(msg)
+							}
+							return m.handleTackleFormUpdate(msg)
 						}
-						if m.noteForm != nil {
-							return m.handleNoteFormUpdate(msg)
-						}
-						return m.handleTackleFormUpdate(msg)
 					}
 				}
 			}
@@ -163,6 +171,27 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Clear the command result message
 		m.commandInput.ClearResult()
 		return m, nil
+
+	case exportProgressMsg:
+		m.commandInput.SetResult(fmt.Sprintf("Processing clip %d/%d...", msg.current, msg.total), false)
+		if m.exportCh != nil {
+			return m, waitForExportMsg(m.exportCh)
+		}
+		return m, nil
+
+	case exportCompleteMsg:
+		m.exportCh = nil
+		m.commandInput.SetResult(fmt.Sprintf("Exported %d clips to %s", msg.count, msg.outputDir), false)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+
+	case exportErrorMsg:
+		m.exportCh = nil
+		m.commandInput.SetResult(msg.err.Error(), true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
 
 	case tea.KeyMsg:
 		// Handle help overlay - any key dismisses it
@@ -2177,8 +2206,21 @@ func (m *Model) loadTackleStatsForPanel() {
 
 // startExportClips initiates the clip export flow for the current video.
 func (m *Model) startExportClips() (tea.Model, tea.Cmd) {
-	m.commandInput.SetResult("Export clips: not yet implemented", true)
-	return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
-		return clearResultMsg{}
-	})
+	// Get video duration from mpv if available
+	var videoDuration float64
+	if m.client != nil && m.client.IsConnected() {
+		videoDuration, _ = m.client.GetDuration()
+	}
+
+	ch, err := startExportGoroutine(m.db, m.videoPath, videoDuration)
+	if err != nil {
+		m.commandInput.SetResult(err.Error(), true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	m.exportCh = ch
+	m.commandInput.SetResult("Starting export...", false)
+	return m, waitForExportMsg(ch)
 }
