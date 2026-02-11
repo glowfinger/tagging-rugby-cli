@@ -49,3 +49,19 @@
   - truncateStr() is available in statspanel.go for truncating player names to fit column width
   - The bordered box from RenderInfoBox adds 2 chars width (1 for each border), so contentWidth = width - 2
 ---
+
+## 2026-02-11 - US-103
+- Verified sort keybinding implementation for Tackle Stats table (already committed as ad95bfe)
+- All acceptance criteria confirmed passing:
+  - tackleSortColumn field on Model with SortByTotal default
+  - X key cycles through sort columns (Total → Completed → Missed → Percentage → Player → Total)
+  - sortTackleStats() creates a copy before sorting (does not mutate source)
+  - Active sort column shown with arrow indicator (↓/↑) and amber highlight in table header
+  - Totals row pinned below header regardless of sort order
+  - Help overlay and controls display both include X/Sort keybinding
+- Files changed: prd.json (marked passes: true)
+- **Learnings for future iterations:**
+  - SortColumn type and constants (SortByTotal, SortByCompleted, etc.) defined in tui/components/statsview.go
+  - Sort at render time pattern: sortTackleStats() in statspanel.go makes a copy, sorts it, returns new slice
+  - Active header styling uses styles.Amber to highlight the sorted column
+---
