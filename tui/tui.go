@@ -172,7 +172,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Mini player mode: only allow playback keys through
-		if m.width > 0 && m.width < minTerminalWidth {
+		if m.width > 0 && m.width < layout.MinTerminalWidth {
 			switch msg.String() {
 			case " ", "h", "H", "left", "l", "L", "right",
 				",", "<", ".", ">",
@@ -1590,8 +1590,6 @@ func (m *Model) updateStatusFromMpv() {
 	}
 }
 
-// minTerminalWidth is the minimum terminal width for the three-column layout.
-const minTerminalWidth = 80
 
 // View renders the current state of the model as a string.
 func (m *Model) View() string {
@@ -1614,7 +1612,7 @@ func (m *Model) View() string {
 	}
 
 	// Mini player for narrow terminals
-	if m.width > 0 && m.width < minTerminalWidth {
+	if m.width > 0 && m.width < layout.MinTerminalWidth {
 		return components.RenderMiniPlayer(m.statusBar, m.width)
 	}
 
@@ -1642,81 +1640,31 @@ func (m *Model) View() string {
 		return statusBar + "\n" + controlsDisplay + "\n" + tackleFormView
 	}
 
-	// --- Three-column layout with responsive sizing ---
-	// Column 3 (live stats) shrinks first; hides entirely at narrow widths.
-	const (
-		col3HideThreshold = 90  // below this width, hide column 3 entirely
-		col3MinWidth      = 18  // minimum width for column 3 before hiding
-	)
-
+	// --- Responsive multi-column layout ---
 	// Available height for columns (total height minus status bar line, timeline 2 lines, and command input line)
 	colHeight := m.height - 5
 	if colHeight < 5 {
 		colHeight = 5
 	}
 
-	showCol3 := m.width >= col3HideThreshold
-
-	// Border style for vertical separators
-	borderStr := lipgloss.NewStyle().
-		Foreground(styles.Purple).
-		Render("│")
+	col1Width, col2Width, col3Width, showCol3 := layout.ComputeColumnWidths(m.width)
 
 	var columnsView string
-
 	if showCol3 {
-		// Three-column layout: account for 2 border characters
-		usableWidth := m.width - 2
-		var col1Width, col2Width, col3Width int
-
-		if m.width >= 120 {
-			// Wide: equal thirds
-			col1Width = usableWidth / 3
-			col2Width = usableWidth / 3
-			col3Width = usableWidth - col1Width - col2Width
-		} else {
-			// Medium: column 3 gets minimum, rest splits between 1 and 2
-			col3Width = col3MinWidth
-			remaining := usableWidth - col3Width
-			col1Width = remaining / 2
-			col2Width = remaining - col1Width
+		columns := []string{
+			m.renderColumn1(col1Width, colHeight),
+			m.renderColumn2(col2Width, colHeight),
+			m.renderColumn3(col3Width, colHeight),
 		}
-
-		col1Content := m.renderColumn1(col1Width, colHeight)
-		col2Content := m.renderColumn2(col2Width, colHeight)
-		col3Content := m.renderColumn3(col3Width, colHeight)
-
-		col1Lines := layout.NormalizeLines(strings.Split(col1Content, "\n"), colHeight)
-		col2Lines := layout.NormalizeLines(strings.Split(col2Content, "\n"), colHeight)
-		col3Lines := layout.NormalizeLines(strings.Split(col3Content, "\n"), colHeight)
-
-		var rows []string
-		for i := 0; i < colHeight; i++ {
-			c1 := layout.PadToWidth(col1Lines[i], col1Width)
-			c2 := layout.PadToWidth(col2Lines[i], col2Width)
-			c3 := layout.PadToWidth(col3Lines[i], col3Width)
-			rows = append(rows, c1+borderStr+c2+borderStr+c3)
-		}
-		columnsView = strings.Join(rows, "\n")
+		widths := []int{col1Width, col2Width, col3Width}
+		columnsView = layout.JoinColumns(columns, widths, colHeight)
 	} else {
-		// Two-column layout: column 3 hidden, 1 border character
-		usableWidth := m.width - 1
-		col1Width := usableWidth / 2
-		col2Width := usableWidth - col1Width
-
-		col1Content := m.renderColumn1(col1Width, colHeight)
-		col2Content := m.renderColumn2(col2Width, colHeight)
-
-		col1Lines := layout.NormalizeLines(strings.Split(col1Content, "\n"), colHeight)
-		col2Lines := layout.NormalizeLines(strings.Split(col2Content, "\n"), colHeight)
-
-		var rows []string
-		for i := 0; i < colHeight; i++ {
-			c1 := layout.PadToWidth(col1Lines[i], col1Width)
-			c2 := layout.PadToWidth(col2Lines[i], col2Width)
-			rows = append(rows, c1+borderStr+c2)
+		columns := []string{
+			m.renderColumn1(col1Width, colHeight),
+			m.renderColumn2(col2Width, colHeight),
 		}
-		columnsView = strings.Join(rows, "\n")
+		widths := []int{col1Width, col2Width}
+		columnsView = layout.JoinColumns(columns, widths, colHeight)
 	}
 
 	// Render timeline progress bar below columns (full width)

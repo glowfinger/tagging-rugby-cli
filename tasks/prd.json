@@ -52,7 +52,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Current inline logic is tui/tui.go:1645-1720. JoinColumns needs to import tui/styles for the purple border colour. The minTerminalWidth const (line 1594) should also move."
     },
     {

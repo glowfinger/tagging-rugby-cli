@@ -38,3 +38,16 @@
   - The scroll indicator replaces the last visible line entirely (not appended as extra line)
 ---
 
+## 2026-02-12 - US-003
+- Created `tui/layout/columns.go` with `ComputeColumnWidths` and `JoinColumns` functions
+- Exported constants: `MinTerminalWidth` (80), `Col3HideThreshold` (90), `Col3MinWidth` (18)
+- `ComputeColumnWidths(termWidth)` returns (col1, col2, col3, showCol3) — encapsulates responsive breakpoint logic
+- `JoinColumns(columns, widths, height)` normalizes lines, pads to width, joins with purple border separator
+- Replaced ~55 lines of inline column layout code in View() with calls to layout functions
+- Removed `minTerminalWidth` constant from tui.go (now `layout.MinTerminalWidth`)
+- Files changed: `tui/layout/columns.go` (new), `tui/tui.go` (modified)
+- **Learnings for future iterations:**
+  - Check ALL references to a constant/function before removing — `minTerminalWidth` was used in both `View()` and `Update()` (key filtering for mini player mode)
+  - `JoinColumns` is generic over any number of columns — works for both 2-col and 3-col layouts
+---
+
