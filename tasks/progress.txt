@@ -62,3 +62,14 @@
   - renderColumn2 passes `listHeight` (clamped to min 3) to NotesList but wraps with Container at full `height` — Container handles any mismatch
 ---
 
+## 2026-02-12 - US-005
+- Created `tui/columns.go` with renderColumn1, renderColumn2, renderColumn3, formatStepSize (same package `tui`)
+- Removed these functions from `tui/tui.go`
+- Removed unused imports from tui.go: `lipgloss`, `styles` (now only needed in columns.go)
+- No changes to function signatures or behavior — purely a file move
+- Files changed: `tui/columns.go` (new), `tui/tui.go` (modified)
+- **Learnings for future iterations:**
+  - When moving methods to a new file in the same package, imports must be duplicated in the new file
+  - After moving code, always check for newly-unused imports in the source file
+---
+

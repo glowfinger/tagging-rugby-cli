@@ -85,7 +85,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "renderColumn1 starts at tui/tui.go:1763, renderColumn2 at :1852, renderColumn3 at :1863, formatStepSize at :1868. All imports they need (fmt, strings, lipgloss, styles, components, timeutil, layout) must be in tui/columns.go."
     },
     {
