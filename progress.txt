@@ -24,3 +24,31 @@
 
 ---
 
+## 2026-02-12 - US-001
+- Removed command mode hint bar text — default bar now renders empty with DarkPurple background
+- Updated stale comment in CommandInput() docstring
+- Files changed: tui/components/commandinput.go
+- **Learnings for future iterations:**
+  - The hint text was already removed in a prior iteration; the code already had `lineStyle.Render(" ")` as default
+  - Only the comment needed updating to match the actual behavior
+---
+
+## 2026-02-12 - US-002 through US-010
+- All features were already implemented on this branch from prior iterations
+- Verified all acceptance criteria pass for each story:
+  - US-002: Speed float64 in StatusBarState, %gx format, polled via GetSpeed(), default 1.0
+  - US-003: speedSizes var, increaseSpeed/decreaseSpeed methods, []{}\\ keybindings in normal mode
+  - US-004: Speed-/Speed+/Speed1x in GetControlGroups(), speed bindings in HelpOverlay()
+  - US-005: RenderMiniPlayer(state, fixedWidth, showWarning) used in renderColumn1()
+  - US-006: RenderInfoBox() in controls.go, used for Selected Tag bordered box
+  - US-007: renderColumn2() wraps NotesList in bordered box with tab-style Notes header
+  - US-008: No borderStr, usableWidth = m.width, columns joined as c1+c2+c3
+  - US-009: Timeline() wraps in bordered box, 6 lines total, colHeight = m.height - 9
+  - US-010: RenderMiniPlayer shows Speed: %gx alongside step size
+- CGO_ENABLED=0 go vet ./... passes cleanly
+- Files changed: prd.json (all stories marked passes: true), progress.txt
+- **Learnings for future iterations:**
+  - When switching branches with stashed PRD changes, all prior implementation may already be present
+  - Always verify existing code before implementing — avoids duplicate work
+---
+
