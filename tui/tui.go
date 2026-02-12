@@ -10,8 +10,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/user/tagging-rugby-cli/db"
+	"github.com/user/tagging-rugby-cli/tui/layout"
 	"github.com/user/tagging-rugby-cli/mpv"
 	"github.com/user/tagging-rugby-cli/pkg/timeutil"
 	"github.com/user/tagging-rugby-cli/tui/components"
@@ -1686,15 +1686,15 @@ func (m *Model) View() string {
 		col2Content := m.renderColumn2(col2Width, colHeight)
 		col3Content := m.renderColumn3(col3Width, colHeight)
 
-		col1Lines := normalizeLines(strings.Split(col1Content, "\n"), colHeight)
-		col2Lines := normalizeLines(strings.Split(col2Content, "\n"), colHeight)
-		col3Lines := normalizeLines(strings.Split(col3Content, "\n"), colHeight)
+		col1Lines := layout.NormalizeLines(strings.Split(col1Content, "\n"), colHeight)
+		col2Lines := layout.NormalizeLines(strings.Split(col2Content, "\n"), colHeight)
+		col3Lines := layout.NormalizeLines(strings.Split(col3Content, "\n"), colHeight)
 
 		var rows []string
 		for i := 0; i < colHeight; i++ {
-			c1 := padToWidth(col1Lines[i], col1Width)
-			c2 := padToWidth(col2Lines[i], col2Width)
-			c3 := padToWidth(col3Lines[i], col3Width)
+			c1 := layout.PadToWidth(col1Lines[i], col1Width)
+			c2 := layout.PadToWidth(col2Lines[i], col2Width)
+			c3 := layout.PadToWidth(col3Lines[i], col3Width)
 			rows = append(rows, c1+borderStr+c2+borderStr+c3)
 		}
 		columnsView = strings.Join(rows, "\n")
@@ -1707,13 +1707,13 @@ func (m *Model) View() string {
 		col1Content := m.renderColumn1(col1Width, colHeight)
 		col2Content := m.renderColumn2(col2Width, colHeight)
 
-		col1Lines := normalizeLines(strings.Split(col1Content, "\n"), colHeight)
-		col2Lines := normalizeLines(strings.Split(col2Content, "\n"), colHeight)
+		col1Lines := layout.NormalizeLines(strings.Split(col1Content, "\n"), colHeight)
+		col2Lines := layout.NormalizeLines(strings.Split(col2Content, "\n"), colHeight)
 
 		var rows []string
 		for i := 0; i < colHeight; i++ {
-			c1 := padToWidth(col1Lines[i], col1Width)
-			c2 := padToWidth(col2Lines[i], col2Width)
+			c1 := layout.PadToWidth(col1Lines[i], col1Width)
+			c2 := layout.PadToWidth(col2Lines[i], col2Width)
 			rows = append(rows, c1+borderStr+c2)
 		}
 		columnsView = strings.Join(rows, "\n")
@@ -1728,37 +1728,6 @@ func (m *Model) View() string {
 	return statusBar + "\n" + columnsView + "\n" + timeline + "\n" + commandInput
 }
 
-// padToWidth pads or truncates a string to exactly the specified width.
-// Uses ansi.Truncate for ANSI-aware, grapheme-aware truncation that correctly
-// handles double-width characters (emoji, East-Asian).
-func padToWidth(s string, width int) string {
-	if width <= 0 {
-		return ""
-	}
-	currentWidth := lipgloss.Width(s)
-	if currentWidth == width {
-		return s
-	}
-	if currentWidth > width {
-		s = ansi.Truncate(s, width, "")
-		currentWidth = lipgloss.Width(s)
-	}
-	if currentWidth < width {
-		return s + strings.Repeat(" ", width-currentWidth)
-	}
-	return s
-}
-
-// normalizeLines pads or truncates a slice of strings to exactly the given height.
-func normalizeLines(lines []string, height int) []string {
-	if len(lines) > height {
-		lines = lines[:height]
-	}
-	for len(lines) < height {
-		lines = append(lines, "")
-	}
-	return lines
-}
 
 // renderColumn1 renders Column 1: Playback status, selected tag detail, controls.
 func (m *Model) renderColumn1(width, height int) string {
