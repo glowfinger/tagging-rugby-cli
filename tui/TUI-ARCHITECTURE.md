@@ -96,13 +96,12 @@ Constrains content to an exact `Width x Height` bounding box:
 
 ### ComputeColumnWidths(termWidth int) (col1, col2, col3 int, showCol3 bool)
 
-Responsive column width calculation:
+Responsive column width calculation (column 1 is always fixed at 30 cells):
 
 | Terminal Width | Layout | Column Sizing |
 |---------------|--------|---------------|
-| >= 120 | 3-column | Equal thirds (accounting for 2 border chars) |
-| 90 - 119 | 3-column | Col 3 = 18 (min), remaining split evenly between 1 and 2 |
-| 80 - 89 | 2-column | Col 3 hidden, remaining split evenly |
+| >= 90 | 3-column | Col 1 = 30 (fixed), remaining split evenly between 2 and 3 |
+| 80 - 89 | 2-column | Col 1 = 30 (fixed), col 3 hidden, all remaining to col 2 |
 | < 80 | Mini player | Separate `RenderMiniPlayer` path (not column layout) |
 
 ### JoinColumns(columns []string, widths []int, height int) string

@@ -17,8 +17,8 @@ const (
 
 // ComputeColumnWidths calculates responsive column widths based on terminal width.
 // Returns individual column widths and whether column 3 should be shown.
-// At >=120 width: equal thirds. At 90-119: min-width col3, rest split evenly.
-// At 80-89: two-column layout (col3 hidden).
+// Column 1 is always fixed at Col1Width (30). Remaining space is distributed
+// between columns 2 and 3. At <Col3HideThreshold: two-column layout (col3 hidden).
 func ComputeColumnWidths(termWidth int) (col1, col2, col3 int, showCol3 bool) {
 	showCol3 = termWidth >= Col3HideThreshold
 	col1 = Col1Width
