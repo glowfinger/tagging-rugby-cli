@@ -1,0 +1,88 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/column4-controls",
+  "description": "Column 4 Controls Panel - Add a fixed-width rightmost column for keybinding control groups (Playback, Navigation, Views), decluttering Column 1",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Update ComputeColumnWidths for 4-column layout",
+      "description": "As a developer, I need the layout engine to compute widths for 4 columns so the new controls column can be rendered at the correct size.",
+      "acceptanceCriteria": [
+        "ComputeColumnWidths() returns (col1, col2, col3, col4 int, showCol3, showCol4 bool)",
+        "New constant Col4Width = 30 added to tui/layout/columns.go",
+        "New constant Col4ShowThreshold = 160 added to tui/layout/columns.go",
+        "showCol4 is true when terminal width >= 160",
+        "When showCol4 is true: usable = termWidth - 3 borders; col1 = 30, col4 = 30; remaining split evenly between col2 and col3",
+        "When showCol4 is false, existing 3-col / 2-col / mini breakpoints are unchanged",
+        "All call sites of ComputeColumnWidths updated for the new return signature",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "ComputeColumnWidths is in tui/layout/columns.go. Called from View() in tui/tui.go. Return signature changes from (col1, col2, col3 int, showCol3 bool) to (col1, col2, col3, col4 int, showCol3, showCol4 bool)."
+    },
+    {
+      "id": "US-002",
+      "title": "Add renderColumn4 method",
+      "description": "As a developer, I need a renderColumn4 method that renders the three control groups inside a Container so it integrates with the column join pipeline.",
+      "acceptanceCriteria": [
+        "New method (m *Model) renderColumn4(width, height int) string added to tui/columns.go",
+        "Renders Playback, Navigation, and Views control groups using components.GetControlGroups() and components.RenderControlBox()",
+        "Control groups separated by 1 blank line gap (same spacing as current renderColumn1)",
+        "Output wrapped in layout.Container{Width, Height}.Render(...) for exact dimensions",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Follow the same pattern as the existing control group rendering in renderColumn1 (tui/columns.go lines 68-77). The method iterates GetControlGroups(), calls RenderControlBox() for each, joins with blank line gaps."
+    },
+    {
+      "id": "US-003",
+      "title": "Remove control groups from renderColumn1",
+      "description": "As a developer, I need to remove the control groups rendering from Column 1 so they don't appear in two places.",
+      "acceptanceCriteria": [
+        "renderColumn1 no longer calls GetControlGroups() or RenderControlBox()",
+        "Column 1 renders only: mini player card (RenderMiniPlayer) + selected tag detail box (RenderInfoBox)",
+        "Column 1 still wraps output in layout.Container{Width, Height}.Render(...)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Remove lines 68-77 from renderColumn1 in tui/columns.go (the GetControlGroups loop and RenderControlBox calls). Keep the mini player card and selected tag detail card."
+    },
+    {
+      "id": "US-004",
+      "title": "Wire Column 4 into View() rendering",
+      "description": "As a developer, I need to update the View() method to include Column 4 in the column join when the terminal is wide enough.",
+      "acceptanceCriteria": [
+        "When showCol4 is true, View() renders 4 columns: [col1, col2, col3, col4] with widths [col1Width, col2Width, col3Width, col4Width]",
+        "When showCol4 is false and showCol3 is true, existing 3-col rendering is unchanged",
+        "When both showCol3 and showCol4 are false, existing 2-col rendering is unchanged",
+        "Column 4 is the rightmost column (appears after Column 3)",
+        "JoinColumns correctly joins 4 columns with 3 border separators (no changes needed to JoinColumns itself)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "View() is in tui/tui.go. The column rendering section (around line 1769) has if/else for showCol3. Add a new outer branch for showCol4. JoinColumns is generic over N columns — no changes needed."
+    },
+    {
+      "id": "US-005",
+      "title": "Update TUI-ARCHITECTURE.md",
+      "description": "As a developer, I need the architecture docs to reflect the new 4-column layout so future contributors understand the layout system.",
+      "acceptanceCriteria": [
+        "Directory Structure: columns.go comment updated to renderColumn1/2/3/4",
+        "Rendering Pipeline step 3b updated from 'responsive 2-col or 3-col grid' to 'responsive 2/3/4-col grid'",
+        "Column Rendering table includes Column 4 row: method renderColumn4(width, height), content 'Keybinding control groups (Playback, Navigation, Views)'",
+        "Column 1 row updated: content changed from 'Playback status, selected tag detail, control groups' to 'Playback status, selected tag detail'",
+        "ComputeColumnWidths function signature updated to show new return values (col1, col2, col3, col4 int, showCol3, showCol4 bool)",
+        "Responsive layout table includes 4-column row: >= 160 | 4-column | Col 1 = 30 (fixed), Col 4 = 30 (fixed), remaining split evenly between 2 and 3",
+        "Existing 3-column row threshold updated to 90 - 159",
+        "No stale references to controls being in Column 1"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "TUI-ARCHITECTURE.md is at tui/TUI-ARCHITECTURE.md. Read the file first and make targeted edits — do not rewrite the entire file."
+    }
+  ]
+}
