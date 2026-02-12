@@ -10,38 +10,27 @@ import (
 // Responsive layout constants.
 const (
 	MinTerminalWidth  = 80 // minimum terminal width for multi-column layout
+	Col1Width         = 30 // fixed width for column 1
 	Col3HideThreshold = 90 // below this width, hide column 3 entirely
 	Col3MinWidth      = 18 // minimum width for column 3 before hiding
 )
 
 // ComputeColumnWidths calculates responsive column widths based on terminal width.
 // Returns individual column widths and whether column 3 should be shown.
-// At >=120 width: equal thirds. At 90-119: min-width col3, rest split evenly.
-// At 80-89: two-column layout (col3 hidden).
+// Column 1 is always fixed at Col1Width (30). Remaining space is distributed
+// between columns 2 and 3. At <Col3HideThreshold: two-column layout (col3 hidden).
 func ComputeColumnWidths(termWidth int) (col1, col2, col3 int, showCol3 bool) {
 	showCol3 = termWidth >= Col3HideThreshold
+	col1 = Col1Width
 
 	if showCol3 {
 		// Three-column layout: account for 2 border characters
-		usableWidth := termWidth - 2
-
-		if termWidth >= 120 {
-			// Wide: equal thirds
-			col1 = usableWidth / 3
-			col2 = usableWidth / 3
-			col3 = usableWidth - col1 - col2
-		} else {
-			// Medium: column 3 gets minimum, rest splits between 1 and 2
-			col3 = Col3MinWidth
-			remaining := usableWidth - col3
-			col1 = remaining / 2
-			col2 = remaining - col1
-		}
+		remaining := termWidth - 2 - col1
+		col2 = remaining / 2
+		col3 = remaining - col2
 	} else {
 		// Two-column layout: 1 border character
-		usableWidth := termWidth - 1
-		col1 = usableWidth / 2
-		col2 = usableWidth - col1
+		col2 = termWidth - 1 - col1
 		col3 = 0
 	}
 
