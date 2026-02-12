@@ -1,0 +1,35 @@
+## Codebase Patterns
+- Use `CGO_ENABLED=0` for all Go build/vet commands (required for modernc.org/sqlite)
+- Go binary is at `/home/node/go/bin/go` - use `export PATH="$PATH:/home/node/go/bin"` before Go commands
+- Database connection uses modernc.org/sqlite (pure Go implementation, no CGO)
+- Bubble Tea key strings: use "esc" (not "escape"), "enter", "tab", "backspace", "left", "right" for key handling
+- SQL queries live in `db/sql/*.sql` files, embedded via `go:embed` in `db/queries.go`
+- Three-column TUI layout uses padToWidth helper + manual row-by-row assembly (split lines, pad, join with border chars)
+- lipgloss.Width() accounts for ANSI escape sequences when measuring rendered string width
+- Column 1 renderColumn1() uses GetControlGroups() from controls.go — ControlGroup uses SubGroups [][]Control for divider placement
+- padToWidth() uses lipgloss.Width() to ANSI-aware pad AND truncate lines to exact column width
+- normalizeLines() ensures column line arrays are exactly the target height
+- Responsive layout: col3HideThreshold=90, col3MinWidth=18; at <90 cols, two-column layout with single border
+- Use `ansi.Truncate()` from `charmbracelet/x/ansi` for ANSI+grapheme-aware truncation
+- Shared time formatting in `pkg/timeutil/timeutil.go` — `timeutil.FormatTime(seconds)` for H:MM:SS
+- Shared time parsing in `pkg/timeutil/timeutil.go` — `timeutil.ParseTimeToSeconds(str)` for HH:MM:SS, MM:SS, or raw seconds
+- Bordered control boxes: `components.RenderControlBox(group, width)` — tab header + box-drawing border + horizontal dividers between sub-groups
+- Mini player: `components.RenderMiniPlayer(statusBar, width)` renders compact bordered card for narrow terminals (< minTerminalWidth)
+- mpv client has SetSpeed(float64) and GetSpeed() methods already implemented
+- huh form integration: store *huh.Form + result struct in Model, delegate Update/View, check State for completion
+- Edit tackle form: `forms.NewEditTackleForm(timestamp, endSeconds, result)` with `EditTackleFormResult`
+- Edit flow uses `editingNoteID` field (0=create, >0=edit) to distinguish save paths
+- db package cannot import tui/forms (circular dependency) — use db-package structs, let TUI map to form types
+- Column 1 fixed width: `layout.Col1Width = 30` constant; ComputeColumnWidths always uses it
+
+---
+
+## 2026-02-12 - US-001
+- Implemented fixed column 1 width of 30 cells
+- Files changed: `tui/layout/columns.go`, `tui/TUI-ARCHITECTURE.md`
+- **Learnings for future iterations:**
+  - The old ComputeColumnWidths had three branches (>=120, 90-119, 80-89) — the fixed col1 simplifies this to two branches (three-col vs two-col)
+  - The architecture doc table at TUI-ARCHITECTURE.md lines 101-106 must be kept in sync with ComputeColumnWidths logic
+  - Col3MinWidth constant is still defined but no longer used in the branching logic (col3 gets whatever space is left after col1 + col2)
+---
+
