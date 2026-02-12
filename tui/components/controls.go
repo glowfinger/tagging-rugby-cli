@@ -199,7 +199,7 @@ func RenderControlBox(group ControlGroup, width int) string {
 //	├─────────────────────────┤
 //	│ Time: 1:11:22 / 1:08:11 │
 //	└─────────────────────────┘
-func RenderMiniPlayer(state StatusBarState, termWidth int) string {
+func RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool) string {
 	borderStyle := lipgloss.NewStyle().Foreground(styles.Purple)
 	headerStyle := lipgloss.NewStyle().Foreground(styles.Pink).Bold(true)
 	textStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
@@ -314,6 +314,10 @@ func RenderMiniPlayer(state StatusBarState, termWidth int) string {
 			centeredLines = append(centeredLines, padStr+l)
 		}
 		card = strings.Join(centeredLines, "\n")
+	}
+
+	if !showWarning {
+		return card
 	}
 
 	// Warning line below card
