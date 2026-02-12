@@ -1,0 +1,113 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/layout-extraction",
+  "description": "Extract Layout Package & Document TUI Architecture - Move all layout logic from tui.go into a dedicated tui/layout/ package and document the full TUI layer",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create layout package with PadToWidth and NormalizeLines",
+      "description": "As a developer, I want low-level layout utilities in their own package so column rendering code can use them without depending on the main TUI model.",
+      "acceptanceCriteria": [
+        "New file tui/layout/helpers.go created with package declaration 'package layout'",
+        "Exported function PadToWidth(s string, width int) string — identical logic to current padToWidth in tui/tui.go (uses ansi.Truncate from charmbracelet/x/ansi)",
+        "Exported function NormalizeLines(lines []string, height int) []string — identical logic to current normalizeLines in tui/tui.go",
+        "All call sites in tui/tui.go updated to use layout.PadToWidth and layout.NormalizeLines",
+        "Original padToWidth and normalizeLines removed from tui/tui.go",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "padToWidth is at tui/tui.go:1734, normalizeLines at tui/tui.go:1753. PadToWidth imports lipgloss and charmbracelet/x/ansi. NormalizeLines is pure stdlib."
+    },
+    {
+      "id": "US-002",
+      "title": "Create Container component in layout package",
+      "description": "As a developer, I want a Container struct that wraps content to an exact Width x Height bounding box so every column renderer produces dimension-safe output.",
+      "acceptanceCriteria": [
+        "New file tui/layout/container.go created",
+        "Container struct with Width int and Height int fields",
+        "Render(content string) string method that: splits on newlines, truncates each line to Width via PadToWidth, pads/truncates line count to Height",
+        "When content has more lines than Height, the last visible line shows a scroll indicator (e.g. styled '... more' or similar) to signal truncation",
+        "When content has fewer lines than Height, empty lines are appended to fill",
+        "Output is always exactly Height lines, each exactly Width visual columns",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Container can import tui/styles for scroll indicator styling. Uses PadToWidth from helpers.go in same package."
+    },
+    {
+      "id": "US-003",
+      "title": "Extract responsive column width logic into layout package",
+      "description": "As a developer, I want the responsive multi-column breakpoint logic in a dedicated file so the View method is concise and layout rules are easy to find.",
+      "acceptanceCriteria": [
+        "New file tui/layout/columns.go created",
+        "Exported constants: MinTerminalWidth (80), Col3HideThreshold (90), Col3MinWidth (18)",
+        "Exported function ComputeColumnWidths(termWidth int) (col1, col2, col3 int, showCol3 bool) — encapsulates the responsive width math from tui/tui.go View()",
+        "ComputeColumnWidths returns identical widths to current inline logic for all terminal widths: equal thirds at >=120, min-width col3 at 90-119, 2-col at 80-89",
+        "Exported function JoinColumns(columns []string, widths []int, height int) string — normalizes lines, pads to width, joins with purple border separator",
+        "JoinColumns produces output identical to current inline column-joining loop in View()",
+        "tui/tui.go View() updated to call layout.ComputeColumnWidths and layout.JoinColumns instead of inline logic",
+        "The ~55 lines of inline column layout code removed from View() in tui/tui.go",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Current inline logic is tui/tui.go:1645-1720. JoinColumns needs to import tui/styles for the purple border colour. The minTerminalWidth const (line 1594) should also move."
+    },
+    {
+      "id": "US-004",
+      "title": "Wrap renderColumn1/2/3 with Container",
+      "description": "As a developer, I want each column renderer to use layout.Container so columns guarantee exact dimensions and show scroll indicators when content overflows.",
+      "acceptanceCriteria": [
+        "renderColumn1 wraps its return value in layout.Container{Width: width, Height: height}.Render(...)",
+        "renderColumn2 wraps its return value in layout.Container{Width: width, Height: height}.Render(...)",
+        "renderColumn3 wraps its return value in layout.Container{Width: width, Height: height}.Render(...)",
+        "JoinColumns no longer needs to call NormalizeLines/PadToWidth per-line since each column is already containerized — simplify if appropriate",
+        "Scroll indicator appears on column 1 when playback info + selected tag + controls exceeds available height",
+        "Visual output identical when content fits; scroll indicator only shows when content is truncated",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "renderColumn1 is the most likely to overflow — it has playback status, selected tag detail, and 3 control groups. renderColumn2 and renderColumn3 already respect height internally but should still be wrapped for consistency."
+    },
+    {
+      "id": "US-005",
+      "title": "Move renderColumn1/2/3 and formatStepSize to tui/columns.go",
+      "description": "As a developer, I want column render methods in a separate file so tui.go stays focused on Model, Update, and top-level View orchestration.",
+      "acceptanceCriteria": [
+        "New file tui/columns.go created (same package 'tui', NOT in layout/)",
+        "Functions moved: renderColumn1, renderColumn2, renderColumn3, formatStepSize",
+        "These remain methods on *Model (they access model state)",
+        "tui/tui.go no longer contains any renderColumn or formatStepSize functions",
+        "No changes to function signatures or behavior",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "renderColumn1 starts at tui/tui.go:1763, renderColumn2 at :1852, renderColumn3 at :1863, formatStepSize at :1868. All imports they need (fmt, strings, lipgloss, styles, components, timeutil, layout) must be in tui/columns.go."
+    },
+    {
+      "id": "US-006",
+      "title": "Write TUI-ARCHITECTURE.md",
+      "description": "As a contributor, I want a document explaining the TUI layer structure so I can understand the rendering pipeline, component contracts, and layout system without reading every file.",
+      "acceptanceCriteria": [
+        "File created at tui/TUI-ARCHITECTURE.md",
+        "Covers: Overview (purpose, key deps: Bubble Tea, Lip Gloss, huh)",
+        "Covers: Directory structure (tui.go, columns.go, components/, forms/, styles/, layout/)",
+        "Covers: Rendering pipeline (View() orchestration: status bar -> columns -> timeline -> command input)",
+        "Covers: Layout system (tui/layout/ package: Container, ComputeColumnWidths, JoinColumns, PadToWidth, NormalizeLines; responsive breakpoints)",
+        "Covers: Component contracts (each component's public function signature, state struct, and rendering guarantees)",
+        "Covers: Forms integration (how huh forms init, delegate messages, check state)",
+        "Covers: Styles (colour palette in tui/styles/styles.go)",
+        "Every statement matches the actual code — no invented details",
+        "Concise — approximately 150-250 lines of markdown",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "This is a documentation-only story — no Go code changes. The doc should reflect the state of the code AFTER US-001 through US-005 are complete. Read the actual files to verify every detail."
+    }
+  ]
+}

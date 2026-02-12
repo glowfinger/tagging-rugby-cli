@@ -1,113 +1,88 @@
 {
   "project": "tagging-rugby-cli",
-  "branchName": "ralph/layout-extraction",
-  "description": "Extract Layout Package & Document TUI Architecture - Move all layout logic from tui.go into a dedicated tui/layout/ package and document the full TUI layer",
+  "branchName": "ralph/column4-controls",
+  "description": "Column 4 Controls Panel - Add a fixed-width rightmost column for keybinding control groups (Playback, Navigation, Views), decluttering Column 1",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Create layout package with PadToWidth and NormalizeLines",
-      "description": "As a developer, I want low-level layout utilities in their own package so column rendering code can use them without depending on the main TUI model.",
+      "title": "Update ComputeColumnWidths for 4-column layout",
+      "description": "As a developer, I need the layout engine to compute widths for 4 columns so the new controls column can be rendered at the correct size.",
       "acceptanceCriteria": [
-        "New file tui/layout/helpers.go created with package declaration 'package layout'",
-        "Exported function PadToWidth(s string, width int) string — identical logic to current padToWidth in tui/tui.go (uses ansi.Truncate from charmbracelet/x/ansi)",
-        "Exported function NormalizeLines(lines []string, height int) []string — identical logic to current normalizeLines in tui/tui.go",
-        "All call sites in tui/tui.go updated to use layout.PadToWidth and layout.NormalizeLines",
-        "Original padToWidth and normalizeLines removed from tui/tui.go",
+        "ComputeColumnWidths() returns (col1, col2, col3, col4 int, showCol3, showCol4 bool)",
+        "New constant Col4Width = 30 added to tui/layout/columns.go",
+        "New constant Col4ShowThreshold = 160 added to tui/layout/columns.go",
+        "showCol4 is true when terminal width >= 160",
+        "When showCol4 is true: usable = termWidth - 3 borders; col1 = 30, col4 = 30; remaining split evenly between col2 and col3",
+        "When showCol4 is false, existing 3-col / 2-col / mini breakpoints are unchanged",
+        "All call sites of ComputeColumnWidths updated for the new return signature",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "padToWidth is at tui/tui.go:1734, normalizeLines at tui/tui.go:1753. PadToWidth imports lipgloss and charmbracelet/x/ansi. NormalizeLines is pure stdlib."
+      "notes": "ComputeColumnWidths is in tui/layout/columns.go. Called from View() in tui/tui.go. Return signature changes from (col1, col2, col3 int, showCol3 bool) to (col1, col2, col3, col4 int, showCol3, showCol4 bool)."
     },
     {
       "id": "US-002",
-      "title": "Create Container component in layout package",
-      "description": "As a developer, I want a Container struct that wraps content to an exact Width x Height bounding box so every column renderer produces dimension-safe output.",
+      "title": "Add renderColumn4 method",
+      "description": "As a developer, I need a renderColumn4 method that renders the three control groups inside a Container so it integrates with the column join pipeline.",
       "acceptanceCriteria": [
-        "New file tui/layout/container.go created",
-        "Container struct with Width int and Height int fields",
-        "Render(content string) string method that: splits on newlines, truncates each line to Width via PadToWidth, pads/truncates line count to Height",
-        "When content has more lines than Height, the last visible line shows a scroll indicator (e.g. styled '... more' or similar) to signal truncation",
-        "When content has fewer lines than Height, empty lines are appended to fill",
-        "Output is always exactly Height lines, each exactly Width visual columns",
+        "New method (m *Model) renderColumn4(width, height int) string added to tui/columns.go",
+        "Renders Playback, Navigation, and Views control groups using components.GetControlGroups() and components.RenderControlBox()",
+        "Control groups separated by 1 blank line gap (same spacing as current renderColumn1)",
+        "Output wrapped in layout.Container{Width, Height}.Render(...) for exact dimensions",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "Container can import tui/styles for scroll indicator styling. Uses PadToWidth from helpers.go in same package."
+      "notes": "Follow the same pattern as the existing control group rendering in renderColumn1 (tui/columns.go lines 68-77). The method iterates GetControlGroups(), calls RenderControlBox() for each, joins with blank line gaps."
     },
     {
       "id": "US-003",
-      "title": "Extract responsive column width logic into layout package",
-      "description": "As a developer, I want the responsive multi-column breakpoint logic in a dedicated file so the View method is concise and layout rules are easy to find.",
+      "title": "Remove control groups from renderColumn1",
+      "description": "As a developer, I need to remove the control groups rendering from Column 1 so they don't appear in two places.",
       "acceptanceCriteria": [
-        "New file tui/layout/columns.go created",
-        "Exported constants: MinTerminalWidth (80), Col3HideThreshold (90), Col3MinWidth (18)",
-        "Exported function ComputeColumnWidths(termWidth int) (col1, col2, col3 int, showCol3 bool) — encapsulates the responsive width math from tui/tui.go View()",
-        "ComputeColumnWidths returns identical widths to current inline logic for all terminal widths: equal thirds at >=120, min-width col3 at 90-119, 2-col at 80-89",
-        "Exported function JoinColumns(columns []string, widths []int, height int) string — normalizes lines, pads to width, joins with purple border separator",
-        "JoinColumns produces output identical to current inline column-joining loop in View()",
-        "tui/tui.go View() updated to call layout.ComputeColumnWidths and layout.JoinColumns instead of inline logic",
-        "The ~55 lines of inline column layout code removed from View() in tui/tui.go",
+        "renderColumn1 no longer calls GetControlGroups() or RenderControlBox()",
+        "Column 1 renders only: mini player card (RenderMiniPlayer) + selected tag detail box (RenderInfoBox)",
+        "Column 1 still wraps output in layout.Container{Width, Height}.Render(...)",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "Current inline logic is tui/tui.go:1645-1720. JoinColumns needs to import tui/styles for the purple border colour. The minTerminalWidth const (line 1594) should also move."
+      "notes": "Remove lines 68-77 from renderColumn1 in tui/columns.go (the GetControlGroups loop and RenderControlBox calls). Keep the mini player card and selected tag detail card."
     },
     {
       "id": "US-004",
-      "title": "Wrap renderColumn1/2/3 with Container",
-      "description": "As a developer, I want each column renderer to use layout.Container so columns guarantee exact dimensions and show scroll indicators when content overflows.",
+      "title": "Wire Column 4 into View() rendering",
+      "description": "As a developer, I need to update the View() method to include Column 4 in the column join when the terminal is wide enough.",
       "acceptanceCriteria": [
-        "renderColumn1 wraps its return value in layout.Container{Width: width, Height: height}.Render(...)",
-        "renderColumn2 wraps its return value in layout.Container{Width: width, Height: height}.Render(...)",
-        "renderColumn3 wraps its return value in layout.Container{Width: width, Height: height}.Render(...)",
-        "JoinColumns no longer needs to call NormalizeLines/PadToWidth per-line since each column is already containerized — simplify if appropriate",
-        "Scroll indicator appears on column 1 when playback info + selected tag + controls exceeds available height",
-        "Visual output identical when content fits; scroll indicator only shows when content is truncated",
+        "When showCol4 is true, View() renders 4 columns: [col1, col2, col3, col4] with widths [col1Width, col2Width, col3Width, col4Width]",
+        "When showCol4 is false and showCol3 is true, existing 3-col rendering is unchanged",
+        "When both showCol3 and showCol4 are false, existing 2-col rendering is unchanged",
+        "Column 4 is the rightmost column (appears after Column 3)",
+        "JoinColumns correctly joins 4 columns with 3 border separators (no changes needed to JoinColumns itself)",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "renderColumn1 is the most likely to overflow — it has playback status, selected tag detail, and 3 control groups. renderColumn2 and renderColumn3 already respect height internally but should still be wrapped for consistency."
+      "notes": "View() is in tui/tui.go. The column rendering section (around line 1769) has if/else for showCol3. Add a new outer branch for showCol4. JoinColumns is generic over N columns — no changes needed."
     },
     {
       "id": "US-005",
-      "title": "Move renderColumn1/2/3 and formatStepSize to tui/columns.go",
-      "description": "As a developer, I want column render methods in a separate file so tui.go stays focused on Model, Update, and top-level View orchestration.",
+      "title": "Update TUI-ARCHITECTURE.md",
+      "description": "As a developer, I need the architecture docs to reflect the new 4-column layout so future contributors understand the layout system.",
       "acceptanceCriteria": [
-        "New file tui/columns.go created (same package 'tui', NOT in layout/)",
-        "Functions moved: renderColumn1, renderColumn2, renderColumn3, formatStepSize",
-        "These remain methods on *Model (they access model state)",
-        "tui/tui.go no longer contains any renderColumn or formatStepSize functions",
-        "No changes to function signatures or behavior",
-        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+        "Directory Structure: columns.go comment updated to renderColumn1/2/3/4",
+        "Rendering Pipeline step 3b updated from 'responsive 2-col or 3-col grid' to 'responsive 2/3/4-col grid'",
+        "Column Rendering table includes Column 4 row: method renderColumn4(width, height), content 'Keybinding control groups (Playback, Navigation, Views)'",
+        "Column 1 row updated: content changed from 'Playback status, selected tag detail, control groups' to 'Playback status, selected tag detail'",
+        "ComputeColumnWidths function signature updated to show new return values (col1, col2, col3, col4 int, showCol3, showCol4 bool)",
+        "Responsive layout table includes 4-column row: >= 160 | 4-column | Col 1 = 30 (fixed), Col 4 = 30 (fixed), remaining split evenly between 2 and 3",
+        "Existing 3-column row threshold updated to 90 - 159",
+        "No stale references to controls being in Column 1"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "renderColumn1 starts at tui/tui.go:1763, renderColumn2 at :1852, renderColumn3 at :1863, formatStepSize at :1868. All imports they need (fmt, strings, lipgloss, styles, components, timeutil, layout) must be in tui/columns.go."
-    },
-    {
-      "id": "US-006",
-      "title": "Write TUI-ARCHITECTURE.md",
-      "description": "As a contributor, I want a document explaining the TUI layer structure so I can understand the rendering pipeline, component contracts, and layout system without reading every file.",
-      "acceptanceCriteria": [
-        "File created at tui/TUI-ARCHITECTURE.md",
-        "Covers: Overview (purpose, key deps: Bubble Tea, Lip Gloss, huh)",
-        "Covers: Directory structure (tui.go, columns.go, components/, forms/, styles/, layout/)",
-        "Covers: Rendering pipeline (View() orchestration: status bar -> columns -> timeline -> command input)",
-        "Covers: Layout system (tui/layout/ package: Container, ComputeColumnWidths, JoinColumns, PadToWidth, NormalizeLines; responsive breakpoints)",
-        "Covers: Component contracts (each component's public function signature, state struct, and rendering guarantees)",
-        "Covers: Forms integration (how huh forms init, delegate messages, check state)",
-        "Covers: Styles (colour palette in tui/styles/styles.go)",
-        "Every statement matches the actual code — no invented details",
-        "Concise — approximately 150-250 lines of markdown",
-        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
-      ],
-      "priority": 6,
-      "passes": true,
-      "notes": "This is a documentation-only story — no Go code changes. The doc should reflect the state of the code AFTER US-001 through US-005 are complete. Read the actual files to verify every detail."
+      "notes": "TUI-ARCHITECTURE.md is at tui/TUI-ARCHITECTURE.md. Read the file first and make targeted edits — do not rewrite the entire file."
     }
   ]
 }

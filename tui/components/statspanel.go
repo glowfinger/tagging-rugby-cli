@@ -142,7 +142,7 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 		nameStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
 		numStyle := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
 		pctStyle := lipgloss.NewStyle().Foreground(styles.Lavender)
-		medalIcons := []string{"🥇", "🥈", "🥉", " 4", " 5"}
+		medalIcons := []string{"#1", "#2", "#3", "#4", "#5"}
 
 		nameWidth := width - 18 // medal(2) + total(4) + pct(6) + padding(6)
 		if nameWidth < 6 {

@@ -1639,16 +1639,25 @@ func (m *Model) View() string {
 	}
 
 	// --- Responsive multi-column layout ---
-	// Available height for columns (total height minus timeline 2 lines and command input line)
-	colHeight := m.height - 4
+	// Available height for columns: total height minus timeline (2 lines) and command input (1 line)
+	colHeight := m.height - 3
 	if colHeight < 5 {
 		colHeight = 5
 	}
 
-	col1Width, col2Width, col3Width, showCol3 := layout.ComputeColumnWidths(m.width)
+	col1Width, col2Width, col3Width, col4Width, showCol3, showCol4 := layout.ComputeColumnWidths(m.width)
 
 	var columnsView string
-	if showCol3 {
+	if showCol4 {
+		columns := []string{
+			m.renderColumn1(col1Width, colHeight),
+			m.renderColumn2(col2Width, colHeight),
+			m.renderColumn3(col3Width, colHeight),
+			m.renderColumn4(col4Width, colHeight),
+		}
+		widths := []int{col1Width, col2Width, col3Width, col4Width}
+		columnsView = layout.JoinColumns(columns, widths, colHeight)
+	} else if showCol3 {
 		columns := []string{
 			m.renderColumn1(col1Width, colHeight),
 			m.renderColumn2(col2Width, colHeight),
