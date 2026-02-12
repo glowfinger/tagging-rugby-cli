@@ -37,3 +37,19 @@
   - Column 1 plain-text playback section in columns.go is separate from RenderMiniPlayer
   - The mini player auto-sizes based on widest content line + 4 for borders
 ---
+
+## 2026-02-12 - US-002
+- Removed the full-width status bar from the main View() layout in tui/tui.go
+- Form overlay views (confirm discard, note form, tackle form) now show RenderMiniPlayer at top instead of StatusBar
+- Error view now shows RenderMiniPlayer with showWarning=true instead of StatusBar
+- Added `showWarning` bool parameter to RenderMiniPlayer — warning line only rendered when true
+- Updated narrow terminal mini player call to pass showWarning=true
+- Changed colHeight from m.height - 5 to m.height - 4 to reclaim the freed status bar line
+- StatusBar function and StatusBarState struct remain unchanged (still available, still used as data container)
+- Help overlay and stats view remain unchanged (they already don't show the status bar)
+- Files changed: tui/tui.go, tui/components/controls.go
+- **Learnings for future iterations:**
+  - RenderMiniPlayer signature is now (state StatusBarState, termWidth int, showWarning bool)
+  - colHeight = m.height - 4 (timeline 2 lines + command input 1 line + 1 newline separator)
+  - StatusBar() function is NOT deleted — it remains in statusbar.go for potential future use
+---
