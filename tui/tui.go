@@ -1639,8 +1639,8 @@ func (m *Model) View() string {
 	}
 
 	// --- Responsive multi-column layout ---
-	// Available height for columns (total height minus timeline 2 lines and command input line)
-	colHeight := m.height - 4
+	// Available height for columns: total height minus timeline (2 lines) and command input (1 line)
+	colHeight := m.height - 3
 	if colHeight < 5 {
 		colHeight = 5
 	}

@@ -15,44 +15,21 @@ import (
 func (m *Model) renderColumn1(width, height int) string {
 	var lines []string
 
-	// Playback status card
-	statusHeader := lipgloss.NewStyle().
-		Foreground(styles.Pink).
-		Bold(true)
-	lines = append(lines, statusHeader.Render(" Playback"))
+	// Bordered mini player card
+	miniPlayer := components.RenderMiniPlayer(m.statusBar, width, false)
+	lines = append(lines, strings.Split(miniPlayer, "\n")...)
 
-	infoStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
-
-	playState := "▶ Playing"
-	if m.statusBar.Paused {
-		playState = "⏸ Paused"
-	}
-	lines = append(lines, infoStyle.Render(" "+playState))
-	lines = append(lines, infoStyle.Render(fmt.Sprintf(" Time: %s / %s",
-		timeutil.FormatTime(m.statusBar.TimePos),
-		timeutil.FormatTime(m.statusBar.Duration))))
-	lines = append(lines, infoStyle.Render(fmt.Sprintf(" Step: %s", formatStepSize(m.statusBar.StepSize))))
-
-	if m.statusBar.Muted {
-		lines = append(lines, infoStyle.Render(" 🔇 Muted"))
-	}
-	if m.statusBar.OverlayEnabled {
-		lines = append(lines, infoStyle.Render(" Overlay: on"))
-	} else {
-		lines = append(lines, infoStyle.Render(" Overlay: off"))
-	}
-	lines = append(lines, "")
-
-	// Current tag detail card (selected item)
+	// Current tag detail card (selected item) — bordered box
 	item := m.notesList.GetSelectedItem()
 	if item != nil {
-		detailHeader := lipgloss.NewStyle().
-			Foreground(styles.Pink).
-			Bold(true)
-		lines = append(lines, detailHeader.Render(" Selected Tag"))
-
 		detailStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
 		dimStyle := lipgloss.NewStyle().Foreground(styles.Lavender)
+
+		// Inner width = column width - 4 (2 border chars + 2 padding/space)
+		innerW := width - 4
+		if innerW < 10 {
+			innerW = 10
+		}
 
 		typeStr := "Note"
 		if item.Type == components.ItemTypeTackle {
@@ -62,29 +39,29 @@ func (m *Model) renderColumn1(width, height int) string {
 		if item.Starred {
 			starStr = " ★"
 		}
-		lines = append(lines, detailStyle.Render(fmt.Sprintf(" #%d %s%s", item.ID, typeStr, starStr)))
-		lines = append(lines, dimStyle.Render(fmt.Sprintf(" @ %s", timeutil.FormatTime(item.TimestampSeconds))))
+
+		var contentLines []string
+		contentLines = append(contentLines, detailStyle.Render(fmt.Sprintf(" #%d %s%s", item.ID, typeStr, starStr)))
+		contentLines = append(contentLines, dimStyle.Render(fmt.Sprintf(" @ %s", timeutil.FormatTime(item.TimestampSeconds))))
 		if item.Category != "" {
-			lines = append(lines, dimStyle.Render(fmt.Sprintf(" [%s]", item.Category)))
+			contentLines = append(contentLines, dimStyle.Render(fmt.Sprintf(" [%s]", item.Category)))
 		}
 		if item.Player != "" {
-			lines = append(lines, dimStyle.Render(fmt.Sprintf(" Player: %s", item.Player)))
+			contentLines = append(contentLines, dimStyle.Render(fmt.Sprintf(" Player: %s", item.Player)))
 		}
 		if item.Team != "" {
-			lines = append(lines, dimStyle.Render(fmt.Sprintf(" Team: %s", item.Team)))
+			contentLines = append(contentLines, dimStyle.Render(fmt.Sprintf(" Team: %s", item.Team)))
 		}
 		if item.Text != "" {
 			text := item.Text
-			maxTextW := width - 3
-			if maxTextW < 10 {
-				maxTextW = 10
+			if len(text) > innerW {
+				text = text[:innerW-3] + "..."
 			}
-			if len(text) > maxTextW {
-				text = text[:maxTextW-3] + "..."
-			}
-			lines = append(lines, detailStyle.Render(" "+text))
+			contentLines = append(contentLines, detailStyle.Render(" "+text))
 		}
-		lines = append(lines, "")
+
+		infoBox := components.RenderInfoBox("Selected Tag", contentLines, width)
+		lines = append(lines, strings.Split(infoBox, "\n")...)
 	}
 
 	return layout.Container{Width: width, Height: height}.Render(strings.Join(lines, "\n"))
