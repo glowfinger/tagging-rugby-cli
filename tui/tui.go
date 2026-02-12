@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/mpv"
 	"github.com/user/tagging-rugby-cli/pkg/timeutil"
@@ -167,22 +168,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.showHelp {
 			m.showHelp = false
 			return m, nil
-		}
-
-		// Mini player mode: only allow playback keys through
-		if m.width > 0 && m.width < layout.MinTerminalWidth {
-			switch msg.String() {
-			case " ", "h", "H", "left", "l", "L", "right",
-				",", "<", ".", ">",
-				"m", "M",
-				"ctrl+h", "ctrl+l",
-				"ctrl+c",
-				"?":
-				// Allow these keys to fall through to normal handling
-			default:
-				// Suppress all other keys in mini player mode
-				return m, nil
-			}
 		}
 
 		// Handle stats view input
@@ -1596,7 +1581,7 @@ func (m *Model) View() string {
 	}
 
 	if m.err != nil {
-		return components.RenderMiniPlayer(m.statusBar, 0, true) + "\n\nError: " + m.err.Error() + "\n\nPress q to quit.\n"
+		return "Error: " + m.err.Error() + "\n\nPress Ctrl+C to quit.\n"
 	}
 
 	// If help overlay is active, show it instead of normal view
@@ -1609,33 +1594,25 @@ func (m *Model) View() string {
 		return components.StatsView(m.statsView, m.width, m.height)
 	}
 
-	// Mini player for narrow terminals
-	if m.width > 0 && m.width < layout.MinTerminalWidth {
-		return components.RenderMiniPlayer(m.statusBar, m.width, true)
-	}
-
 	// Check if confirm discard dialog is active — show it as overlay
 	if m.confirmDiscardForm != nil {
-		miniPlayer := components.RenderMiniPlayer(m.statusBar, 0, false)
 		controlsDisplay := components.ControlsDisplay(m.width)
-		confirmView := m.confirmDiscardForm.View()
-		return miniPlayer + "\n" + controlsDisplay + "\n" + confirmView
+		confirmView := truncateViewToWidth(m.confirmDiscardForm.View(), m.width)
+		return controlsDisplay + "\n" + confirmView
 	}
 
 	// Check if note form is active — show huh form as overlay
 	if m.noteForm != nil {
-		miniPlayer := components.RenderMiniPlayer(m.statusBar, 0, false)
 		controlsDisplay := components.ControlsDisplay(m.width)
-		noteFormView := m.noteForm.View()
-		return miniPlayer + "\n" + controlsDisplay + "\n" + noteFormView
+		noteFormView := truncateViewToWidth(m.noteForm.View(), m.width)
+		return controlsDisplay + "\n" + noteFormView
 	}
 
 	// Check if tackle form is active — show huh wizard as overlay
 	if m.tackleForm != nil {
-		miniPlayer := components.RenderMiniPlayer(m.statusBar, 0, false)
 		controlsDisplay := components.ControlsDisplay(m.width)
-		tackleFormView := m.tackleForm.View()
-		return miniPlayer + "\n" + controlsDisplay + "\n" + tackleFormView
+		tackleFormView := truncateViewToWidth(m.tackleForm.View(), m.width)
+		return controlsDisplay + "\n" + tackleFormView
 	}
 
 	// --- Responsive multi-column layout ---
@@ -1645,10 +1622,10 @@ func (m *Model) View() string {
 		colHeight = 5
 	}
 
-	col1Width, col2Width, col3Width, col4Width, showCol3, showCol4 := layout.ComputeColumnWidths(m.width)
+	col1Width, col2Width, col3Width, col4Width, showCol2, showCol3, showCol4 := layout.ComputeColumnWidths(m.width)
 
 	var columnsView string
-	if showCol4 {
+	if showCol4 && showCol3 {
 		columns := []string{
 			m.renderColumn1(col1Width, colHeight),
 			m.renderColumn2(col2Width, colHeight),
@@ -1656,6 +1633,14 @@ func (m *Model) View() string {
 			m.renderColumn4(col4Width, colHeight),
 		}
 		widths := []int{col1Width, col2Width, col3Width, col4Width}
+		columnsView = layout.JoinColumns(columns, widths, colHeight)
+	} else if showCol4 && showCol2 {
+		columns := []string{
+			m.renderColumn1(col1Width, colHeight),
+			m.renderColumn2(col2Width, colHeight),
+			m.renderColumn4(col4Width, colHeight),
+		}
+		widths := []int{col1Width, col2Width, col4Width}
 		columnsView = layout.JoinColumns(columns, widths, colHeight)
 	} else if showCol3 {
 		columns := []string{
@@ -1665,12 +1650,18 @@ func (m *Model) View() string {
 		}
 		widths := []int{col1Width, col2Width, col3Width}
 		columnsView = layout.JoinColumns(columns, widths, colHeight)
-	} else {
+	} else if showCol2 {
 		columns := []string{
 			m.renderColumn1(col1Width, colHeight),
 			m.renderColumn2(col2Width, colHeight),
 		}
 		widths := []int{col1Width, col2Width}
+		columnsView = layout.JoinColumns(columns, widths, colHeight)
+	} else {
+		columns := []string{
+			m.renderColumn1(col1Width, colHeight),
+		}
+		widths := []int{col1Width}
 		columnsView = layout.JoinColumns(columns, widths, colHeight)
 	}
 
@@ -1684,6 +1675,18 @@ func (m *Model) View() string {
 }
 
 
+
+// truncateViewToWidth truncates each line of a multi-line view to fit within the given width.
+func truncateViewToWidth(view string, width int) string {
+	if width <= 0 {
+		return view
+	}
+	lines := strings.Split(view, "\n")
+	for i, line := range lines {
+		lines[i] = ansi.Truncate(line, width, "")
+	}
+	return strings.Join(lines, "\n")
+}
 
 // Run starts the Bubbletea program with the given model.
 // It returns an error if the program fails to start or run.

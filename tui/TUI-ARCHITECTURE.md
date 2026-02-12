@@ -95,16 +95,18 @@ Constrains content to an exact `Width x Height` bounding box:
 - Each line is padded/truncated to `Width` via `PadToWidth`
 - Output is always exactly `Height` lines, each exactly `Width` visual columns
 
-### ComputeColumnWidths(termWidth int) (col1, col2, col3, col4 int, showCol3, showCol4 bool)
+### ComputeColumnWidths(termWidth int) (col1, col2, col3, col4 int, showCol2, showCol3, showCol4 bool)
 
 Responsive column width calculation (column 1 is always fixed at 30 cells):
 
 | Terminal Width | Layout | Column Sizing |
 |---------------|--------|---------------|
-| >= 160 | 4-column | Col 1 = 30 (fixed), Col 4 = 30 (fixed), remaining split evenly between 2 and 3 |
-| 90 - 159 | 3-column | Col 1 = 30 (fixed), remaining split evenly between 2 and 3 |
-| 80 - 89 | 2-column | Col 1 = 30 (fixed), col 3 hidden, all remaining to col 2 |
-| < 80 | Mini player | Separate `RenderMiniPlayer` path (not column layout) |
+| >= 170 | 4-column | Col 1 = 30 (fixed), Col 4 = 30 (fixed), remaining split proportionally (Col 2 target 80, Col 3 target 60, min 30 each) |
+| 92 - 169 | 3-column | Col 1 = 30 (fixed), remaining split proportionally (Col 2 target 80, Col 3 target 60, min 30 each) |
+| 61 - 91 | 2-column | Col 1 = 30 (fixed), Col 3 hidden, all remaining to Col 2 |
+| <= 60 | 1-column | Col 1 = 30 (fixed) only |
+
+Hide order: Col 4 first (< 170), then Col 3 (when < 30 cells), then Col 2 (when < 30 cells). Col 1 always visible.
 
 ### JoinColumns(columns []string, widths []int, height int) string
 
