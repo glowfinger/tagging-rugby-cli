@@ -2,66 +2,25 @@
 - Use `CGO_ENABLED=0` for all Go build/vet commands (required for modernc.org/sqlite)
 - Go binary is at `/home/node/go/bin/go` - use `export PATH="$PATH:/home/node/go/bin"` before Go commands
 - Database connection uses modernc.org/sqlite (pure Go implementation, no CGO)
-- Add new table migrations to the `migrate()` function in db/db.go - always use `CREATE TABLE IF NOT EXISTS`
 - Bubble Tea key strings: use "esc" (not "escape"), "enter", "tab", "backspace", "left", "right" for key handling
-- SQL queries live in `db/sql/*.sql` files, embedded via `go:embed` in `db/queries.go` — reference as `db.InsertNoteSQL` etc.
-- go:embed can only access files within the same package directory or subdirectories (no `../` paths)
+- SQL queries live in `db/sql/*.sql` files, embedded via `go:embed` in `db/queries.go`
 - Three-column TUI layout uses padToWidth helper + manual row-by-row assembly (split lines, pad, join with border chars)
 - lipgloss.Width() accounts for ANSI escape sequences when measuring rendered string width
-- Column 3 live stats use loadTackleStatsForPanel() on tick — only updates when stats view is not active to avoid conflicts
-- Go structs for all tables in db/models.go; database functions (insert/select/delete) in db/functions.go
-- Use `db.InsertNoteWithChildren(database, category, db.NoteChildren{...})` for transactional insert of note + child records
-- CLI commands create notes with category field ("clip", "tackle", or user-provided) plus child rows for timing, video, and type-specific data
-- TUI note/tackle/clip creation also uses `db.InsertNoteWithChildren()` — same pattern as CLI commands
-- Tackle stats in TUI use inline SQL queries joining note_tackles, notes, note_videos, and note_highlights (not embedded SQL files)
-- loadNotesAndTackles() uses inline SQL joining notes, note_videos, note_timing, then loads child details/tackles/highlights per note
-- Star highlights are stored as note_highlights rows with type="star", not as a column on notes
-- huh forms package lives in tui/forms/ — theme, note form, and tackle form go here
-- huh form integration pattern: store *huh.Form + result struct in Model, delegate Update/View, check State for completion
-- huh forms need ALL message types delegated (not just KeyMsg) — cursor blink, focus msgs are internal
-- huh Select auto-sets value to first option on Init() — exclude from HasData() checks for "empty form" detection
-- Confirm discard pattern: intercept StateAborted, check HasData(), show confirm form, reopen original form if user cancels
-- Normal-mode keybindings in Update() switch: msg.String() returns "left", "right", "up", "down" for arrow keys and "," "." for punctuation
-- Command mode already handles "left"/"right" for cursor movement — normal-mode arrow cases only fire when commandInput.Active is false
-- Column 1 renderColumn1() now uses GetControlGroups() from controls.go (single source of truth)
+- Column 1 renderColumn1() uses GetControlGroups() from controls.go — ControlGroup uses SubGroups [][]Control for divider placement
 - padToWidth() uses lipgloss.Width() to ANSI-aware pad AND truncate lines to exact column width
-- truncateToWidth() preserves ANSI escape sequences while trimming visible width
 - normalizeLines() ensures column line arrays are exactly the target height
-- Responsive layout: col1Width=30 (fixed), col3HideThreshold=90, col3MinWidth=18; at <90 cols, two-column layout with single border
-- Arrow keys ("left","right","up","down") and punctuation (",",".") added as alternatives in normal-mode switch
-- RenderInfoBox(title, contentLines, width) in controls.go — generic bordered box; pass pre-styled lines, box handles borders only
-- LaunchMpv returns (*exec.Cmd, func(), error) — caller must `defer cleanup()` to remove temp input.conf
+- Responsive layout: col3HideThreshold=90, col3MinWidth=18; at <90 cols, two-column layout with single border
+- Use `ansi.Truncate()` from `charmbracelet/x/ansi` for ANSI+grapheme-aware truncation
+- Shared time formatting in `pkg/timeutil/timeutil.go` — `timeutil.FormatTime(seconds)` for H:MM:SS
+- Shared time parsing in `pkg/timeutil/timeutil.go` — `timeutil.ParseTimeToSeconds(str)` for HH:MM:SS, MM:SS, or raw seconds
+- Bordered control boxes: `components.RenderControlBox(group, width)` — tab header + box-drawing border + horizontal dividers between sub-groups
+- Mini player: `components.RenderMiniPlayer(statusBar, width)` renders compact bordered card for narrow terminals (< minTerminalWidth)
+- mpv client has SetSpeed(float64) and GetSpeed() methods already implemented
+- huh form integration: store *huh.Form + result struct in Model, delegate Update/View, check State for completion
+- Edit tackle form: `forms.NewEditTackleForm(timestamp, endSeconds, result)` with `EditTackleFormResult`
+- Edit flow uses `editingNoteID` field (0=create, >0=edit) to distinguish save paths
+- db package cannot import tui/forms (circular dependency) — use db-package structs, let TUI map to form types
+- Column 1 fixed width: `layout.Col1Width = 30` constant; ComputeColumnWidths always uses it
 
 ---
 
-## 2026-02-11 - US-102
-- Implemented full Tackle Stats table to replace Top Players leaderboard
-- Created RenderInfoBox() function in tui/components/controls.go for bordered containers
-- Modified renderTackleStatsTable() in tui/components/statspanel.go to show all players with totals row
-- Files changed:
-  - tui/components/controls.go (added RenderInfoBox function)
-  - tui/components/statspanel.go (replaced Top Players with full table)
-- **Learnings for future iterations:**
-  - RenderInfoBox is a reusable component for bordered boxes in the TUI - takes title, content lines, and width
-  - Tackle stats table uses flexible column widths: fixed widths for numeric columns, flexible for player names
-  - Totals row uses bold cyan styling (totalsStyle) to distinguish from player rows
-  - Table header uses headerStyle (pink/bold), player names use nameStyle (light lavender), numbers use numStyle (cyan)
-  - truncateStr() is available in statspanel.go for truncating player names to fit column width
-  - The bordered box from RenderInfoBox adds 2 chars width (1 for each border), so contentWidth = width - 2
----
-
-## 2026-02-11 - US-103
-- Verified sort keybinding implementation for Tackle Stats table (already committed as ad95bfe)
-- All acceptance criteria confirmed passing:
-  - tackleSortColumn field on Model with SortByTotal default
-  - X key cycles through sort columns (Total → Completed → Missed → Percentage → Player → Total)
-  - sortTackleStats() creates a copy before sorting (does not mutate source)
-  - Active sort column shown with arrow indicator (↓/↑) and amber highlight in table header
-  - Totals row pinned below header regardless of sort order
-  - Help overlay and controls display both include X/Sort keybinding
-- Files changed: prd.json (marked passes: true)
-- **Learnings for future iterations:**
-  - SortColumn type and constants (SortByTotal, SortByCompleted, etc.) defined in tui/components/statsview.go
-  - Sort at render time pattern: sortTackleStats() in statspanel.go makes a copy, sorts it, returns new slice
-  - Active header styling uses styles.Amber to highlight the sorted column
----

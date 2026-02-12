@@ -23,7 +23,7 @@ type CommandInputState struct {
 // CommandInput renders the command input component.
 // When active, it shows a ':' prompt with the current input.
 // When not active but there's a result, it shows the result message.
-// Otherwise, it shows a help hint.
+// Otherwise, it shows an empty styled bar.
 func CommandInput(state CommandInputState, width int) string {
 	if state.Active {
 		// Command mode active - show prompt and input
