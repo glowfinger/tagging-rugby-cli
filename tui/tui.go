@@ -1763,7 +1763,7 @@ func (m *Model) renderColumn1(width, height int) string {
 		}
 	}
 
-	return strings.Join(lines, "\n")
+	return layout.Container{Width: width, Height: height}.Render(strings.Join(lines, "\n"))
 }
 
 // renderColumn2 renders Column 2: Scrollable list of all tags/events.
@@ -1774,12 +1774,14 @@ func (m *Model) renderColumn2(width, height int) string {
 		listHeight = 3
 	}
 
-	return components.NotesList(m.notesList, width, listHeight, m.statusBar.TimePos)
+	return layout.Container{Width: width, Height: height}.Render(
+		components.NotesList(m.notesList, width, listHeight, m.statusBar.TimePos))
 }
 
 // renderColumn3 renders Column 3: Live stats summary, bar graph, top players leaderboard.
 func (m *Model) renderColumn3(width, height int) string {
-	return components.StatsPanel(m.statsView.Stats, m.notesList.Items, width, height)
+	return layout.Container{Width: width, Height: height}.Render(
+		components.StatsPanel(m.statsView.Stats, m.notesList.Items, width, height))
 }
 
 // formatStepSize formats the step size for display.

@@ -49,23 +49,27 @@ func ComputeColumnWidths(termWidth int) (col1, col2, col3 int, showCol3 bool) {
 }
 
 // JoinColumns joins pre-rendered column strings side by side with purple border separators.
-// Each column is normalized to the given height and padded to its width.
+// Columns should already be containerized (exact Width x Height) via Container.Render.
+// NormalizeLines/PadToWidth are still applied as a safety net.
 func JoinColumns(columns []string, widths []int, height int) string {
 	borderStr := lipgloss.NewStyle().
 		Foreground(styles.Purple).
 		Render("│")
 
-	// Split each column into lines and normalize to height
 	colLines := make([][]string, len(columns))
 	for i, col := range columns {
-		colLines[i] = NormalizeLines(strings.Split(col, "\n"), height)
+		colLines[i] = strings.Split(col, "\n")
 	}
 
 	var rows []string
 	for row := 0; row < height; row++ {
 		var parts []string
 		for i, lines := range colLines {
-			parts = append(parts, PadToWidth(lines[row], widths[i]))
+			if row < len(lines) {
+				parts = append(parts, lines[row])
+			} else {
+				parts = append(parts, PadToWidth("", widths[i]))
+			}
 		}
 		rows = append(rows, strings.Join(parts, borderStr))
 	}

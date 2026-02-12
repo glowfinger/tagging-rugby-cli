@@ -51,3 +51,14 @@
   - `JoinColumns` is generic over any number of columns — works for both 2-col and 3-col layouts
 ---
 
+## 2026-02-12 - US-004
+- Wrapped `renderColumn1`, `renderColumn2`, `renderColumn3` return values with `layout.Container{Width, Height}.Render(...)`
+- Simplified `JoinColumns` — no longer calls `NormalizeLines`/`PadToWidth` per line since containers guarantee exact dimensions
+- JoinColumns still handles edge cases (row beyond column line count) as a safety net
+- Scroll indicator ("↓ More...") will appear on column 1 when playback info + selected tag + controls exceeds available height
+- Files changed: `tui/tui.go` (modified), `tui/layout/columns.go` (modified)
+- **Learnings for future iterations:**
+  - Container.Render guarantees exact Height lines each exactly Width wide — downstream consumers can rely on this contract
+  - renderColumn2 passes `listHeight` (clamped to min 3) to NotesList but wraps with Container at full `height` — Container handles any mismatch
+---
+
