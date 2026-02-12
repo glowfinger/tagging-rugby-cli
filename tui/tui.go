@@ -1624,10 +1624,10 @@ func (m *Model) View() string {
 		colHeight = 5
 	}
 
-	col1Width, col2Width, col3Width, col4Width, showCol3, showCol4 := layout.ComputeColumnWidths(m.width)
+	col1Width, col2Width, col3Width, col4Width, showCol2, showCol3, showCol4 := layout.ComputeColumnWidths(m.width)
 
 	var columnsView string
-	if showCol4 {
+	if showCol4 && showCol3 {
 		columns := []string{
 			m.renderColumn1(col1Width, colHeight),
 			m.renderColumn2(col2Width, colHeight),
@@ -1635,6 +1635,14 @@ func (m *Model) View() string {
 			m.renderColumn4(col4Width, colHeight),
 		}
 		widths := []int{col1Width, col2Width, col3Width, col4Width}
+		columnsView = layout.JoinColumns(columns, widths, colHeight)
+	} else if showCol4 && showCol2 {
+		columns := []string{
+			m.renderColumn1(col1Width, colHeight),
+			m.renderColumn2(col2Width, colHeight),
+			m.renderColumn4(col4Width, colHeight),
+		}
+		widths := []int{col1Width, col2Width, col4Width}
 		columnsView = layout.JoinColumns(columns, widths, colHeight)
 	} else if showCol3 {
 		columns := []string{
@@ -1644,12 +1652,18 @@ func (m *Model) View() string {
 		}
 		widths := []int{col1Width, col2Width, col3Width}
 		columnsView = layout.JoinColumns(columns, widths, colHeight)
-	} else {
+	} else if showCol2 {
 		columns := []string{
 			m.renderColumn1(col1Width, colHeight),
 			m.renderColumn2(col2Width, colHeight),
 		}
 		widths := []int{col1Width, col2Width}
+		columnsView = layout.JoinColumns(columns, widths, colHeight)
+	} else {
+		columns := []string{
+			m.renderColumn1(col1Width, colHeight),
+		}
+		widths := []int{col1Width}
 		columnsView = layout.JoinColumns(columns, widths, colHeight)
 	}
 

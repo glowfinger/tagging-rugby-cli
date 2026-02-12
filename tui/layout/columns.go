@@ -10,42 +10,76 @@ import (
 // Responsive layout constants.
 const (
 	Col1Width         = 30  // fixed width for column 1
-	Col3HideThreshold = 90  // below this width, hide column 3 entirely
-	Col3MinWidth      = 18  // minimum width for column 3 before hiding
+	Col2TargetWidth   = 80  // target width for column 2
+	Col3TargetWidth   = 60  // target width for column 3
+	ColMinWidth       = 30  // minimum width before a column is hidden
 	Col4Width         = 30  // fixed width for column 4 (controls)
-	Col4ShowThreshold = 160 // show column 4 when terminal width >= this
+	Col4ShowThreshold = 170 // show column 4 when terminal width >= this
 )
 
 // ComputeColumnWidths calculates responsive column widths based on terminal width.
-// Returns individual column widths and whether columns 3 and 4 should be shown.
+// Returns individual column widths and whether columns 2, 3, and 4 should be shown.
 // Column 1 is always fixed at Col1Width (30). Column 4 is fixed at Col4Width (30).
-// At >=Col4ShowThreshold: 4-column layout. At >=Col3HideThreshold: 3-column layout.
-// At <Col3HideThreshold: 2-column layout.
-func ComputeColumnWidths(termWidth int) (col1, col2, col3, col4 int, showCol3, showCol4 bool) {
-	showCol4 = termWidth >= Col4ShowThreshold
-	showCol3 = termWidth >= Col3HideThreshold
+// Hide order: Col4 first (below 170), then Col3 (below 30 cells), then Col2 (below 30 cells).
+// Col1 is always visible at any terminal width.
+func ComputeColumnWidths(termWidth int) (col1, col2, col3, col4 int, showCol2, showCol3, showCol4 bool) {
 	col1 = Col1Width
 
+	// Step 1: Determine if col4 is shown
+	showCol4 = termWidth >= Col4ShowThreshold
+
+	// Step 2: Calculate available space for col2 and col3
+	borders := 0
+	fixedUsed := col1
 	if showCol4 {
-		// Four-column layout: account for 3 border characters
-		usableWidth := termWidth - 3
 		col4 = Col4Width
-		remaining := usableWidth - col1 - col4
-		col2 = remaining / 2
-		col3 = remaining - col2
-	} else if showCol3 {
-		// Three-column layout: account for 2 border characters
-		usableWidth := termWidth - 2
-		remaining := usableWidth - col1
-		col2 = remaining / 2
-		col3 = remaining - col2
-	} else {
-		// Two-column layout: 1 border character
-		usableWidth := termWidth - 1
-		col2 = usableWidth - col1
-		col3 = 0
+		fixedUsed += col4
+		borders = 3 // col1|col2|col3|col4
 	}
 
+	// Try 3-column layout (col1 + col2 + col3 [+ col4])
+	if !showCol4 {
+		borders = 2 // col1|col2|col3
+	}
+	usable := termWidth - fixedUsed - borders
+	if usable >= ColMinWidth*2 {
+		// Enough room for both col2 and col3
+		showCol2 = true
+		showCol3 = true
+		// Distribute proportionally based on targets
+		totalTarget := Col2TargetWidth + Col3TargetWidth
+		col2 = usable * Col2TargetWidth / totalTarget
+		col3 = usable - col2
+		// Clamp: if col3 would be below min, give space to col2
+		if col3 < ColMinWidth {
+			col3 = ColMinWidth
+			col2 = usable - col3
+		}
+		if col2 < ColMinWidth {
+			col2 = ColMinWidth
+			col3 = usable - col2
+		}
+		return
+	}
+
+	// Try 2-column layout (col1 + col2 [+ col4])
+	showCol3 = false
+	col3 = 0
+	if showCol4 {
+		borders = 2 // col1|col2|col4
+	} else {
+		borders = 1 // col1|col2
+	}
+	usable = termWidth - fixedUsed - borders
+	if usable >= ColMinWidth {
+		showCol2 = true
+		col2 = usable
+		return
+	}
+
+	// Only col1 [+ col4] visible
+	showCol2 = false
+	col2 = 0
 	return
 }
 
