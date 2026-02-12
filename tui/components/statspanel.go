@@ -76,7 +76,10 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 		categories = append(categories, CategoryCount{Name: name, Count: count})
 	}
 	sort.Slice(categories, func(i, j int) bool {
-		return categories[i].Count > categories[j].Count
+		if categories[i].Count != categories[j].Count {
+			return categories[i].Count > categories[j].Count
+		}
+		return categories[i].Name < categories[j].Name
 	})
 
 	// Render bar graph (max 6 categories)
@@ -130,7 +133,10 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 		sorted := make([]PlayerStats, len(tackleStats))
 		copy(sorted, tackleStats)
 		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].Total > sorted[j].Total
+			if sorted[i].Total != sorted[j].Total {
+				return sorted[i].Total > sorted[j].Total
+			}
+			return sorted[i].Player < sorted[j].Player
 		})
 
 		// Show top 5 players
