@@ -9,12 +9,15 @@
 - Column 1 renderColumn1() uses GetControlGroups() from controls.go — ControlGroup uses SubGroups [][]Control for divider placement
 - padToWidth() uses lipgloss.Width() to ANSI-aware pad AND truncate lines to exact column width
 - normalizeLines() ensures column line arrays are exactly the target height
-- Responsive layout: col3HideThreshold=90, col3MinWidth=18; at <90 cols, two-column layout with single border
+- Column 1 fixed width: `layout.Col1Width = 30` constant; ComputeColumnWidths always uses it
 - Use `ansi.Truncate()` from `charmbracelet/x/ansi` for ANSI+grapheme-aware truncation
 - Shared time formatting in `pkg/timeutil/timeutil.go` — `timeutil.FormatTime(seconds)` for H:MM:SS
 - Shared time parsing in `pkg/timeutil/timeutil.go` — `timeutil.ParseTimeToSeconds(str)` for HH:MM:SS, MM:SS, or raw seconds
 - Bordered control boxes: `components.RenderControlBox(group, width)` — tab header + box-drawing border + horizontal dividers between sub-groups
-- Mini player: `components.RenderMiniPlayer(statusBar, width)` renders compact bordered card for narrow terminals (< minTerminalWidth)
+- Mini player: `components.RenderMiniPlayer(state, fixedWidth, showWarning)` renders compact bordered card
+- RenderInfoBox(title, contentLines, width) — generic bordered info card, used for Selected Tag detail
+- Bordered containers on: notes list (col2), timeline, playback (mini player in col1), selected tag detail
+- Column separators removed — columns tile directly without border chars
 - mpv client has SetSpeed(float64) and GetSpeed() methods already implemented
 - huh form integration: store *huh.Form + result struct in Model, delegate Update/View, check State for completion
 - Edit tackle form: `forms.NewEditTackleForm(timestamp, endSeconds, result)` with `EditTackleFormResult`
@@ -23,3 +26,30 @@
 
 ---
 
+## 2026-02-12 - US-001
+- Added overlay indicator ("Overlay: on" / "Overlay: off") to RenderMiniPlayer in tui/components/controls.go
+- Updated column 1 plain-text playback card in tui/columns.go to always show overlay status (was conditional, now shows both on/off)
+- Overlay line appears after time line with divider in mini player card
+- Overlay width included in card auto-sizing calculation
+- Files changed: tui/components/controls.go, tui/columns.go
+- **Learnings for future iterations:**
+  - RenderMiniPlayer signature is currently (state StatusBarState, termWidth int) — no fixed-width param yet
+  - Column 1 plain-text playback section in columns.go is separate from RenderMiniPlayer
+  - The mini player auto-sizes based on widest content line + 4 for borders
+---
+
+## 2026-02-12 - US-002
+- Removed the full-width status bar from the main View() layout in tui/tui.go
+- Form overlay views (confirm discard, note form, tackle form) now show RenderMiniPlayer at top instead of StatusBar
+- Error view now shows RenderMiniPlayer with showWarning=true instead of StatusBar
+- Added `showWarning` bool parameter to RenderMiniPlayer — warning line only rendered when true
+- Updated narrow terminal mini player call to pass showWarning=true
+- Changed colHeight from m.height - 5 to m.height - 4 to reclaim the freed status bar line
+- StatusBar function and StatusBarState struct remain unchanged (still available, still used as data container)
+- Help overlay and stats view remain unchanged (they already don't show the status bar)
+- Files changed: tui/tui.go, tui/components/controls.go
+- **Learnings for future iterations:**
+  - RenderMiniPlayer signature is now (state StatusBarState, termWidth int, showWarning bool)
+  - colHeight = m.height - 4 (timeline 2 lines + command input 1 line + 1 newline separator)
+  - StatusBar() function is NOT deleted — it remains in statusbar.go for potential future use
+---
