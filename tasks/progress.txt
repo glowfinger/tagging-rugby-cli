@@ -11,6 +11,7 @@
 - Column border uses `styles.Purple` for the `│` separator character
 
 - Layout utilities now live in `tui/layout/` package (PadToWidth, NormalizeLines)
+- Container struct in `tui/layout/container.go` — `Container{Width, Height}.Render(content)` guarantees exact dimensions
 
 ---
 
@@ -23,5 +24,17 @@
 - **Learnings for future iterations:**
   - `replace_all` on Edit tool replaces ALL occurrences including function definitions — be careful when renaming call sites; remove old definitions separately
   - After extracting functions that use imports, check if the original file still needs those imports (Go compiler will error on unused imports)
+---
+
+## 2026-02-12 - US-002
+- Created `tui/layout/container.go` with `Container` struct and `Render` method
+- Container splits content on newlines, pads each line to Width via PadToWidth, pads/truncates to Height
+- When content exceeds Height, last visible line replaced with styled "↓ More..." scroll indicator (using `styles.Purple`)
+- When content has fewer lines than Height, empty lines appended to fill
+- Output is always exactly Height lines, each exactly Width visual columns
+- Files changed: `tui/layout/container.go` (new)
+- **Learnings for future iterations:**
+  - Container imports `tui/styles` for scroll indicator styling — no circular dependency since layout doesn't import tui package
+  - The scroll indicator replaces the last visible line entirely (not appended as extra line)
 ---
 
