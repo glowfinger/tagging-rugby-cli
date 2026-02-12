@@ -1596,7 +1596,7 @@ func (m *Model) View() string {
 	}
 
 	if m.err != nil {
-		return components.StatusBar(m.statusBar, m.width) + "\n\nError: " + m.err.Error() + "\n\nPress q to quit.\n"
+		return components.RenderMiniPlayer(m.statusBar, 0, true) + "\n\nError: " + m.err.Error() + "\n\nPress q to quit.\n"
 	}
 
 	// If help overlay is active, show it instead of normal view
@@ -1611,36 +1611,36 @@ func (m *Model) View() string {
 
 	// Mini player for narrow terminals
 	if m.width > 0 && m.width < layout.MinTerminalWidth {
-		return components.RenderMiniPlayer(m.statusBar, m.width)
+		return components.RenderMiniPlayer(m.statusBar, m.width, true)
 	}
-
-	// Render status bar at top (full width)
-	statusBar := components.StatusBar(m.statusBar, m.width)
 
 	// Check if confirm discard dialog is active — show it as overlay
 	if m.confirmDiscardForm != nil {
+		miniPlayer := components.RenderMiniPlayer(m.statusBar, 0, false)
 		controlsDisplay := components.ControlsDisplay(m.width)
 		confirmView := m.confirmDiscardForm.View()
-		return statusBar + "\n" + controlsDisplay + "\n" + confirmView
+		return miniPlayer + "\n" + controlsDisplay + "\n" + confirmView
 	}
 
 	// Check if note form is active — show huh form as overlay
 	if m.noteForm != nil {
+		miniPlayer := components.RenderMiniPlayer(m.statusBar, 0, false)
 		controlsDisplay := components.ControlsDisplay(m.width)
 		noteFormView := m.noteForm.View()
-		return statusBar + "\n" + controlsDisplay + "\n" + noteFormView
+		return miniPlayer + "\n" + controlsDisplay + "\n" + noteFormView
 	}
 
 	// Check if tackle form is active — show huh wizard as overlay
 	if m.tackleForm != nil {
+		miniPlayer := components.RenderMiniPlayer(m.statusBar, 0, false)
 		controlsDisplay := components.ControlsDisplay(m.width)
 		tackleFormView := m.tackleForm.View()
-		return statusBar + "\n" + controlsDisplay + "\n" + tackleFormView
+		return miniPlayer + "\n" + controlsDisplay + "\n" + tackleFormView
 	}
 
 	// --- Responsive multi-column layout ---
-	// Available height for columns (total height minus status bar line, timeline 2 lines, and command input line)
-	colHeight := m.height - 5
+	// Available height for columns (total height minus timeline 2 lines and command input line)
+	colHeight := m.height - 4
 	if colHeight < 5 {
 		colHeight = 5
 	}
@@ -1671,7 +1671,7 @@ func (m *Model) View() string {
 	// Render command input at bottom (full width)
 	commandInput := components.CommandInput(m.commandInput, m.width)
 
-	return statusBar + "\n" + columnsView + "\n" + timeline + "\n" + commandInput
+	return columnsView + "\n" + timeline + "\n" + commandInput
 }
 
 

@@ -1,0 +1,27 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/column1-fixed-width",
+  "description": "Fix column 1 to exactly 30 cells wide, redistributing freed space evenly between columns 2 and 3",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Fix column 1 width to 30 cells",
+      "description": "As a user, I want column 1 to always be 30 cells wide so that the layout is consistent and columns 2/3 get more space at wider terminals.",
+      "acceptanceCriteria": [
+        "Add a constant Col1Width = 30 in tui/layout/columns.go",
+        "Modify ComputeColumnWidths so column 1 is always Col1Width (30) in all multi-column layout branches",
+        "In three-column mode: after allocating 30 to column 1 and subtracting 2 border characters, split remaining width evenly between columns 2 and 3",
+        "In two-column mode (col3 hidden): after allocating 30 to column 1 and subtracting 1 border character, give all remaining width to column 2",
+        "When terminal is too narrow to support 30-cell column 1 plus usable columns 2/3, switch to mini-player mode",
+        "Adjust Col3HideThreshold if needed for sensible column 3 show/hide breakpoint with fixed column 1",
+        "Update the ComputeColumnWidths table in tui/TUI-ARCHITECTURE.md (lines 101-106) to reflect the new fixed column 1 width and revised sizing rules",
+        "No content changes to column 1 — only the width calculation changes",
+        "CGO_ENABLED=0 go vet ./... passes",
+        "CGO_ENABLED=0 go build ./... passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

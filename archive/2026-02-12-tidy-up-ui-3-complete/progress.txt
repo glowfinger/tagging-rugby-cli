@@ -1,0 +1,54 @@
+## Codebase Patterns
+- Use `CGO_ENABLED=0` for all Go build/vet commands (required for modernc.org/sqlite)
+- Go binary is at `/home/node/go/bin/go` - use `export PATH="$PATH:/home/node/go/bin"` before Go commands
+- Database connection uses modernc.org/sqlite (pure Go implementation, no CGO)
+- Bubble Tea key strings: use "esc" (not "escape"), "enter", "tab", "backspace", "left", "right" for key handling
+- SQL queries live in `db/sql/*.sql` files, embedded via `go:embed` in `db/queries.go`
+- Three-column TUI layout uses padToWidth helper + manual row-by-row assembly (split lines, pad, join with border chars)
+- lipgloss.Width() accounts for ANSI escape sequences when measuring rendered string width
+- Column 1 renderColumn1() uses GetControlGroups() from controls.go — ControlGroup uses SubGroups [][]Control for divider placement
+- padToWidth() uses lipgloss.Width() to ANSI-aware pad AND truncate lines to exact column width
+- normalizeLines() ensures column line arrays are exactly the target height
+- Responsive layout: col3HideThreshold=90, col3MinWidth=18; at <90 cols, two-column layout with single border
+- Use `ansi.Truncate()` from `charmbracelet/x/ansi` for ANSI+grapheme-aware truncation
+- Shared time formatting in `pkg/timeutil/timeutil.go` — `timeutil.FormatTime(seconds)` for H:MM:SS
+- Shared time parsing in `pkg/timeutil/timeutil.go` — `timeutil.ParseTimeToSeconds(str)` for HH:MM:SS, MM:SS, or raw seconds
+- Bordered control boxes: `components.RenderControlBox(group, width)` — tab header + box-drawing border + horizontal dividers between sub-groups
+- Mini player: `components.RenderMiniPlayer(statusBar, width)` renders compact bordered card for narrow terminals (< minTerminalWidth)
+- mpv client has SetSpeed(float64) and GetSpeed() methods already implemented
+- huh form integration: store *huh.Form + result struct in Model, delegate Update/View, check State for completion
+- Edit tackle form: `forms.NewEditTackleForm(timestamp, endSeconds, result)` with `EditTackleFormResult`
+- Edit flow uses `editingNoteID` field (0=create, >0=edit) to distinguish save paths
+- db package cannot import tui/forms (circular dependency) — use db-package structs, let TUI map to form types
+- Column 1 fixed width: `layout.Col1Width = 30` constant; ComputeColumnWidths always uses it
+
+---
+
+## 2026-02-12 - US-001
+- Removed command mode hint bar text — default bar now renders empty with DarkPurple background
+- Updated stale comment in CommandInput() docstring
+- Files changed: tui/components/commandinput.go
+- **Learnings for future iterations:**
+  - The hint text was already removed in a prior iteration; the code already had `lineStyle.Render(" ")` as default
+  - Only the comment needed updating to match the actual behavior
+---
+
+## 2026-02-12 - US-002 through US-010
+- All features were already implemented on this branch from prior iterations
+- Verified all acceptance criteria pass for each story:
+  - US-002: Speed float64 in StatusBarState, %gx format, polled via GetSpeed(), default 1.0
+  - US-003: speedSizes var, increaseSpeed/decreaseSpeed methods, []{}\\ keybindings in normal mode
+  - US-004: Speed-/Speed+/Speed1x in GetControlGroups(), speed bindings in HelpOverlay()
+  - US-005: RenderMiniPlayer(state, fixedWidth, showWarning) used in renderColumn1()
+  - US-006: RenderInfoBox() in controls.go, used for Selected Tag bordered box
+  - US-007: renderColumn2() wraps NotesList in bordered box with tab-style Notes header
+  - US-008: No borderStr, usableWidth = m.width, columns joined as c1+c2+c3
+  - US-009: Timeline() wraps in bordered box, 6 lines total, colHeight = m.height - 9
+  - US-010: RenderMiniPlayer shows Speed: %gx alongside step size
+- CGO_ENABLED=0 go vet ./... passes cleanly
+- Files changed: prd.json (all stories marked passes: true), progress.txt
+- **Learnings for future iterations:**
+  - When switching branches with stashed PRD changes, all prior implementation may already be present
+  - Always verify existing code before implementing — avoids duplicate work
+---
+

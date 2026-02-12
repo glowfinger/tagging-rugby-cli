@@ -199,7 +199,7 @@ func RenderControlBox(group ControlGroup, width int) string {
 //	├─────────────────────────┤
 //	│ Time: 1:11:22 / 1:08:11 │
 //	└─────────────────────────┘
-func RenderMiniPlayer(state StatusBarState, termWidth int) string {
+func RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool) string {
 	borderStyle := lipgloss.NewStyle().Foreground(styles.Purple)
 	headerStyle := lipgloss.NewStyle().Foreground(styles.Pink).Bold(true)
 	textStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
@@ -233,10 +233,18 @@ func RenderMiniPlayer(state StatusBarState, termWidth int) string {
 		timeutil.FormatTime(state.TimePos),
 		timeutil.FormatTime(state.Duration))
 
+	overlayLine := "Overlay: off"
+	if state.OverlayEnabled {
+		overlayLine = "Overlay: on"
+	}
+
 	// Card width: fit the widest content line + 4 (2 border chars + 2 padding spaces)
 	contentW := lipgloss.Width(statusLine)
 	if lipgloss.Width(timeLine) > contentW {
 		contentW = lipgloss.Width(timeLine)
+	}
+	if lipgloss.Width(overlayLine) > contentW {
+		contentW = lipgloss.Width(overlayLine)
 	}
 	cardWidth := contentW + 4 // │ + space + content + space + │
 
@@ -291,6 +299,8 @@ func RenderMiniPlayer(state StatusBarState, termWidth int) string {
 	lines = append(lines, renderRow(textStyle.Render(statusLine)))
 	lines = append(lines, divider)
 	lines = append(lines, renderRow(textStyle.Render(timeLine)))
+	lines = append(lines, divider)
+	lines = append(lines, renderRow(textStyle.Render(overlayLine)))
 	lines = append(lines, bottom)
 
 	card := strings.Join(lines, "\n")
@@ -304,6 +314,10 @@ func RenderMiniPlayer(state StatusBarState, termWidth int) string {
 			centeredLines = append(centeredLines, padStr+l)
 		}
 		card = strings.Join(centeredLines, "\n")
+	}
+
+	if !showWarning {
+		return card
 	}
 
 	// Warning line below card

@@ -25,12 +25,14 @@ func ComputeColumnWidths(termWidth int) (col1, col2, col3 int, showCol3 bool) {
 
 	if showCol3 {
 		// Three-column layout: account for 2 border characters
-		remaining := termWidth - 2 - col1
+		usableWidth := termWidth - 2
+		remaining := usableWidth - col1
 		col2 = remaining / 2
 		col3 = remaining - col2
 	} else {
 		// Two-column layout: 1 border character
-		col2 = termWidth - 1 - col1
+		usableWidth := termWidth - 1
+		col2 = usableWidth - col1
 		col3 = 0
 	}
 
