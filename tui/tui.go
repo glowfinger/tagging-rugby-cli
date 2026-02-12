@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/mpv"
 	"github.com/user/tagging-rugby-cli/pkg/timeutil"
@@ -1580,7 +1581,7 @@ func (m *Model) View() string {
 	}
 
 	if m.err != nil {
-		return components.RenderMiniPlayer(m.statusBar, 0, true) + "\n\nError: " + m.err.Error() + "\n\nPress q to quit.\n"
+		return "Error: " + m.err.Error() + "\n\nPress Ctrl+C to quit.\n"
 	}
 
 	// If help overlay is active, show it instead of normal view
@@ -1595,26 +1596,23 @@ func (m *Model) View() string {
 
 	// Check if confirm discard dialog is active — show it as overlay
 	if m.confirmDiscardForm != nil {
-		miniPlayer := components.RenderMiniPlayer(m.statusBar, 0, false)
 		controlsDisplay := components.ControlsDisplay(m.width)
-		confirmView := m.confirmDiscardForm.View()
-		return miniPlayer + "\n" + controlsDisplay + "\n" + confirmView
+		confirmView := truncateViewToWidth(m.confirmDiscardForm.View(), m.width)
+		return controlsDisplay + "\n" + confirmView
 	}
 
 	// Check if note form is active — show huh form as overlay
 	if m.noteForm != nil {
-		miniPlayer := components.RenderMiniPlayer(m.statusBar, 0, false)
 		controlsDisplay := components.ControlsDisplay(m.width)
-		noteFormView := m.noteForm.View()
-		return miniPlayer + "\n" + controlsDisplay + "\n" + noteFormView
+		noteFormView := truncateViewToWidth(m.noteForm.View(), m.width)
+		return controlsDisplay + "\n" + noteFormView
 	}
 
 	// Check if tackle form is active — show huh wizard as overlay
 	if m.tackleForm != nil {
-		miniPlayer := components.RenderMiniPlayer(m.statusBar, 0, false)
 		controlsDisplay := components.ControlsDisplay(m.width)
-		tackleFormView := m.tackleForm.View()
-		return miniPlayer + "\n" + controlsDisplay + "\n" + tackleFormView
+		tackleFormView := truncateViewToWidth(m.tackleForm.View(), m.width)
+		return controlsDisplay + "\n" + tackleFormView
 	}
 
 	// --- Responsive multi-column layout ---
@@ -1677,6 +1675,18 @@ func (m *Model) View() string {
 }
 
 
+
+// truncateViewToWidth truncates each line of a multi-line view to fit within the given width.
+func truncateViewToWidth(view string, width int) string {
+	if width <= 0 {
+		return view
+	}
+	lines := strings.Split(view, "\n")
+	for i, line := range lines {
+		lines[i] = ansi.Truncate(line, width, "")
+	}
+	return strings.Join(lines, "\n")
+}
 
 // Run starts the Bubbletea program with the given model.
 // It returns an error if the program fails to start or run.
