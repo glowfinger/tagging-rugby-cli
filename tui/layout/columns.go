@@ -9,7 +9,6 @@ import (
 
 // Responsive layout constants.
 const (
-	MinTerminalWidth  = 80  // minimum terminal width for multi-column layout
 	Col1Width         = 30  // fixed width for column 1
 	Col3HideThreshold = 90  // below this width, hide column 3 entirely
 	Col3MinWidth      = 18  // minimum width for column 3 before hiding

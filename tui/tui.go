@@ -169,22 +169,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Mini player mode: only allow playback keys through
-		if m.width > 0 && m.width < layout.MinTerminalWidth {
-			switch msg.String() {
-			case " ", "h", "H", "left", "l", "L", "right",
-				",", "<", ".", ">",
-				"m", "M",
-				"ctrl+h", "ctrl+l",
-				"ctrl+c",
-				"?":
-				// Allow these keys to fall through to normal handling
-			default:
-				// Suppress all other keys in mini player mode
-				return m, nil
-			}
-		}
-
 		// Handle stats view input
 		if m.statsView.Active {
 			return m.handleStatsViewInput(msg)
@@ -1607,11 +1591,6 @@ func (m *Model) View() string {
 	// If stats view is active, show it instead of normal view
 	if m.statsView.Active {
 		return components.StatsView(m.statsView, m.width, m.height)
-	}
-
-	// Mini player for narrow terminals
-	if m.width > 0 && m.width < layout.MinTerminalWidth {
-		return components.RenderMiniPlayer(m.statusBar, m.width, true)
 	}
 
 	// Check if confirm discard dialog is active — show it as overlay
