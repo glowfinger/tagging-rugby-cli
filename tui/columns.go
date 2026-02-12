@@ -37,7 +37,9 @@ func (m *Model) renderColumn1(width, height int) string {
 		lines = append(lines, infoStyle.Render(" 🔇 Muted"))
 	}
 	if m.statusBar.OverlayEnabled {
-		lines = append(lines, infoStyle.Render(" 📺 Overlay On"))
+		lines = append(lines, infoStyle.Render(" Overlay: on"))
+	} else {
+		lines = append(lines, infoStyle.Render(" Overlay: off"))
 	}
 	lines = append(lines, "")
 

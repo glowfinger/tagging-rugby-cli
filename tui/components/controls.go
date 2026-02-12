@@ -233,10 +233,18 @@ func RenderMiniPlayer(state StatusBarState, termWidth int) string {
 		timeutil.FormatTime(state.TimePos),
 		timeutil.FormatTime(state.Duration))
 
+	overlayLine := "Overlay: off"
+	if state.OverlayEnabled {
+		overlayLine = "Overlay: on"
+	}
+
 	// Card width: fit the widest content line + 4 (2 border chars + 2 padding spaces)
 	contentW := lipgloss.Width(statusLine)
 	if lipgloss.Width(timeLine) > contentW {
 		contentW = lipgloss.Width(timeLine)
+	}
+	if lipgloss.Width(overlayLine) > contentW {
+		contentW = lipgloss.Width(overlayLine)
 	}
 	cardWidth := contentW + 4 // │ + space + content + space + │
 
@@ -291,6 +299,8 @@ func RenderMiniPlayer(state StatusBarState, termWidth int) string {
 	lines = append(lines, renderRow(textStyle.Render(statusLine)))
 	lines = append(lines, divider)
 	lines = append(lines, renderRow(textStyle.Render(timeLine)))
+	lines = append(lines, divider)
+	lines = append(lines, renderRow(textStyle.Render(overlayLine)))
 	lines = append(lines, bottom)
 
 	card := strings.Join(lines, "\n")
