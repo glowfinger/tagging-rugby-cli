@@ -73,3 +73,14 @@
   - After moving code, always check for newly-unused imports in the source file
 ---
 
+## 2026-02-12 - US-006
+- Created `tui/TUI-ARCHITECTURE.md` (215 lines)
+- Covers: Overview, directory structure, rendering pipeline, layout system, component contracts, forms integration, styles
+- Every statement verified against actual source code
+- Documentation-only — no Go code changes
+- Files changed: `tui/TUI-ARCHITECTURE.md` (new)
+- **Learnings for future iterations:**
+  - When documenting component contracts, read the State struct + render function signature from actual code rather than guessing
+  - Architecture docs should reflect the CURRENT state of code, not aspirational design
+---
+

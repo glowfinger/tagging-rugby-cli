@@ -106,7 +106,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "This is a documentation-only story — no Go code changes. The doc should reflect the state of the code AFTER US-001 through US-005 are complete. Read the actual files to verify every detail."
     }
   ]
