@@ -1645,10 +1645,19 @@ func (m *Model) View() string {
 		colHeight = 5
 	}
 
-	col1Width, col2Width, col3Width, showCol3 := layout.ComputeColumnWidths(m.width)
+	col1Width, col2Width, col3Width, col4Width, showCol3, showCol4 := layout.ComputeColumnWidths(m.width)
 
 	var columnsView string
-	if showCol3 {
+	if showCol4 {
+		columns := []string{
+			m.renderColumn1(col1Width, colHeight),
+			m.renderColumn2(col2Width, colHeight),
+			m.renderColumn3(col3Width, colHeight),
+			m.renderColumn4(col4Width, colHeight),
+		}
+		widths := []int{col1Width, col2Width, col3Width, col4Width}
+		columnsView = layout.JoinColumns(columns, widths, colHeight)
+	} else if showCol3 {
 		columns := []string{
 			m.renderColumn1(col1Width, colHeight),
 			m.renderColumn2(col2Width, colHeight),

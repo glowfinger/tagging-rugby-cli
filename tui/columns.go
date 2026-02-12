@@ -11,7 +11,7 @@ import (
 	"github.com/user/tagging-rugby-cli/tui/styles"
 )
 
-// renderColumn1 renders Column 1: Playback status, selected tag detail, controls.
+// renderColumn1 renders Column 1: Playback status, selected tag detail.
 func (m *Model) renderColumn1(width, height int) string {
 	var lines []string
 
@@ -87,18 +87,6 @@ func (m *Model) renderColumn1(width, height int) string {
 		lines = append(lines, "")
 	}
 
-	// Controls section — bordered containers per group
-	groups := components.GetControlGroups()
-	for i, group := range groups {
-		box := components.RenderControlBox(group, width)
-		lines = append(lines, box)
-
-		// 1 blank line gap between bordered containers
-		if i < len(groups)-1 {
-			lines = append(lines, "")
-		}
-	}
-
 	return layout.Container{Width: width, Height: height}.Render(strings.Join(lines, "\n"))
 }
 
@@ -118,6 +106,24 @@ func (m *Model) renderColumn2(width, height int) string {
 func (m *Model) renderColumn3(width, height int) string {
 	return layout.Container{Width: width, Height: height}.Render(
 		components.StatsPanel(m.statsView.Stats, m.notesList.Items, width, height))
+}
+
+// renderColumn4 renders Column 4: Keybinding control groups (Playback, Navigation, Views).
+func (m *Model) renderColumn4(width, height int) string {
+	var lines []string
+
+	groups := components.GetControlGroups()
+	for i, group := range groups {
+		box := components.RenderControlBox(group, width)
+		lines = append(lines, box)
+
+		// 1 blank line gap between bordered containers
+		if i < len(groups)-1 {
+			lines = append(lines, "")
+		}
+	}
+
+	return layout.Container{Width: width, Height: height}.Render(strings.Join(lines, "\n"))
 }
 
 // formatStepSize formats the step size for display.

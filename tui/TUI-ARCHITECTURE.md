@@ -18,7 +18,7 @@ The TUI is built on:
 ```
 tui/
   tui.go              # Model struct, Init, Update, View (orchestration)
-  columns.go          # renderColumn1/2/3, formatStepSize (column render methods)
+  columns.go          # renderColumn1/2/3/4, formatStepSize (column render methods)
   components/
     statusbar.go      # StatusBarState, StatusBar()
     timeline.go       # Timeline() — progress bar with event markers
@@ -48,9 +48,9 @@ tui/
 ```
 1. Early returns (quitting, error, help overlay, stats view, mini player)
 2. Form overlays (confirm discard, note form, tackle form)
-3. Normal three-column layout:
+3. Normal multi-column layout:
    a. StatusBar          — full width, 1 line
-   b. Columns            — responsive 2-col or 3-col grid
+   b. Columns            — responsive 2/3/4-col grid
    c. Timeline           — full width, 2 lines (progress bar + markers)
    d. CommandInput       — full width, 1 line
 ```
@@ -63,9 +63,10 @@ Each column is rendered independently by a method on `*Model`:
 
 | Column | Method | Content |
 |--------|--------|---------|
-| 1 | `renderColumn1(width, height)` | Playback status, selected tag detail, control groups |
+| 1 | `renderColumn1(width, height)` | Playback status, selected tag detail |
 | 2 | `renderColumn2(width, height)` | Scrollable notes/tackles table |
 | 3 | `renderColumn3(width, height)` | Live stats panel (bar graph, leaderboard) |
+| 4 | `renderColumn4(width, height)` | Keybinding control groups (Playback, Navigation, Views) |
 
 Each method wraps its output in `layout.Container{Width, Height}.Render(...)` to
 guarantee exact dimensions. The containerized columns are then joined by
@@ -94,13 +95,14 @@ Constrains content to an exact `Width x Height` bounding box:
 - Each line is padded/truncated to `Width` via `PadToWidth`
 - Output is always exactly `Height` lines, each exactly `Width` visual columns
 
-### ComputeColumnWidths(termWidth int) (col1, col2, col3 int, showCol3 bool)
+### ComputeColumnWidths(termWidth int) (col1, col2, col3, col4 int, showCol3, showCol4 bool)
 
 Responsive column width calculation (column 1 is always fixed at 30 cells):
 
 | Terminal Width | Layout | Column Sizing |
 |---------------|--------|---------------|
-| >= 90 | 3-column | Col 1 = 30 (fixed), remaining split evenly between 2 and 3 |
+| >= 160 | 4-column | Col 1 = 30 (fixed), Col 4 = 30 (fixed), remaining split evenly between 2 and 3 |
+| 90 - 159 | 3-column | Col 1 = 30 (fixed), remaining split evenly between 2 and 3 |
 | 80 - 89 | 2-column | Col 1 = 30 (fixed), col 3 hidden, all remaining to col 2 |
 | < 80 | Mini player | Separate `RenderMiniPlayer` path (not column layout) |
 
