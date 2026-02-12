@@ -1,79 +1,86 @@
 # Ralph Progress Log
-# Branch: ralph/tidy-up-ui
-# Started: 2026-02-09
+# Branch: ralph/layout-extraction
+# Started: 2026-02-12
 
 ## Codebase Patterns
 - Use `CGO_ENABLED=0` for all Go build/vet commands (modernc.org/sqlite requirement)
 - Go binary at `/home/node/go/bin/go` — export PATH before commands
-- huh forms live in `tui/forms/` — the old `tui/components/noteinput.go` and `tackleinput.go` are now deleted
-- `openNoteInput()` and `openTackleInput()` in tui/tui.go are the huh-based methods, not references to old code
-- Colour palette is Ciapre (warm/earthy) — constants kept as DeepPurple/DarkPurple/etc. for backward compat but values are Ciapre hex
-- New colour constants available: `styles.Amber`, `styles.Red`, `styles.Green`
+- huh forms live in `tui/forms/` (theme.go, noteform.go, tackleform.go)
+- Colour palette is Ciapre (warm/earthy) — constants in tui/styles/styles.go
+- padToWidth uses `ansi.Truncate` from `charmbracelet/x/ansi` — ANSI+grapheme-aware
+- Column border uses `styles.Purple` for the `│` separator character
+
+- Layout utilities now live in `tui/layout/` package (PadToWidth, NormalizeLines)
+- Container struct in `tui/layout/container.go` — `Container{Width, Height}.Render(content)` guarantees exact dimensions
 
 ---
 
-## 2026-02-09 - US-001
-- Deleted deprecated `tui/components/noteinput.go` and `tui/components/tackleinput.go`
-- Verified no remaining imports or references to `NoteInputState`, `TackleInputState`, `NoteInputField`, `TackleInputField` types
-- Build and vet pass cleanly
-- Files changed: tui/components/noteinput.go (deleted), tui/components/tackleinput.go (deleted)
+## 2026-02-12 - US-001
+- Created `tui/layout/helpers.go` with exported `PadToWidth` and `NormalizeLines` functions
+- Updated all call sites in `tui/tui.go` to use `layout.PadToWidth` and `layout.NormalizeLines`
+- Removed original `padToWidth` and `normalizeLines` functions from `tui/tui.go`
+- Removed unused `charmbracelet/x/ansi` import from tui.go (still used by layout package)
+- Files changed: `tui/layout/helpers.go` (new), `tui/tui.go` (modified)
 - **Learnings for future iterations:**
-  - The method names `openNoteInput` / `openTackleInput` in tui/tui.go are the huh form openers — don't confuse with the deleted deprecated types
-  - `NoteInput` and `TackleInput` types were only self-contained in their own files with no external references, making deletion safe
+  - `replace_all` on Edit tool replaces ALL occurrences including function definitions — be careful when renaming call sites; remove old definitions separately
+  - After extracting functions that use imports, check if the original file still needs those imports (Go compiler will error on unused imports)
 ---
 
-## 2026-02-09 - US-002
-- Replaced all 8 colour constants in `tui/styles/styles.go` with Ciapre palette hex values
-- Added 3 new constants: Amber (#CC8B3F), Red (#AC3835), Green (#A6A75D)
-- Updated Warning style to use Red, Success style to use Green
-- Updated package doc string to reference Ciapre palette
-- Build and vet pass cleanly
-- Files changed: tui/styles/styles.go
+## 2026-02-12 - US-002
+- Created `tui/layout/container.go` with `Container` struct and `Render` method
+- Container splits content on newlines, pads each line to Width via PadToWidth, pads/truncates to Height
+- When content exceeds Height, last visible line replaced with styled "↓ More..." scroll indicator (using `styles.Purple`)
+- When content has fewer lines than Height, empty lines appended to fill
+- Output is always exactly Height lines, each exactly Width visual columns
+- Files changed: `tui/layout/container.go` (new)
 - **Learnings for future iterations:**
-  - Kept original constant names (DeepPurple, DarkPurple, etc.) even though Ciapre isn't purple — avoids renaming across 20+ files
-  - All components reference `styles.XXX` constants, so changing values in one place propagates everywhere
-  - New Amber, Red, Green constants are available for US-003+ (sub-headers, warnings, success)
+  - Container imports `tui/styles` for scroll indicator styling — no circular dependency since layout doesn't import tui package
+  - The scroll indicator replaces the last visible line entirely (not appended as extra line)
 ---
 
-## 2026-02-09 - US-005
-- Reordered `renderColumn1()` in `tui/tui.go` to render sections as: (1) Playback, (2) Selected Tag, (3) Controls
-- Previously the order was Controls → Playback → Selected Tag
-- Each section retains its styled header (Pink for Playback/Selected Tag, Cyan for Controls) with blank line separators
-- Updated function comment to reflect new order
-- Build and vet pass cleanly
-- Files changed: tui/tui.go
+## 2026-02-12 - US-003
+- Created `tui/layout/columns.go` with `ComputeColumnWidths` and `JoinColumns` functions
+- Exported constants: `MinTerminalWidth` (80), `Col3HideThreshold` (90), `Col3MinWidth` (18)
+- `ComputeColumnWidths(termWidth)` returns (col1, col2, col3, showCol3) — encapsulates responsive breakpoint logic
+- `JoinColumns(columns, widths, height)` normalizes lines, pads to width, joins with purple border separator
+- Replaced ~55 lines of inline column layout code in View() with calls to layout functions
+- Removed `minTerminalWidth` constant from tui.go (now `layout.MinTerminalWidth`)
+- Files changed: `tui/layout/columns.go` (new), `tui/tui.go` (modified)
 - **Learnings for future iterations:**
-  - `renderColumn1()` starts around line 1569 — the three sections are self-contained blocks that can be reordered by moving code blocks
-  - The Selected Tag section is conditional (only renders if an item is selected), so the blank line separator after it needs to be inside the `if item != nil` block
-  - `ControlsDisplay()` in controls.go is a separate horizontal compact layout used for form overlay views — not the same as the column 1 controls rendering
+  - Check ALL references to a constant/function before removing — `minTerminalWidth` was used in both `View()` and `Update()` (key filtering for mini player mode)
+  - `JoinColumns` is generic over any number of columns — works for both 2-col and 3-col layouts
 ---
 
-## 2026-02-09 - US-006
-- Added `Name` field to `ControlGroup` struct in `tui/components/controls.go`
-- Updated `GetControlGroups()` with group labels: "Playback", "Navigation", "Step / Overlay", "Views"
-- Redesigned controls section in `renderColumn1()` in `tui/tui.go`:
-  - Each group gets an amber-styled sub-header (`styles.Amber`)
-  - Each control renders as two lines: emoji+name, then indented [key] in blue (`styles.Cyan`)
-  - Blank line between each control, extra blank line between groups
-- Left `ControlsDisplay()` unchanged — it's the horizontal compact layout used for form overlay views
-- Build and vet pass cleanly
-- Files changed: tui/components/controls.go, tui/tui.go
+## 2026-02-12 - US-004
+- Wrapped `renderColumn1`, `renderColumn2`, `renderColumn3` return values with `layout.Container{Width, Height}.Render(...)`
+- Simplified `JoinColumns` — no longer calls `NormalizeLines`/`PadToWidth` per line since containers guarantee exact dimensions
+- JoinColumns still handles edge cases (row beyond column line count) as a safety net
+- Scroll indicator ("↓ More...") will appear on column 1 when playback info + selected tag + controls exceeds available height
+- Files changed: `tui/tui.go` (modified), `tui/layout/columns.go` (modified)
 - **Learnings for future iterations:**
-  - The `ControlGroup.Name` field is now available for any view that wants to display group labels
-  - `ControlsDisplay()` is independent from the column 1 rendering — changes to one don't affect the other
-  - Controls section clips naturally at column bottom since `renderColumn1` output is truncated to height by the column layout code
+  - Container.Render guarantees exact Height lines each exactly Width wide — downstream consumers can rely on this contract
+  - renderColumn2 passes `listHeight` (clamped to min 3) to NotesList but wraps with Container at full `height` — Container handles any mismatch
 ---
 
-## 2026-02-09 - US-007
-- Final QA verification — no code changes required
-- Verified: `CGO_ENABLED=0 go build ./...` passes cleanly
-- Verified: `CGO_ENABLED=0 go vet ./...` passes cleanly with no warnings
-- Verified: No hardcoded hex colour values outside `tui/styles/styles.go` (all 11 colours defined centrally)
-- Verified: No old palette values (#1a1a2e, #16213e, #4a347d, #7b2cbf, #c77dff, #e0aaff, #ff6b9d, #64dfdf) remain anywhere
-- Verified: StatusBar, Timeline, and CommandInput all use `.Width(width)` with full terminal width — no gaps
-- Files changed: tasks/prd.json (mark passes: true), tasks/progress.txt (this entry)
+## 2026-02-12 - US-005
+- Created `tui/columns.go` with renderColumn1, renderColumn2, renderColumn3, formatStepSize (same package `tui`)
+- Removed these functions from `tui/tui.go`
+- Removed unused imports from tui.go: `lipgloss`, `styles` (now only needed in columns.go)
+- No changes to function signatures or behavior — purely a file move
+- Files changed: `tui/columns.go` (new), `tui/tui.go` (modified)
 - **Learnings for future iterations:**
-  - All full-width components (StatusBar, Timeline, CommandInput) use lipgloss `.Width(width)` pattern — maintain this for future components
-  - Colour centralisation via `styles.XXX` constants means a grep for `#[0-9a-fA-F]{6}` in tui/ .go files is a reliable QA check
-  - The column layout properly accounts for border characters (usableWidth = m.width - borderCount) so rows + borders + full-width bars all align
+  - When moving methods to a new file in the same package, imports must be duplicated in the new file
+  - After moving code, always check for newly-unused imports in the source file
 ---
+
+## 2026-02-12 - US-006
+- Created `tui/TUI-ARCHITECTURE.md` (215 lines)
+- Covers: Overview, directory structure, rendering pipeline, layout system, component contracts, forms integration, styles
+- Every statement verified against actual source code
+- Documentation-only — no Go code changes
+- Files changed: `tui/TUI-ARCHITECTURE.md` (new)
+- **Learnings for future iterations:**
+  - When documenting component contracts, read the State struct + render function signature from actual code rather than guessing
+  - Architecture docs should reflect the CURRENT state of code, not aspirational design
+---
+

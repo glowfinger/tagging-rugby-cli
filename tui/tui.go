@@ -9,14 +9,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/mpv"
 	"github.com/user/tagging-rugby-cli/pkg/timeutil"
 	"github.com/user/tagging-rugby-cli/tui/components"
 	"github.com/user/tagging-rugby-cli/tui/forms"
-	"github.com/user/tagging-rugby-cli/tui/styles"
+	"github.com/user/tagging-rugby-cli/tui/layout"
 )
 
 const (
@@ -172,7 +170,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Mini player mode: only allow playback keys through
-		if m.width > 0 && m.width < minTerminalWidth {
+		if m.width > 0 && m.width < layout.MinTerminalWidth {
 			switch msg.String() {
 			case " ", "h", "H", "left", "l", "L", "right",
 				",", "<", ".", ">",
@@ -1590,8 +1588,6 @@ func (m *Model) updateStatusFromMpv() {
 	}
 }
 
-// minTerminalWidth is the minimum terminal width for the three-column layout.
-const minTerminalWidth = 80
 
 // View renders the current state of the model as a string.
 func (m *Model) View() string {
@@ -1614,7 +1610,7 @@ func (m *Model) View() string {
 	}
 
 	// Mini player for narrow terminals
-	if m.width > 0 && m.width < minTerminalWidth {
+	if m.width > 0 && m.width < layout.MinTerminalWidth {
 		return components.RenderMiniPlayer(m.statusBar, m.width)
 	}
 
@@ -1642,81 +1638,31 @@ func (m *Model) View() string {
 		return statusBar + "\n" + controlsDisplay + "\n" + tackleFormView
 	}
 
-	// --- Three-column layout with responsive sizing ---
-	// Column 3 (live stats) shrinks first; hides entirely at narrow widths.
-	const (
-		col3HideThreshold = 90  // below this width, hide column 3 entirely
-		col3MinWidth      = 18  // minimum width for column 3 before hiding
-	)
-
+	// --- Responsive multi-column layout ---
 	// Available height for columns (total height minus status bar line, timeline 2 lines, and command input line)
 	colHeight := m.height - 5
 	if colHeight < 5 {
 		colHeight = 5
 	}
 
-	showCol3 := m.width >= col3HideThreshold
-
-	// Border style for vertical separators
-	borderStr := lipgloss.NewStyle().
-		Foreground(styles.Purple).
-		Render("│")
+	col1Width, col2Width, col3Width, showCol3 := layout.ComputeColumnWidths(m.width)
 
 	var columnsView string
-
 	if showCol3 {
-		// Three-column layout: account for 2 border characters
-		usableWidth := m.width - 2
-		var col1Width, col2Width, col3Width int
-
-		if m.width >= 120 {
-			// Wide: equal thirds
-			col1Width = usableWidth / 3
-			col2Width = usableWidth / 3
-			col3Width = usableWidth - col1Width - col2Width
-		} else {
-			// Medium: column 3 gets minimum, rest splits between 1 and 2
-			col3Width = col3MinWidth
-			remaining := usableWidth - col3Width
-			col1Width = remaining / 2
-			col2Width = remaining - col1Width
+		columns := []string{
+			m.renderColumn1(col1Width, colHeight),
+			m.renderColumn2(col2Width, colHeight),
+			m.renderColumn3(col3Width, colHeight),
 		}
-
-		col1Content := m.renderColumn1(col1Width, colHeight)
-		col2Content := m.renderColumn2(col2Width, colHeight)
-		col3Content := m.renderColumn3(col3Width, colHeight)
-
-		col1Lines := normalizeLines(strings.Split(col1Content, "\n"), colHeight)
-		col2Lines := normalizeLines(strings.Split(col2Content, "\n"), colHeight)
-		col3Lines := normalizeLines(strings.Split(col3Content, "\n"), colHeight)
-
-		var rows []string
-		for i := 0; i < colHeight; i++ {
-			c1 := padToWidth(col1Lines[i], col1Width)
-			c2 := padToWidth(col2Lines[i], col2Width)
-			c3 := padToWidth(col3Lines[i], col3Width)
-			rows = append(rows, c1+borderStr+c2+borderStr+c3)
-		}
-		columnsView = strings.Join(rows, "\n")
+		widths := []int{col1Width, col2Width, col3Width}
+		columnsView = layout.JoinColumns(columns, widths, colHeight)
 	} else {
-		// Two-column layout: column 3 hidden, 1 border character
-		usableWidth := m.width - 1
-		col1Width := usableWidth / 2
-		col2Width := usableWidth - col1Width
-
-		col1Content := m.renderColumn1(col1Width, colHeight)
-		col2Content := m.renderColumn2(col2Width, colHeight)
-
-		col1Lines := normalizeLines(strings.Split(col1Content, "\n"), colHeight)
-		col2Lines := normalizeLines(strings.Split(col2Content, "\n"), colHeight)
-
-		var rows []string
-		for i := 0; i < colHeight; i++ {
-			c1 := padToWidth(col1Lines[i], col1Width)
-			c2 := padToWidth(col2Lines[i], col2Width)
-			rows = append(rows, c1+borderStr+c2)
+		columns := []string{
+			m.renderColumn1(col1Width, colHeight),
+			m.renderColumn2(col2Width, colHeight),
 		}
-		columnsView = strings.Join(rows, "\n")
+		widths := []int{col1Width, col2Width}
+		columnsView = layout.JoinColumns(columns, widths, colHeight)
 	}
 
 	// Render timeline progress bar below columns (full width)
@@ -1728,150 +1674,7 @@ func (m *Model) View() string {
 	return statusBar + "\n" + columnsView + "\n" + timeline + "\n" + commandInput
 }
 
-// padToWidth pads or truncates a string to exactly the specified width.
-// Uses ansi.Truncate for ANSI-aware, grapheme-aware truncation that correctly
-// handles double-width characters (emoji, East-Asian).
-func padToWidth(s string, width int) string {
-	if width <= 0 {
-		return ""
-	}
-	currentWidth := lipgloss.Width(s)
-	if currentWidth == width {
-		return s
-	}
-	if currentWidth > width {
-		s = ansi.Truncate(s, width, "")
-		currentWidth = lipgloss.Width(s)
-	}
-	if currentWidth < width {
-		return s + strings.Repeat(" ", width-currentWidth)
-	}
-	return s
-}
 
-// normalizeLines pads or truncates a slice of strings to exactly the given height.
-func normalizeLines(lines []string, height int) []string {
-	if len(lines) > height {
-		lines = lines[:height]
-	}
-	for len(lines) < height {
-		lines = append(lines, "")
-	}
-	return lines
-}
-
-// renderColumn1 renders Column 1: Playback status, selected tag detail, controls.
-func (m *Model) renderColumn1(width, height int) string {
-	var lines []string
-
-	// Playback status card
-	statusHeader := lipgloss.NewStyle().
-		Foreground(styles.Pink).
-		Bold(true)
-	lines = append(lines, statusHeader.Render(" Playback"))
-
-	infoStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
-
-	playState := "▶ Playing"
-	if m.statusBar.Paused {
-		playState = "⏸ Paused"
-	}
-	lines = append(lines, infoStyle.Render(" "+playState))
-	lines = append(lines, infoStyle.Render(fmt.Sprintf(" Time: %s / %s",
-		timeutil.FormatTime(m.statusBar.TimePos),
-		timeutil.FormatTime(m.statusBar.Duration))))
-	lines = append(lines, infoStyle.Render(fmt.Sprintf(" Step: %s", formatStepSize(m.statusBar.StepSize))))
-
-	if m.statusBar.Muted {
-		lines = append(lines, infoStyle.Render(" 🔇 Muted"))
-	}
-	if m.statusBar.OverlayEnabled {
-		lines = append(lines, infoStyle.Render(" 📺 Overlay On"))
-	}
-	lines = append(lines, "")
-
-	// Current tag detail card (selected item)
-	item := m.notesList.GetSelectedItem()
-	if item != nil {
-		detailHeader := lipgloss.NewStyle().
-			Foreground(styles.Pink).
-			Bold(true)
-		lines = append(lines, detailHeader.Render(" Selected Tag"))
-
-		detailStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
-		dimStyle := lipgloss.NewStyle().Foreground(styles.Lavender)
-
-		typeStr := "Note"
-		if item.Type == components.ItemTypeTackle {
-			typeStr = "Tackle"
-		}
-		starStr := ""
-		if item.Starred {
-			starStr = " ★"
-		}
-		lines = append(lines, detailStyle.Render(fmt.Sprintf(" #%d %s%s", item.ID, typeStr, starStr)))
-		lines = append(lines, dimStyle.Render(fmt.Sprintf(" @ %s", timeutil.FormatTime(item.TimestampSeconds))))
-		if item.Category != "" {
-			lines = append(lines, dimStyle.Render(fmt.Sprintf(" [%s]", item.Category)))
-		}
-		if item.Player != "" {
-			lines = append(lines, dimStyle.Render(fmt.Sprintf(" Player: %s", item.Player)))
-		}
-		if item.Team != "" {
-			lines = append(lines, dimStyle.Render(fmt.Sprintf(" Team: %s", item.Team)))
-		}
-		if item.Text != "" {
-			text := item.Text
-			maxTextW := width - 3
-			if maxTextW < 10 {
-				maxTextW = 10
-			}
-			if len(text) > maxTextW {
-				text = text[:maxTextW-3] + "..."
-			}
-			lines = append(lines, detailStyle.Render(" "+text))
-		}
-		lines = append(lines, "")
-	}
-
-	// Controls section — bordered containers per group
-	groups := components.GetControlGroups()
-	for i, group := range groups {
-		box := components.RenderControlBox(group, width)
-		lines = append(lines, box)
-
-		// 1 blank line gap between bordered containers
-		if i < len(groups)-1 {
-			lines = append(lines, "")
-		}
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-// renderColumn2 renders Column 2: Scrollable list of all tags/events.
-func (m *Model) renderColumn2(width, height int) string {
-	// Use a taller list that fills the column
-	listHeight := height
-	if listHeight < 3 {
-		listHeight = 3
-	}
-
-	return components.NotesList(m.notesList, width, listHeight, m.statusBar.TimePos)
-}
-
-// renderColumn3 renders Column 3: Live stats summary, bar graph, top players leaderboard.
-func (m *Model) renderColumn3(width, height int) string {
-	return components.StatsPanel(m.statsView.Stats, m.notesList.Items, width, height)
-}
-
-// formatStepSize formats the step size for display.
-func formatStepSize(stepSize float64) string {
-	if stepSize < 1 {
-		return fmt.Sprintf("%.1fs", stepSize)
-	}
-	return fmt.Sprintf("%.0fs", stepSize)
-}
 
 // Run starts the Bubbletea program with the given model.
 // It returns an error if the program fails to start or run.

@@ -1,0 +1,79 @@
+# Ralph Progress Log
+# Branch: ralph/tidy-up-ui
+# Started: 2026-02-09
+
+## Codebase Patterns
+- Use `CGO_ENABLED=0` for all Go build/vet commands (modernc.org/sqlite requirement)
+- Go binary at `/home/node/go/bin/go` — export PATH before commands
+- huh forms live in `tui/forms/` — the old `tui/components/noteinput.go` and `tackleinput.go` are now deleted
+- `openNoteInput()` and `openTackleInput()` in tui/tui.go are the huh-based methods, not references to old code
+- Colour palette is Ciapre (warm/earthy) — constants kept as DeepPurple/DarkPurple/etc. for backward compat but values are Ciapre hex
+- New colour constants available: `styles.Amber`, `styles.Red`, `styles.Green`
+
+---
+
+## 2026-02-09 - US-001
+- Deleted deprecated `tui/components/noteinput.go` and `tui/components/tackleinput.go`
+- Verified no remaining imports or references to `NoteInputState`, `TackleInputState`, `NoteInputField`, `TackleInputField` types
+- Build and vet pass cleanly
+- Files changed: tui/components/noteinput.go (deleted), tui/components/tackleinput.go (deleted)
+- **Learnings for future iterations:**
+  - The method names `openNoteInput` / `openTackleInput` in tui/tui.go are the huh form openers — don't confuse with the deleted deprecated types
+  - `NoteInput` and `TackleInput` types were only self-contained in their own files with no external references, making deletion safe
+---
+
+## 2026-02-09 - US-002
+- Replaced all 8 colour constants in `tui/styles/styles.go` with Ciapre palette hex values
+- Added 3 new constants: Amber (#CC8B3F), Red (#AC3835), Green (#A6A75D)
+- Updated Warning style to use Red, Success style to use Green
+- Updated package doc string to reference Ciapre palette
+- Build and vet pass cleanly
+- Files changed: tui/styles/styles.go
+- **Learnings for future iterations:**
+  - Kept original constant names (DeepPurple, DarkPurple, etc.) even though Ciapre isn't purple — avoids renaming across 20+ files
+  - All components reference `styles.XXX` constants, so changing values in one place propagates everywhere
+  - New Amber, Red, Green constants are available for US-003+ (sub-headers, warnings, success)
+---
+
+## 2026-02-09 - US-005
+- Reordered `renderColumn1()` in `tui/tui.go` to render sections as: (1) Playback, (2) Selected Tag, (3) Controls
+- Previously the order was Controls → Playback → Selected Tag
+- Each section retains its styled header (Pink for Playback/Selected Tag, Cyan for Controls) with blank line separators
+- Updated function comment to reflect new order
+- Build and vet pass cleanly
+- Files changed: tui/tui.go
+- **Learnings for future iterations:**
+  - `renderColumn1()` starts around line 1569 — the three sections are self-contained blocks that can be reordered by moving code blocks
+  - The Selected Tag section is conditional (only renders if an item is selected), so the blank line separator after it needs to be inside the `if item != nil` block
+  - `ControlsDisplay()` in controls.go is a separate horizontal compact layout used for form overlay views — not the same as the column 1 controls rendering
+---
+
+## 2026-02-09 - US-006
+- Added `Name` field to `ControlGroup` struct in `tui/components/controls.go`
+- Updated `GetControlGroups()` with group labels: "Playback", "Navigation", "Step / Overlay", "Views"
+- Redesigned controls section in `renderColumn1()` in `tui/tui.go`:
+  - Each group gets an amber-styled sub-header (`styles.Amber`)
+  - Each control renders as two lines: emoji+name, then indented [key] in blue (`styles.Cyan`)
+  - Blank line between each control, extra blank line between groups
+- Left `ControlsDisplay()` unchanged — it's the horizontal compact layout used for form overlay views
+- Build and vet pass cleanly
+- Files changed: tui/components/controls.go, tui/tui.go
+- **Learnings for future iterations:**
+  - The `ControlGroup.Name` field is now available for any view that wants to display group labels
+  - `ControlsDisplay()` is independent from the column 1 rendering — changes to one don't affect the other
+  - Controls section clips naturally at column bottom since `renderColumn1` output is truncated to height by the column layout code
+---
+
+## 2026-02-09 - US-007
+- Final QA verification — no code changes required
+- Verified: `CGO_ENABLED=0 go build ./...` passes cleanly
+- Verified: `CGO_ENABLED=0 go vet ./...` passes cleanly with no warnings
+- Verified: No hardcoded hex colour values outside `tui/styles/styles.go` (all 11 colours defined centrally)
+- Verified: No old palette values (#1a1a2e, #16213e, #4a347d, #7b2cbf, #c77dff, #e0aaff, #ff6b9d, #64dfdf) remain anywhere
+- Verified: StatusBar, Timeline, and CommandInput all use `.Width(width)` with full terminal width — no gaps
+- Files changed: tasks/prd.json (mark passes: true), tasks/progress.txt (this entry)
+- **Learnings for future iterations:**
+  - All full-width components (StatusBar, Timeline, CommandInput) use lipgloss `.Width(width)` pattern — maintain this for future components
+  - Colour centralisation via `styles.XXX` constants means a grep for `#[0-9a-fA-F]{6}` in tui/ .go files is a reliable QA check
+  - The column layout properly accounts for border characters (usableWidth = m.width - borderCount) so rows + borders + full-width bars all align
+---
