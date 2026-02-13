@@ -1,0 +1,57 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/remove-mini-player",
+  "description": "Remove Mini Player Mode & Revise Responsive Layout - Eliminate the standalone mini player fallback, always show the multi-column layout with revised responsive breakpoints and progressive column hiding",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Remove mini player narrow-mode fallback and key filtering",
+      "description": "As a user, I want the full column layout to always display so that I never get stuck in a limited mini player view.",
+      "acceptanceCriteria": [
+        "The `if m.width > 0 && m.width < layout.MinTerminalWidth` guard in View() that returns RenderMiniPlayer is removed",
+        "The key-filtering switch block in Update() that suppresses non-playback keys when width < MinTerminalWidth is removed",
+        "All keybindings work at any terminal width",
+        "The MinTerminalWidth constant is removed from tui/layout/columns.go",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Mini player guard is in tui/tui.go View() around line 1612. Key filtering is in Update() around line 172. MinTerminalWidth constant is in tui/layout/columns.go line 12."
+    },
+    {
+      "id": "US-002",
+      "title": "Revise responsive column breakpoints and sizing",
+      "description": "As a user, I want columns to have proper target widths and hide progressively as the terminal narrows, so the layout stays readable at any size.",
+      "acceptanceCriteria": [
+        "Column 1: fixed at 30 cells, always visible at any terminal width",
+        "Column 2: target width 80 cells; truncates as terminal narrows; hides when it would fall below 30 cells",
+        "Column 3: target width 60 cells; truncates as terminal narrows; hides when it would fall below 30 cells (hides before Column 2)",
+        "Column 4: fixed at 30 cells; hidden when terminal width < 170",
+        "New constants added: Col2TargetWidth = 80, Col3TargetWidth = 60, ColMinWidth = 30",
+        "Col4ShowThreshold updated from 160 to 170",
+        "ComputeColumnWidths() updated with new logic in tui/layout/columns.go",
+        "View() in tui/tui.go uses the updated column visibility flags correctly",
+        "Layout renders correctly at widths: 220, 200, 170, 140, 100, 60",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "ComputeColumnWidths is in tui/layout/columns.go. Current constants: Col1Width=30, Col3HideThreshold=90, Col3MinWidth=18, Col4Width=30, Col4ShowThreshold=160. Replace Col3HideThreshold and Col3MinWidth with the new target/min system. Column hide order: Col4 first (below 170), then Col3 (below 30 cells), then Col2 (below 30 cells), Col1 always visible."
+    },
+    {
+      "id": "US-003",
+      "title": "Clean up form overlays and error view referencing mini player",
+      "description": "As a developer, I want to remove mini player references from form overlay code paths and truncate forms to fit the terminal width.",
+      "acceptanceCriteria": [
+        "The confirmDiscardForm, noteForm, and tackleForm overlay views in View() no longer call RenderMiniPlayer",
+        "Form overlays truncate to fit the current terminal width (no wrapping or overflow)",
+        "Error view (m.err != nil) no longer calls RenderMiniPlayer",
+        "If RenderMiniPlayer is no longer called anywhere (check renderColumn1 — it may use a different render path), remove it from tui/components/controls.go",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Form overlays are in tui/tui.go View() around lines 1618-1639. Each calls RenderMiniPlayer(m.statusBar, 0, false) as a header. Error view is around line 1599. Check renderColumn1 in tui/columns.go to see if it calls RenderMiniPlayer — that's the Column 1 compact card which should be preserved. The ControlsDisplay function used in form overlays may also need review."
+    }
+  ]
+}
