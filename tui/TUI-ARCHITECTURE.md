@@ -97,16 +97,16 @@ Constrains content to an exact `Width x Height` bounding box:
 
 ### ComputeColumnWidths(termWidth int) (col1, col2, col3, col4 int, showCol2, showCol3, showCol4 bool)
 
-Responsive column width calculation (column 1 is always fixed at 30 cells):
+Responsive column width calculation. Constants: `Col1Width = 30`, `Col3Width = 40`, `Col4Width = 30`, `ColMinWidth = 30`, `Col4ShowThreshold = 170`. Column 3 is fixed at 40 cells; Column 2 gets all remaining space.
 
 | Terminal Width | Layout | Column Sizing |
 |---------------|--------|---------------|
-| >= 170 | 4-column | Col 1 = 30 (fixed), Col 4 = 30 (fixed), remaining split proportionally (Col 2 target 80, Col 3 target 60, min 30 each) |
-| 92 - 169 | 3-column | Col 1 = 30 (fixed), remaining split proportionally (Col 2 target 80, Col 3 target 60, min 30 each) |
-| 61 - 91 | 2-column | Col 1 = 30 (fixed), Col 3 hidden, all remaining to Col 2 |
+| >= 170 | 4-column | Col 1 = 30 (fixed), Col 3 = 40 (fixed), Col 4 = 30 (fixed), Col 2 = all remaining space |
+| 102 - 169 | 3-column | Col 1 = 30 (fixed), Col 3 = 40 (fixed), Col 2 = all remaining space |
+| 61 - 101 | 2-column | Col 1 = 30 (fixed), Col 3 hidden, Col 2 = all remaining space |
 | <= 60 | 1-column | Col 1 = 30 (fixed) only |
 
-Hide order: Col 4 first (< 170), then Col 3 (when < 30 cells), then Col 2 (when < 30 cells). Col 1 always visible.
+Hide order: Col 4 first (< 170), then Col 3 (when Col 2 would fall below 30 cells), then Col 2 (when < 30 cells). Col 1 always visible.
 
 ### JoinColumns(columns []string, widths []int, height int) string
 
