@@ -1,41 +1,35 @@
 # Ralph Progress Log
-# Branch: ralph/column3-fixed-width
+# Branch: ralph/dynamic-notes-list-height
 # Started: 2026-02-13
 
 ## Codebase Patterns
 - Use `CGO_ENABLED=0` for all Go build/vet commands (modernc.org/sqlite requirement)
 - Go binary at `/home/node/go/bin/go` — export PATH before commands
-- Layout utilities in `tui/layout/` package (PadToWidth, NormalizeLines, Container, ComputeColumnWidths, JoinColumns)
-- ComputeColumnWidths in tui/layout/columns.go — current constants: Col1Width=30, Col2TargetWidth=80, Col3TargetWidth=60, ColMinWidth=30, Col4Width=30, Col4ShowThreshold=170
-- ComputeColumnWidths returns 7 values: (col1, col2, col3, col4, showCol2, showCol3, showCol4)
-- Hide order: Col4 first (<170), then Col3 (<30 cells for col2), then Col2 (<30 cells), Col1 always visible
-- TUI-ARCHITECTURE.md at tui/TUI-ARCHITECTURE.md — has constants list (~line 98) and column sizing table (~lines 102-108)
-
-- ComputeColumnWidths returns 7 values: (col1, col2, col3, col4, showCol2, showCol3, showCol4)
-- Col3 is now fixed (Col3Width=40), Col2 gets remainder — no more proportional distribution
-- Hide check for Col3: `usable - Col3Width >= ColMinWidth` (does Col2 still have room after giving Col3 its fixed 40?)
+- NotesList component in tui/components/noteslist.go — currently uses hardcoded `const tableRows = 10`
+- The `height` parameter is already passed from renderColumn2 (tui/columns.go) into NotesList
+- scrollToCurrentTime is a method on *NotesListState that references tableRows directly
+- TUI-ARCHITECTURE.md at tui/TUI-ARCHITECTURE.md — NotesList section around line 144
 
 ---
 
 ## 2026-02-13 - US-001
-- Replaced Col2TargetWidth (80) and Col3TargetWidth (60) with Col3Width = 40
-- ComputeColumnWidths now gives Col3 a fixed 40 cells, Col2 gets all remaining space
-- Col3 hide check changed from `usable >= ColMinWidth*2` to `usable - Col3Width >= ColMinWidth`
-- Files changed: tui/layout/columns.go
+- Removed `const tableRows = 10` and replaced with `visibleRows := height - 1` computed from the height parameter
+- Updated all 4 references: render loop, empty-state padding, scroll-offset clamping, and scrollToCurrentTime
+- Changed scrollToCurrentTime signature to accept `visibleRows int` parameter
+- Added guard for non-positive visibleRows (returns empty string)
+- Files changed: tui/components/noteslist.go
 - **Learnings for future iterations:**
-  - The proportional distribution was simple integer division; replacing with fixed width simplified the code significantly
-  - No other Go files referenced the removed constants — only docs/task files
-  - Verified layout math at widths 220, 170, 140, 100, 60 — all produce correct results
+  - scrollToCurrentTime is only called internally from NotesList(), so changing its signature required no external plumbing
+  - The height param was already passed through from renderColumn2 — no changes needed in columns.go
+  - CGO_ENABLED=0 go vet ./... passes cleanly
 ---
 
 ## 2026-02-13 - US-002
-- Updated TUI-ARCHITECTURE.md to reflect fixed Column 3 width
-- Replaced proportional sizing description with fixed Col3Width=40, Col2 gets remainder
-- Updated column sizing table with correct breakpoints (102-169 for 3-col, 61-101 for 2-col)
-- Listed all constants inline: Col1Width=30, Col3Width=40, Col4Width=30, ColMinWidth=30, Col4ShowThreshold=170
+- Updated NotesList section in TUI-ARCHITECTURE.md to describe dynamic height instead of fixed-row
+- Changed "fixed-row scrollable table" to "dynamically-sized scrollable table (visible row count derived from height parameter)"
 - Files changed: tui/TUI-ARCHITECTURE.md
 - **Learnings for future iterations:**
-  - Breakpoint math: 3-col shows at width >= 102 (30 + 40 + 30 + 2 borders), 2-col at width >= 61 (30 + 30 + 1 border)
-  - The doc had been using approximate ranges; recalculated from actual code logic
+  - NotesList section is at line 146 of TUI-ARCHITECTURE.md
+  - Only the Renders bullet needed updating — the signature already showed the height parameter
 ---
 

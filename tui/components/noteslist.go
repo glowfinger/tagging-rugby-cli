@@ -50,13 +50,17 @@ type NotesListState struct {
 	ScrollOffset int
 }
 
-// tableRows is the fixed number of rows in the table (excluding header).
-const tableRows = 10
-
-// NotesList renders the notes list component as a fixed 10-row table at the bottom.
+// NotesList renders the notes list component as a dynamically-sized table.
 // It displays notes and tackles sorted by timestamp.
+// The visible row count is derived from the height parameter (height - 1 for the header row).
 // The currentTimePos parameter is used to auto-scroll to show notes near the current video timestamp.
 func NotesList(state NotesListState, width, height int, currentTimePos float64) string {
+	// Compute visible rows from height (subtract 1 for header row)
+	visibleRows := height - 1
+	if visibleRows <= 0 {
+		return ""
+	}
+
 	// Build the table
 	var lines []string
 
@@ -91,27 +95,27 @@ func NotesList(state NotesListState, width, height int, currentTimePos float64) 
 		emptyRow := emptyStyle.Render(fmt.Sprintf(" %-*s", width-2, "No notes or tackles for this video"))
 		lines = append(lines, emptyRow)
 		// Fill remaining rows with empty space
-		for i := 1; i < tableRows; i++ {
+		for i := 1; i < visibleRows; i++ {
 			lines = append(lines, "")
 		}
 		return strings.Join(lines, "\n")
 	}
 
 	// Auto-scroll to show notes near current video timestamp
-	state.scrollToCurrentTime(currentTimePos)
+	state.scrollToCurrentTime(currentTimePos, visibleRows)
 
-	// Adjust scroll offset to keep selected item visible within the 10 rows
+	// Adjust scroll offset to keep selected item visible within visible rows
 	if state.SelectedIndex < state.ScrollOffset {
 		state.ScrollOffset = state.SelectedIndex
-	} else if state.SelectedIndex >= state.ScrollOffset+tableRows {
-		state.ScrollOffset = state.SelectedIndex - tableRows + 1
+	} else if state.SelectedIndex >= state.ScrollOffset+visibleRows {
+		state.ScrollOffset = state.SelectedIndex - visibleRows + 1
 	}
 
 	// Ensure scroll offset doesn't go negative or beyond items
 	if state.ScrollOffset < 0 {
 		state.ScrollOffset = 0
 	}
-	maxOffset := len(state.Items) - tableRows
+	maxOffset := len(state.Items) - visibleRows
 	if maxOffset < 0 {
 		maxOffset = 0
 	}
@@ -119,8 +123,8 @@ func NotesList(state NotesListState, width, height int, currentTimePos float64) 
 		state.ScrollOffset = maxOffset
 	}
 
-	// Render exactly 10 rows
-	for row := 0; row < tableRows; row++ {
+	// Render visible rows
+	for row := 0; row < visibleRows; row++ {
 		itemIndex := state.ScrollOffset + row
 		if itemIndex < len(state.Items) {
 			item := state.Items[itemIndex]
@@ -136,7 +140,7 @@ func NotesList(state NotesListState, width, height int, currentTimePos float64) 
 }
 
 // scrollToCurrentTime adjusts the scroll offset to show notes near the current timestamp.
-func (s *NotesListState) scrollToCurrentTime(currentTimePos float64) {
+func (s *NotesListState) scrollToCurrentTime(currentTimePos float64, visibleRows int) {
 	if len(s.Items) == 0 {
 		return
 	}
@@ -152,13 +156,13 @@ func (s *NotesListState) scrollToCurrentTime(currentTimePos float64) {
 	}
 
 	// Center the view around the nearest item if not already selected
-	if s.SelectedIndex < s.ScrollOffset || s.SelectedIndex >= s.ScrollOffset+tableRows {
+	if s.SelectedIndex < s.ScrollOffset || s.SelectedIndex >= s.ScrollOffset+visibleRows {
 		// Only auto-scroll if selection is out of view - position nearest item in upper third
-		targetOffset := nearestIndex - tableRows/3
+		targetOffset := nearestIndex - visibleRows/3
 		if targetOffset < 0 {
 			targetOffset = 0
 		}
-		maxOffset := len(s.Items) - tableRows
+		maxOffset := len(s.Items) - visibleRows
 		if maxOffset < 0 {
 			maxOffset = 0
 		}

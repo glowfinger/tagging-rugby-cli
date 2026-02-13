@@ -1,44 +1,39 @@
 {
   "project": "tagging-rugby-cli",
-  "branchName": "ralph/column3-fixed-width",
-  "description": "Fix Column 3 Width to 40 Cells - Change Column 3 from proportional sizing to a fixed 40-cell width, giving all remaining space to Column 2",
+  "branchName": "ralph/dynamic-notes-list-height",
+  "description": "Dynamic Notes List Height - Make the notes list component use all available vertical space instead of a fixed 10-row table",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Fix Column 3 to 40 cells and give remaining space to Column 2",
-      "description": "As a user, I want the stats column to be a consistent fixed width so the layout is predictable and the notes list gets maximum space.",
+      "title": "Remove fixed tableRows constant and derive row count from height parameter",
+      "description": "As a user, I want the notes list to fill all available vertical space so the list responds correctly when the terminal is resized vertically.",
       "acceptanceCriteria": [
-        "Col3TargetWidth constant is replaced with Col3Width = 40 in tui/layout/columns.go",
-        "Col2TargetWidth constant is removed — Column 2 no longer needs a target, it gets all remaining space",
-        "ComputeColumnWidths() treats Column 3 as fixed at 40 cells (like Col1 and Col4), not proportionally distributed",
-        "In 3-column layout: col2 = termWidth - Col1Width - Col3Width - borders; col3 = 40",
-        "In 4-column layout: col2 = termWidth - Col1Width - Col3Width - Col4Width - borders; col3 = 40",
-        "Column 3 hides when Col2 would fall below ColMinWidth (30) — check: usable - Col3Width >= ColMinWidth",
-        "Column 2 hides when remaining space after Col1 + borders < ColMinWidth — same as current behaviour",
-        "Col4ShowThreshold remains 170, ColMinWidth remains 30",
-        "Layout renders correctly at terminal widths: 220, 170, 140, 100, 60",
+        "The `const tableRows = 10` is removed from tui/components/noteslist.go",
+        "NotesList() computes visibleRows from the height parameter (height - 1 for the header row)",
+        "The render loop iterates visibleRows times instead of the old constant",
+        "The empty-state branch pads to visibleRows instead of the old constant",
+        "scrollToCurrentTime() accepts a visibleRows int parameter instead of referencing tableRows",
+        "All scroll-offset clamping logic (SelectedIndex bounds, maxOffset calculation) uses visibleRows",
+        "Non-positive visibleRows (<= 0) does not panic — returns header only or empty string",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "ComputeColumnWidths is in tui/layout/columns.go. Current constants: Col1Width=30, Col2TargetWidth=80, Col3TargetWidth=60, ColMinWidth=30, Col4Width=30, Col4ShowThreshold=170. Replace proportional distribution logic (lines 49-61) with fixed Col3 + remainder to Col2. The 3-column check changes from 'usable >= ColMinWidth*2' to 'usable - Col3Width >= ColMinWidth' (after giving Col3 its fixed 40, does Col2 still have at least 30?)."
+      "notes": "Key file: tui/components/noteslist.go. The `height` param is already passed from renderColumn2 in tui/columns.go — no new plumbing needed. There are 4 references to `tableRows`: the render loop (line 123), empty-state padding (line 94), scroll-offset clamping (lines 106, 114), and scrollToCurrentTime (lines 155, 161). The scrollToCurrentTime method signature must change to accept visibleRows as a parameter."
     },
     {
       "id": "US-002",
-      "title": "Update TUI-ARCHITECTURE.md for fixed Column 3 width",
-      "description": "As a developer, I want the architecture doc to reflect that Column 3 is now fixed-width so documentation stays accurate.",
+      "title": "Update TUI-ARCHITECTURE.md NotesList section",
+      "description": "As a developer, I want the architecture doc to accurately describe the NotesList component so I can trust it as a reference.",
       "acceptanceCriteria": [
-        "The responsive layout constants list in TUI-ARCHITECTURE.md shows Col3Width = 40 instead of Col3TargetWidth = 60",
-        "Col2TargetWidth is removed from the constants list",
-        "The ComputeColumnWidths description states Column 3 is fixed at 40 cells",
-        "The column sizing table shows 'Col 3 = 40 (fixed)' instead of proportional sizing for all layouts where Col3 is visible",
-        "Column 2 description says 'all remaining space' instead of 'target 80'",
-        "No other sections are changed",
+        "The NotesList bullet in tui/TUI-ARCHITECTURE.md no longer says 'fixed-row' or '10-row'",
+        "The description states that the visible row count is derived from the height parameter",
+        "No other sections of TUI-ARCHITECTURE.md are modified",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "TUI-ARCHITECTURE.md is at tui/TUI-ARCHITECTURE.md. The constants are listed around line 98. The column sizing table is around lines 102-108. Update both the constants description and the terminal width breakpoint table."
+      "notes": "TUI-ARCHITECTURE.md is at tui/TUI-ARCHITECTURE.md. The NotesList section is around line 144. Current text says 'fixed-row scrollable table' — change to describe dynamic height derived from the height parameter."
     }
   ]
 }
