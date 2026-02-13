@@ -1,38 +1,41 @@
 # Ralph Progress Log
-# Branch: ralph/tackle-stats-table
-# Started: 2026-02-12
+# Branch: ralph/column3-fixed-width
+# Started: 2026-02-13
 
 ## Codebase Patterns
 - Use `CGO_ENABLED=0` for all Go build/vet commands (modernc.org/sqlite requirement)
 - Go binary at `/home/node/go/bin/go` — export PATH before commands
 - Layout utilities in `tui/layout/` package (PadToWidth, NormalizeLines, Container, ComputeColumnWidths, JoinColumns)
-- Column render methods in `tui/columns.go` (renderColumn1/2/3/4) — same package `tui`, methods on *Model
-- Container guarantees exact Width x Height output — every renderColumn MUST wrap in Container
-- StatsPanel in tui/components/statspanel.go — receives tackleStats []PlayerStats, items []ListItem, width, height int
-- PlayerStats struct in tui/components/statsview.go — fields: Player, Total, Completed, Missed, Possible, Other, Starred, Percentage
-- Styles: styles.Pink (headers), styles.LightLavender (primary text), styles.Cyan (info/totals), styles.Lavender (dim text), styles.Purple (borders)
+- ComputeColumnWidths in tui/layout/columns.go — current constants: Col1Width=30, Col2TargetWidth=80, Col3TargetWidth=60, ColMinWidth=30, Col4Width=30, Col4ShowThreshold=170
+- ComputeColumnWidths returns 7 values: (col1, col2, col3, col4, showCol2, showCol3, showCol4)
+- Hide order: Col4 first (<170), then Col3 (<30 cells for col2), then Col2 (<30 cells), Col1 always visible
+- TUI-ARCHITECTURE.md at tui/TUI-ARCHITECTURE.md — has constants list (~line 98) and column sizing table (~lines 102-108)
+
+- ComputeColumnWidths returns 7 values: (col1, col2, col3, col4, showCol2, showCol3, showCol4)
+- Col3 is now fixed (Col3Width=40), Col2 gets remainder — no more proportional distribution
+- Hide check for Col3: `usable - Col3Width >= ColMinWidth` (does Col2 still have room after giving Col3 its fixed 40?)
 
 ---
 
-## 2026-02-12 - US-001
-- Replaced Top Players leaderboard with Tackle Stats table in statspanel.go
-- Table has header row (Player, Tot, Comp, Miss, %) styled with Pink+Bold
-- TOTAL row pinned after header (Cyan style) — sums all players, shows overall %
-- All players displayed (no top-5 limit), sorted by total desc, name asc tiebreaker
-- Player names truncated to fit available width, % shows "-" for zero tackles
-- Empty state preserved ("No tackle data" in dim italic)
-- Files changed: tui/components/statspanel.go
+## 2026-02-13 - US-001
+- Replaced Col2TargetWidth (80) and Col3TargetWidth (60) with Col3Width = 40
+- ComputeColumnWidths now gives Col3 a fixed 40 cells, Col2 gets all remaining space
+- Col3 hide check changed from `usable >= ColMinWidth*2` to `usable - Col3Width >= ColMinWidth`
+- Files changed: tui/layout/columns.go
 - **Learnings for future iterations:**
-  - The truncateStr helper already exists in statspanel.go — reuse it for name truncation
-  - Column width math: reserve fixed space for numeric columns, give remainder to name
-  - TOTAL row must come before player rows so Container truncation keeps it visible
+  - The proportional distribution was simple integer division; replacing with fixed width simplified the code significantly
+  - No other Go files referenced the removed constants — only docs/task files
+  - Verified layout math at widths 220, 170, 140, 100, 60 — all produce correct results
 ---
 
-## 2026-02-12 - US-002
-- Updated TUI-ARCHITECTURE.md to reflect tackle stats table replacing leaderboard
-- Three changes: directory structure comment, Column 3 rendering table row, StatsPanel component contract
+## 2026-02-13 - US-002
+- Updated TUI-ARCHITECTURE.md to reflect fixed Column 3 width
+- Replaced proportional sizing description with fixed Col3Width=40, Col2 gets remainder
+- Updated column sizing table with correct breakpoints (102-169 for 3-col, 61-101 for 2-col)
+- Listed all constants inline: Col1Width=30, Col3Width=40, Col4Width=30, ColMinWidth=30, Col4ShowThreshold=170
 - Files changed: tui/TUI-ARCHITECTURE.md
 - **Learnings for future iterations:**
-  - Architecture doc has three places referencing statspanel: directory tree comment, column rendering table, and component contracts section — update all three when changing statspanel functionality
+  - Breakpoint math: 3-col shows at width >= 102 (30 + 40 + 30 + 2 borders), 2-col at width >= 61 (30 + 30 + 1 border)
+  - The doc had been using approximate ranges; recalculated from actual code logic
 ---
 
