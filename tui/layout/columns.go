@@ -10,8 +10,7 @@ import (
 // Responsive layout constants.
 const (
 	Col1Width         = 30  // fixed width for column 1
-	Col2TargetWidth   = 80  // target width for column 2
-	Col3TargetWidth   = 60  // target width for column 3
+	Col3Width         = 40  // fixed width for column 3
 	ColMinWidth       = 30  // minimum width before a column is hidden
 	Col4Width         = 30  // fixed width for column 4 (controls)
 	Col4ShowThreshold = 170 // show column 4 when terminal width >= this
@@ -19,8 +18,9 @@ const (
 
 // ComputeColumnWidths calculates responsive column widths based on terminal width.
 // Returns individual column widths and whether columns 2, 3, and 4 should be shown.
-// Column 1 is always fixed at Col1Width (30). Column 4 is fixed at Col4Width (30).
-// Hide order: Col4 first (below 170), then Col3 (below 30 cells), then Col2 (below 30 cells).
+// Column 1 is always fixed at Col1Width (30). Column 3 is fixed at Col3Width (40).
+// Column 4 is fixed at Col4Width (30). Column 2 gets all remaining space.
+// Hide order: Col4 first (below 170), then Col3 (col2 would fall below 30), then Col2 (below 30 cells).
 // Col1 is always visible at any terminal width.
 func ComputeColumnWidths(termWidth int) (col1, col2, col3, col4 int, showCol2, showCol3, showCol4 bool) {
 	col1 = Col1Width
@@ -28,37 +28,25 @@ func ComputeColumnWidths(termWidth int) (col1, col2, col3, col4 int, showCol2, s
 	// Step 1: Determine if col4 is shown
 	showCol4 = termWidth >= Col4ShowThreshold
 
-	// Step 2: Calculate available space for col2 and col3
+	// Step 2: Calculate fixed space used
 	borders := 0
 	fixedUsed := col1
 	if showCol4 {
 		col4 = Col4Width
 		fixedUsed += col4
 		borders = 3 // col1|col2|col3|col4
+	} else {
+		borders = 2 // col1|col2|col3
 	}
 
 	// Try 3-column layout (col1 + col2 + col3 [+ col4])
-	if !showCol4 {
-		borders = 2 // col1|col2|col3
-	}
+	// Col3 is fixed at Col3Width; col2 gets the remainder
 	usable := termWidth - fixedUsed - borders
-	if usable >= ColMinWidth*2 {
-		// Enough room for both col2 and col3
+	if usable-Col3Width >= ColMinWidth {
 		showCol2 = true
 		showCol3 = true
-		// Distribute proportionally based on targets
-		totalTarget := Col2TargetWidth + Col3TargetWidth
-		col2 = usable * Col2TargetWidth / totalTarget
-		col3 = usable - col2
-		// Clamp: if col3 would be below min, give space to col2
-		if col3 < ColMinWidth {
-			col3 = ColMinWidth
-			col2 = usable - col3
-		}
-		if col2 < ColMinWidth {
-			col2 = ColMinWidth
-			col3 = usable - col2
-		}
+		col3 = Col3Width
+		col2 = usable - col3
 		return
 	}
 

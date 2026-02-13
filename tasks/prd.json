@@ -1,42 +1,44 @@
 {
   "project": "tagging-rugby-cli",
-  "branchName": "ralph/tackle-stats-table",
-  "description": "Replace Top Players with Tackle Stats Table - Show all players' tackle stats in Column 3 with a pinned totals row, replacing the limited top-5 leaderboard",
+  "branchName": "ralph/column3-fixed-width",
+  "description": "Fix Column 3 Width to 40 Cells - Change Column 3 from proportional sizing to a fixed 40-cell width, giving all remaining space to Column 2",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Replace Top Players leaderboard with tackle stats table",
-      "description": "As a user, I want to see a full tackle stats table in Column 3 so that I can see every player's tackle data without opening the full-screen StatsView.",
+      "title": "Fix Column 3 to 40 cells and give remaining space to Column 2",
+      "description": "As a user, I want the stats column to be a consistent fixed width so the layout is predictable and the notes list gets maximum space.",
       "acceptanceCriteria": [
-        "The 'Top Players' section in StatsPanel (statspanel.go) is replaced with a 'Tackle Stats' section",
-        "Table has a header row with columns: Player, Total, Comp, Miss, %",
-        "A TOTAL row appears immediately after the header, summing Total/Comp/Miss across all players and showing overall % (sum completed / (sum completed + sum missed) * 100)",
-        "The TOTAL row is styled distinctly from player rows (use styles.Cyan for the totals row text, styles.Pink+Bold for headers)",
-        "All players from tackleStats are displayed (no top-5 limit)",
-        "Players sorted by total tackles descending, alphabetical name as tiebreaker",
-        "Player name column truncates long names to fit available width",
-        "% column shows '-' when a player has zero completed + missed tackles",
-        "Empty state shows 'No tackle data' in dim italic style when tackleStats is empty",
-        "Summary and Event Distribution sections above the table remain unchanged",
+        "Col3TargetWidth constant is replaced with Col3Width = 40 in tui/layout/columns.go",
+        "Col2TargetWidth constant is removed — Column 2 no longer needs a target, it gets all remaining space",
+        "ComputeColumnWidths() treats Column 3 as fixed at 40 cells (like Col1 and Col4), not proportionally distributed",
+        "In 3-column layout: col2 = termWidth - Col1Width - Col3Width - borders; col3 = 40",
+        "In 4-column layout: col2 = termWidth - Col1Width - Col3Width - Col4Width - borders; col3 = 40",
+        "Column 3 hides when Col2 would fall below ColMinWidth (30) — check: usable - Col3Width >= ColMinWidth",
+        "Column 2 hides when remaining space after Col1 + borders < ColMinWidth — same as current behaviour",
+        "Col4ShowThreshold remains 170, ColMinWidth remains 30",
+        "Layout renders correctly at terminal widths: 220, 170, 140, 100, 60",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "StatsPanel is in tui/components/statspanel.go. It already receives tackleStats []PlayerStats and height int. The Top Players section starts at line 125. PlayerStats struct is in statsview.go with fields: Player, Total, Completed, Missed, Possible, Other, Starred, Percentage. Only display Player, Total, Completed, Missed, Percentage in the new table. The table is read-only — no scrolling or selection interaction. Use all remaining vertical space for player rows. The totals row must be rendered before player rows so it stays visible when Container truncates overflow with the scroll indicator."
+      "notes": "ComputeColumnWidths is in tui/layout/columns.go. Current constants: Col1Width=30, Col2TargetWidth=80, Col3TargetWidth=60, ColMinWidth=30, Col4Width=30, Col4ShowThreshold=170. Replace proportional distribution logic (lines 49-61) with fixed Col3 + remainder to Col2. The 3-column check changes from 'usable >= ColMinWidth*2' to 'usable - Col3Width >= ColMinWidth' (after giving Col3 its fixed 40, does Col2 still have at least 30?)."
     },
     {
       "id": "US-002",
-      "title": "Update TUI-ARCHITECTURE.md for tackle stats table",
-      "description": "As a developer, I want the architecture doc to reflect the new tackle stats table so documentation stays accurate.",
+      "title": "Update TUI-ARCHITECTURE.md for fixed Column 3 width",
+      "description": "As a developer, I want the architecture doc to reflect that Column 3 is now fixed-width so documentation stays accurate.",
       "acceptanceCriteria": [
-        "The StatsPanel description in TUI-ARCHITECTURE.md Component Contracts section is updated from 'bar graph, category counts, leaderboard' to 'stats summary, bar graph of event distribution, tackle stats table'",
-        "The Column 3 row in the column rendering table is updated from 'Live stats panel (bar graph, leaderboard)' to 'Live stats panel (bar graph, tackle stats table)'",
+        "The responsive layout constants list in TUI-ARCHITECTURE.md shows Col3Width = 40 instead of Col3TargetWidth = 60",
+        "Col2TargetWidth is removed from the constants list",
+        "The ComputeColumnWidths description states Column 3 is fixed at 40 cells",
+        "The column sizing table shows 'Col 3 = 40 (fixed)' instead of proportional sizing for all layouts where Col3 is visible",
+        "Column 2 description says 'all remaining space' instead of 'target 80'",
         "No other sections are changed",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "TUI-ARCHITECTURE.md is at tui/TUI-ARCHITECTURE.md. Column 3 description is in the Column Rendering table around line 69. StatsPanel description is in the Component Contracts section around line 157."
+      "notes": "TUI-ARCHITECTURE.md is at tui/TUI-ARCHITECTURE.md. The constants are listed around line 98. The column sizing table is around lines 102-108. Update both the constants description and the terminal width breakpoint table."
     }
   ]
 }
