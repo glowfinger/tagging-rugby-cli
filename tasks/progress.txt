@@ -1,5 +1,5 @@
 # Ralph Progress Log
-# Branch: ralph/remove-mini-player
+# Branch: ralph/tackle-stats-table
 # Started: 2026-02-12
 
 ## Codebase Patterns
@@ -8,47 +8,31 @@
 - Layout utilities in `tui/layout/` package (PadToWidth, NormalizeLines, Container, ComputeColumnWidths, JoinColumns)
 - Column render methods in `tui/columns.go` (renderColumn1/2/3/4) — same package `tui`, methods on *Model
 - Container guarantees exact Width x Height output — every renderColumn MUST wrap in Container
-- Form overlays (note/tackle/confirmDiscard) in View() show ControlsDisplay + truncated form (no longer use RenderMiniPlayer)
-- RenderMiniPlayer in tui/components/controls.go (~line 248) — still used by renderColumn1 in columns.go
-- truncateViewToWidth() helper in tui.go — uses ansi.Truncate to truncate each line of form views to terminal width
-- ComputeColumnWidths in tui/layout/columns.go with constants: Col1Width=30, Col2TargetWidth=80, Col3TargetWidth=60, ColMinWidth=30, Col4Width=30, Col4ShowThreshold=170
-- ComputeColumnWidths returns 7 values: (col1, col2, col3, col4, showCol2, showCol3, showCol4)
-- Hide order: Col4 first (<170), then Col3 (<30 cells), then Col2 (<30 cells), Col1 always visible
+- StatsPanel in tui/components/statspanel.go — receives tackleStats []PlayerStats, items []ListItem, width, height int
+- PlayerStats struct in tui/components/statsview.go — fields: Player, Total, Completed, Missed, Possible, Other, Starred, Percentage
+- Styles: styles.Pink (headers), styles.LightLavender (primary text), styles.Cyan (info/totals), styles.Lavender (dim text), styles.Purple (borders)
 
 ---
 
 ## 2026-02-12 - US-001
-- Removed mini player narrow-mode guard from View() that returned RenderMiniPlayer when width < MinTerminalWidth
-- Removed key-filtering switch block from Update() that suppressed non-playback keys when width < MinTerminalWidth
-- Removed MinTerminalWidth constant from tui/layout/columns.go
-- Files changed: tui/tui.go, tui/layout/columns.go
+- Replaced Top Players leaderboard with Tackle Stats table in statspanel.go
+- Table has header row (Player, Tot, Comp, Miss, %) styled with Pink+Bold
+- TOTAL row pinned after header (Cyan style) — sums all players, shows overall %
+- All players displayed (no top-5 limit), sorted by total desc, name asc tiebreaker
+- Player names truncated to fit available width, % shows "-" for zero tackles
+- Empty state preserved ("No tackle data" in dim italic)
+- Files changed: tui/components/statspanel.go
 - **Learnings for future iterations:**
-  - MinTerminalWidth was only used in two places in tui.go (View guard + Update key filter) and defined in layout/columns.go
-  - After removal, all keybindings work at any terminal width — the multi-column layout handles narrow widths naturally
+  - The truncateStr helper already exists in statspanel.go — reuse it for name truncation
+  - Column width math: reserve fixed space for numeric columns, give remainder to name
+  - TOTAL row must come before player rows so Container truncation keeps it visible
 ---
 
 ## 2026-02-12 - US-002
-- Replaced old constants (Col3HideThreshold, Col3MinWidth) with new target/min system (Col2TargetWidth=80, Col3TargetWidth=60, ColMinWidth=30)
-- Updated Col4ShowThreshold from 160 to 170
-- Rewrote ComputeColumnWidths with progressive column hiding: distributes space proportionally based on target widths, hides columns when they'd fall below 30 cells
-- Added showCol2 to return signature; updated View() in tui.go to handle 1-column through 4-column layouts
-- Updated TUI-ARCHITECTURE.md with new breakpoint table
-- Files changed: tui/layout/columns.go, tui/tui.go, tui/TUI-ARCHITECTURE.md
+- Updated TUI-ARCHITECTURE.md to reflect tackle stats table replacing leaderboard
+- Three changes: directory structure comment, Column 3 rendering table row, StatsPanel component contract
+- Files changed: tui/TUI-ARCHITECTURE.md
 - **Learnings for future iterations:**
-  - The proportional distribution uses integer division (usable * target / totalTarget) — rounding goes to col3 via col3 = usable - col2
-  - View() now has 5 branches (4-col with col3, 4-col without col3, 3-col, 2-col, 1-col) to handle all combinations
----
-
-## 2026-02-12 - US-003
-- Removed RenderMiniPlayer calls from all 3 form overlays (confirmDiscard, noteForm, tackleForm) in View()
-- Replaced with ControlsDisplay header only (forms are the main content)
-- Added truncateViewToWidth() helper using ansi.Truncate for ANSI-aware line truncation
-- Removed RenderMiniPlayer from error view — simplified to plain error text
-- RenderMiniPlayer kept in codebase: still used by renderColumn1 in columns.go for column 1 playback card
-- Files changed: tui/tui.go
-- **Learnings for future iterations:**
-  - RenderMiniPlayer is dual-purpose: used as standalone card in column 1 AND was used as form overlay header
-  - Form overlays only need ControlsDisplay (keybinding reference) — the playback status is already in column 1
-  - ansi.Truncate from charmbracelet/x/ansi handles ANSI codes correctly when truncating styled lines
+  - Architecture doc has three places referencing statspanel: directory tree comment, column rendering table, and component contracts section — update all three when changing statspanel functionality
 ---
 
