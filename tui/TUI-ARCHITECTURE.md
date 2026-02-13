@@ -25,7 +25,7 @@ tui/
     commandinput.go   # CommandInputState, CommandInput() — : command mode
     noteslist.go      # ListItem, NotesListState, NotesList() — scrollable tag table
     controls.go       # ControlGroup, GetControlGroups(), RenderControlBox()
-    statspanel.go     # StatsPanel() — bar graph, category counts, leaderboard
+    statspanel.go     # StatsPanel() — stats summary, event distribution, tackle stats table
     statsview.go      # StatsViewState, PlayerStats, StatsView() — full-screen stats overlay
     help.go           # HelpOverlay() — keybinding reference overlay
   forms/
@@ -65,7 +65,7 @@ Each column is rendered independently by a method on `*Model`:
 |--------|--------|---------|
 | 1 | `renderColumn1(width, height)` | Playback status, selected tag detail |
 | 2 | `renderColumn2(width, height)` | Scrollable notes/tackles table |
-| 3 | `renderColumn3(width, height)` | Live stats panel (bar graph, leaderboard) |
+| 3 | `renderColumn3(width, height)` | Live stats panel (bar graph, tackle stats table) |
 | 4 | `renderColumn4(width, height)` | Keybinding control groups (Playback, Navigation, Views) |
 
 Each method wraps its output in `layout.Container{Width, Height}.Render(...)` to
@@ -155,7 +155,7 @@ Each component in `tui/components/` follows the pattern:
 ### StatsPanel (`statspanel.go`)
 
 - **Signature:** `StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) string`
-- Renders: stats summary, bar graph of event distribution, top players leaderboard
+- Renders: stats summary, bar graph of event distribution, tackle stats table
 
 ### StatsView (`statsview.go`)
 

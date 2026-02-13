@@ -17,7 +17,7 @@ type CategoryCount struct {
 }
 
 // StatsPanel renders a live stats panel for column 3 of the three-column layout.
-// It shows: stats summary, bar graph of event distribution, and top players leaderboard.
+// It shows: stats summary, bar graph of event distribution, and tackle stats table.
 func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) string {
 	if width < 5 {
 		return ""
@@ -122,14 +122,14 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 	}
 	sections = append(sections, "")
 
-	// --- Top Players Leaderboard ---
-	sections = append(sections, summaryHeaderStyle.Render("Top Players"))
+	// --- Tackle Stats Table ---
+	sections = append(sections, summaryHeaderStyle.Render("Tackle Stats"))
 
 	if len(tackleStats) == 0 {
 		dimStyle := lipgloss.NewStyle().Foreground(styles.Purple).Italic(true)
 		sections = append(sections, dimStyle.Render(" No tackle data"))
 	} else {
-		// Sort by total tackles descending for leaderboard
+		// Sort by total tackles descending, alphabetical name as tiebreaker
 		sorted := make([]PlayerStats, len(tackleStats))
 		copy(sorted, tackleStats)
 		sort.Slice(sorted, func(i, j int) bool {
@@ -139,34 +139,53 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 			return sorted[i].Player < sorted[j].Player
 		})
 
-		// Show top 5 players
-		maxPlayers := 5
-		if len(sorted) < maxPlayers {
-			maxPlayers = len(sorted)
-		}
-
-		nameStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
-		numStyle := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
-		pctStyle := lipgloss.NewStyle().Foreground(styles.Lavender)
-		medalIcons := []string{"#1", "#2", "#3", "#4", "#5"}
-
-		nameWidth := width - 18 // medal(2) + total(4) + pct(6) + padding(6)
+		// Column widths: Total(5) + Comp(5) + Miss(5) + %(5) + spacing(4) = 24
+		nameWidth := width - 24
 		if nameWidth < 6 {
 			nameWidth = 6
 		}
 
-		for i := 0; i < maxPlayers; i++ {
-			p := sorted[i]
-			medal := medalIcons[i]
+		headerStyle := lipgloss.NewStyle().Foreground(styles.Pink).Bold(true)
+		sections = append(sections, fmt.Sprintf(" %s %s %s %s %s",
+			headerStyle.Render(fmt.Sprintf("%-*s", nameWidth, "Player")),
+			headerStyle.Render(fmt.Sprintf("%4s", "Tot")),
+			headerStyle.Render(fmt.Sprintf("%4s", "Comp")),
+			headerStyle.Render(fmt.Sprintf("%4s", "Miss")),
+			headerStyle.Render(fmt.Sprintf("%4s", "%")),
+		))
+
+		// TOTAL row (pinned after header so it stays visible when Container truncates)
+		totalsStyle := lipgloss.NewStyle().Foreground(styles.Cyan)
+		var sumTotal, sumComp, sumMiss int
+		for _, p := range sorted {
+			sumTotal += p.Total
+			sumComp += p.Completed
+			sumMiss += p.Missed
+		}
+		totalPctStr := "-"
+		if sumComp+sumMiss > 0 {
+			totalPctStr = fmt.Sprintf("%.0f", float64(sumComp)/float64(sumComp+sumMiss)*100)
+		}
+		sections = append(sections, totalsStyle.Render(fmt.Sprintf(" %-*s %4d %4d %4d %4s",
+			nameWidth, "TOTAL", sumTotal, sumComp, sumMiss, totalPctStr,
+		)))
+
+		// Player rows
+		nameStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
+		numStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
+		pctStyle := lipgloss.NewStyle().Foreground(styles.Lavender)
+
+		for _, p := range sorted {
 			name := truncateStr(p.Player, nameWidth)
 			pctStr := "-"
 			if p.Completed+p.Missed > 0 {
-				pctStr = fmt.Sprintf("%.0f%%", p.Percentage)
+				pctStr = fmt.Sprintf("%.0f", p.Percentage)
 			}
-			sections = append(sections, fmt.Sprintf(" %s %s %s %s",
-				medal,
+			sections = append(sections, fmt.Sprintf(" %s %s %s %s %s",
 				nameStyle.Render(fmt.Sprintf("%-*s", nameWidth, name)),
-				numStyle.Render(fmt.Sprintf("%3d", p.Total)),
+				numStyle.Render(fmt.Sprintf("%4d", p.Total)),
+				numStyle.Render(fmt.Sprintf("%4d", p.Completed)),
+				numStyle.Render(fmt.Sprintf("%4d", p.Missed)),
 				pctStyle.Render(fmt.Sprintf("%4s", pctStr)),
 			))
 		}
