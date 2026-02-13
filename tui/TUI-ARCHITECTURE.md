@@ -143,7 +143,7 @@ Each component in `tui/components/` follows the pattern:
 
 - **State:** `NotesListState{Items []ListItem, SelectedIndex, ScrollOffset}`
 - **Signature:** `NotesList(state NotesListState, width, height int, currentTimePos float64) string`
-- Renders: fixed-row scrollable table of notes and tackles, auto-scrolls to current timestamp
+- Renders: dynamically-sized scrollable table of notes and tackles (visible row count derived from height parameter), auto-scrolls to current timestamp
 - `ListItem` struct: `{ID, Type, TimestampSeconds, Text, Starred, Category, Player, Team}`
 
 ### Controls (`controls.go`)
