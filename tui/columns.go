@@ -86,10 +86,20 @@ func (m *Model) renderColumn1(width, height int) string {
 	return layout.Container{Width: width, Height: height}.Render(strings.Join(lines, "\n"))
 }
 
-// renderColumn2 renders Column 2: Scrollable list of all tags/events.
+// renderColumn2 renders Column 2: Search input + scrollable list of all tags/events.
 func (m *Model) renderColumn2(width, height int) string {
-	// Reduce height by 2 for InfoBox top+bottom border lines
-	innerHeight := height - 2
+	// Search box takes 3 lines (InfoBox top border + content + bottom border)
+	searchBoxHeight := 3
+	searchBox := components.SearchInput(m.searchInput, width, m.focus == FocusSearch)
+
+	// Notes list gets remaining height
+	notesHeight := height - searchBoxHeight
+	if notesHeight < 5 {
+		notesHeight = 5
+	}
+
+	// Reduce notes height by 2 for InfoBox top+bottom border lines
+	innerHeight := notesHeight - 2
 	if innerHeight < 3 {
 		innerHeight = 3
 	}
@@ -98,8 +108,9 @@ func (m *Model) renderColumn2(width, height int) string {
 	notesOutput := components.NotesList(m.notesList, width-2, innerHeight, m.statusBar.TimePos)
 	notesLines := strings.Split(notesOutput, "\n")
 
-	infoBox := components.RenderInfoBox("Notes", notesLines, width, false)
-	return layout.Container{Width: width, Height: height}.Render(infoBox)
+	infoBox := components.RenderInfoBox("Notes", notesLines, width, m.focus == FocusNotes)
+	combined := searchBox + "\n" + infoBox
+	return layout.Container{Width: width, Height: height}.Render(combined)
 }
 
 // renderColumn3 renders Column 3: Live stats summary, bar graph, top players leaderboard.

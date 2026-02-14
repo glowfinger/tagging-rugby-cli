@@ -94,6 +94,8 @@ type Model struct {
 	editTackleFormResult forms.EditTackleFormResult
 	// focus tracks which panel currently has input focus
 	focus FocusTarget
+	// searchInput holds the state for the search input component
+	searchInput components.SearchInputState
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -111,6 +113,7 @@ func NewModel(client *mpv.Client, db *sql.DB, videoPath string) *Model {
 // Init initializes the model. It returns an optional command to run.
 func (m *Model) Init() tea.Cmd {
 	m.focus = FocusNotes
+	m.searchInput.Mode = "search"
 	// Start the ticker for polling mpv status
 	return tickCmd()
 }
