@@ -70,17 +70,19 @@ func NotesList(state NotesListState, width, height int, currentTimePos float64) 
 		Bold(true).
 		Underline(true)
 
-	// Column widths (ID: 6, Timestamp: 9 for H:MM:SS, Category: 12, Text: rest)
+	// Column widths (#: 5, ID: 6, Timestamp: 9 for H:MM:SS, Category: 12, Text: rest)
+	rowWidth := 5
 	idWidth := 6
 	timeWidth := 9
 	catWidth := 12
-	textWidth := width - idWidth - timeWidth - catWidth - 8 // 8 for spacing/borders
+	textWidth := width - rowWidth - idWidth - timeWidth - catWidth - 10 // 10 for spacing/borders
 	if textWidth < 10 {
 		textWidth = 10
 	}
 
 	// Build header row
-	header := fmt.Sprintf(" %-*s %-*s %-*s %-*s",
+	header := fmt.Sprintf(" %-*s %-*s %-*s %-*s %-*s",
+		rowWidth, "#",
 		idWidth, "ID",
 		timeWidth, "Time",
 		catWidth, "Category",
@@ -129,7 +131,8 @@ func NotesList(state NotesListState, width, height int, currentTimePos float64) 
 		if itemIndex < len(state.Items) {
 			item := state.Items[itemIndex]
 			isSelected := itemIndex == state.SelectedIndex
-			lines = append(lines, renderTableRow(item, isSelected, idWidth, timeWidth, catWidth, textWidth, width))
+			rowNum := itemIndex + 1
+			lines = append(lines, renderTableRow(item, isSelected, rowNum, rowWidth, idWidth, timeWidth, catWidth, textWidth, width))
 		} else {
 			// Empty row
 			lines = append(lines, "")
@@ -174,7 +177,10 @@ func (s *NotesListState) scrollToCurrentTime(currentTimePos float64, visibleRows
 }
 
 // renderTableRow renders a single table row.
-func renderTableRow(item ListItem, selected bool, idWidth, timeWidth, catWidth, textWidth, fullWidth int) string {
+func renderTableRow(item ListItem, selected bool, rowNum, rowWidth, idWidth, timeWidth, catWidth, textWidth, fullWidth int) string {
+	// Format row number
+	rowStr := fmt.Sprintf("#%d", rowNum)
+
 	// Format ID with star symbol if starred
 	idStr := fmt.Sprintf("%d", item.ID)
 	if item.Starred {
@@ -197,7 +203,8 @@ func renderTableRow(item ListItem, selected bool, idWidth, timeWidth, catWidth, 
 	}
 
 	// Build row content
-	content := fmt.Sprintf(" %-*s %-*s %-*s %-*s",
+	content := fmt.Sprintf(" %-*s %-*s %-*s %-*s %-*s",
+		rowWidth, truncateStr(rowStr, rowWidth),
 		idWidth, truncateStr(idStr, idWidth),
 		timeWidth, timeStr,
 		catWidth, truncateStr(catStr, catWidth),
