@@ -1,35 +1,91 @@
 # Ralph Progress Log
-# Branch: ralph/dynamic-notes-list-height
-# Started: 2026-02-13
+# Branch: ralph/tui-layout-update
+# Started: 2026-02-14
 
 ## Codebase Patterns
 - Use `CGO_ENABLED=0` for all Go build/vet commands (modernc.org/sqlite requirement)
 - Go binary at `/home/node/go/bin/go` — export PATH before commands
-- NotesList component in tui/components/noteslist.go — currently uses hardcoded `const tableRows = 10`
-- The `height` parameter is already passed from renderColumn2 (tui/columns.go) into NotesList
-- scrollToCurrentTime is a method on *NotesListState that references tableRows directly
-- TUI-ARCHITECTURE.md at tui/TUI-ARCHITECTURE.md — NotesList section around line 144
+- RenderInfoBox in tui/components/controls.go — the standard container for all UI sections
+- RenderMiniPlayer now uses RenderInfoBox internally (no more 3-line tab header)
+- When wrapping content in RenderInfoBox, reduce width by 2 and height by 2 for border overhead
+- StatusBarState includes VideoOpen field — set in updateStatusFromMpv based on m.client.IsConnected()
+- StatsPanel wraps Event Distribution and Tackle Stats each in their own RenderInfoBox
+- Summary counts are in renderColumn1 (not StatsPanel) — between Playback and Selected Tag
+- NotesList output is split on "\n" and wrapped in RenderInfoBox("Notes", ...) in renderColumn2
+- JoinColumns concatenates columns flush (no separators); ComputeColumnWidths uses borders=0
 
 ---
 
-## 2026-02-13 - US-001
-- Removed `const tableRows = 10` and replaced with `visibleRows := height - 1` computed from the height parameter
-- Updated all 4 references: render loop, empty-state padding, scroll-offset clamping, and scrollToCurrentTime
-- Changed scrollToCurrentTime signature to accept `visibleRows int` parameter
-- Added guard for non-positive visibleRows (returns empty string)
-- Files changed: tui/components/noteslist.go
+## 2026-02-14 - US-001
+- Replaced RenderMiniPlayer's 3-line tab header and internal dividers with RenderInfoBox("Playback", contentLines, cardWidth)
+- Content lines: status+step, time, overlay — all plain rows inside InfoBox
+- Preserved centering logic, mute icon, and showWarning behavior
+- Files changed: tui/components/controls.go
 - **Learnings for future iterations:**
-  - scrollToCurrentTime is only called internally from NotesList(), so changing its signature required no external plumbing
-  - The height param was already passed through from renderColumn2 — no changes needed in columns.go
-  - CGO_ENABLED=0 go vet ./... passes cleanly
+  - RenderInfoBox handles all border drawing — just pass content lines and width
+  - cardWidth calculation (widest content + 4) still needed before calling RenderInfoBox
+  - The minCardW check needs adjusting since RenderInfoBox uses ╭─ Title ─╮ (simpler overhead than 3-line tab)
 ---
 
-## 2026-02-13 - US-002
-- Updated NotesList section in TUI-ARCHITECTURE.md to describe dynamic height instead of fixed-row
-- Changed "fixed-row scrollable table" to "dynamically-sized scrollable table (visible row count derived from height parameter)"
+## 2026-02-14 - US-002
+- Added VideoOpen bool field to StatusBarState
+- Set VideoOpen = true/false in updateStatusFromMpv based on m.client.IsConnected()
+- Added "Video: Open/Closed" content line after overlay in RenderMiniPlayer
+- Files changed: tui/components/statusbar.go, tui/components/controls.go, tui/tui.go
+- **Learnings for future iterations:**
+  - updateStatusFromMpv has an early return guard — set VideoOpen=false before the guard, true after
+  - Adding a new content line to RenderMiniPlayer just needs appending to contentLines slice and adding width check
+---
+
+## 2026-02-14 - US-003
+- Added Summary InfoBox to renderColumn1 between Playback and Selected Tag
+- Removed "Live Stats" title, blank line, and Summary section from StatsPanel
+- Files changed: tui/columns.go, tui/components/statspanel.go
+- **Learnings for future iterations:**
+  - Count items by iterating m.notesList.Items and checking item.Type == components.ItemTypeNote vs ItemTypeTackle
+  - summaryHeaderStyle was kept in StatsPanel for Event Distribution and Tackle Stats headers
+---
+
+## 2026-02-14 - US-004
+- Wrapped NotesList output in RenderInfoBox("Notes", notesLines, width)
+- Reduced height by 2 and width by 2 for InfoBox borders
+- Split NotesList output into []string lines for InfoBox contentLines
+- Files changed: tui/columns.go
+- **Learnings for future iterations:**
+  - RenderInfoBox takes []string content lines — split NotesList string output on "\n"
+  - Must reduce both height (-2) and width (-2) for InfoBox border overhead
+---
+
+## 2026-02-14 - US-005
+- Wrapped Event Distribution bar graph and Tackle Stats table in separate RenderInfoBox containers
+- Removed summaryHeaderStyle plain-text headers (InfoBox titles replace them)
+- Used innerWidth (width-2) for bar graph and table column width calculations
+- Joined boxes with blank line: eventBox + "\n\n" + tackleBox
+- Files changed: tui/components/statspanel.go
+- **Learnings for future iterations:**
+  - When wrapping content in RenderInfoBox, adjust width calculations to use innerWidth = width - 2
+  - RenderInfoBox title replaces the old summaryHeaderStyle headers
+---
+
+## 2026-02-14 - US-006
+- Set borders = 0 in all ComputeColumnWidths code paths
+- Removed borderStr (purple │) from JoinColumns, columns now concatenated flush
+- Removed lipgloss and styles imports from columns.go (no longer needed)
+- Files changed: tui/layout/columns.go
+- **Learnings for future iterations:**
+  - Setting borders=0 automatically gives col2 the extra width via the usable calculation
+  - strings.Join(parts, "") concatenates columns flush
+---
+
+## 2026-02-14 - US-007
+- Updated Column Rendering table: Col1 now shows "Playback status, summary counts, selected tag detail"
+- Updated Col3 description: "Event distribution bar graph, tackle stats table"
+- Updated JoinColumns description: columns joined flush with no separators
+- Updated ComputeColumnWidths: noted borders = 0
+- Added RenderMiniPlayer signature noting it uses RenderInfoBox style
+- Updated StatsPanel description: each section wrapped in RenderInfoBox
+- Added VideoOpen to StatusBarState fields
+- Removed "column separators" from Purple colour usage
 - Files changed: tui/TUI-ARCHITECTURE.md
-- **Learnings for future iterations:**
-  - NotesList section is at line 146 of TUI-ARCHITECTURE.md
-  - Only the Renders bullet needed updating — the signature already showed the height parameter
 ---
 

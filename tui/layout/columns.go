@@ -2,9 +2,6 @@ package layout
 
 import (
 	"strings"
-
-	"github.com/charmbracelet/lipgloss"
-	"github.com/user/tagging-rugby-cli/tui/styles"
 )
 
 // Responsive layout constants.
@@ -28,20 +25,16 @@ func ComputeColumnWidths(termWidth int) (col1, col2, col3, col4 int, showCol2, s
 	// Step 1: Determine if col4 is shown
 	showCol4 = termWidth >= Col4ShowThreshold
 
-	// Step 2: Calculate fixed space used
-	borders := 0
+	// Step 2: Calculate fixed space used (no border separators)
 	fixedUsed := col1
 	if showCol4 {
 		col4 = Col4Width
 		fixedUsed += col4
-		borders = 3 // col1|col2|col3|col4
-	} else {
-		borders = 2 // col1|col2|col3
 	}
 
 	// Try 3-column layout (col1 + col2 + col3 [+ col4])
 	// Col3 is fixed at Col3Width; col2 gets the remainder
-	usable := termWidth - fixedUsed - borders
+	usable := termWidth - fixedUsed
 	if usable-Col3Width >= ColMinWidth {
 		showCol2 = true
 		showCol3 = true
@@ -53,12 +46,7 @@ func ComputeColumnWidths(termWidth int) (col1, col2, col3, col4 int, showCol2, s
 	// Try 2-column layout (col1 + col2 [+ col4])
 	showCol3 = false
 	col3 = 0
-	if showCol4 {
-		borders = 2 // col1|col2|col4
-	} else {
-		borders = 1 // col1|col2
-	}
-	usable = termWidth - fixedUsed - borders
+	usable = termWidth - fixedUsed
 	if usable >= ColMinWidth {
 		showCol2 = true
 		col2 = usable
@@ -71,14 +59,10 @@ func ComputeColumnWidths(termWidth int) (col1, col2, col3, col4 int, showCol2, s
 	return
 }
 
-// JoinColumns joins pre-rendered column strings side by side with purple border separators.
+// JoinColumns joins pre-rendered column strings side by side flush with no separators.
 // Columns should already be containerized (exact Width x Height) via Container.Render.
 // NormalizeLines/PadToWidth are still applied as a safety net.
 func JoinColumns(columns []string, widths []int, height int) string {
-	borderStr := lipgloss.NewStyle().
-		Foreground(styles.Purple).
-		Render("│")
-
 	colLines := make([][]string, len(columns))
 	for i, col := range columns {
 		colLines[i] = strings.Split(col, "\n")
@@ -94,7 +78,7 @@ func JoinColumns(columns []string, widths []int, height int) string {
 				parts = append(parts, PadToWidth("", widths[i]))
 			}
 		}
-		rows = append(rows, strings.Join(parts, borderStr))
+		rows = append(rows, strings.Join(parts, ""))
 	}
 
 	return strings.Join(rows, "\n")

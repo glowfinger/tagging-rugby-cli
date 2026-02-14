@@ -19,6 +19,25 @@ func (m *Model) renderColumn1(width, height int) string {
 	miniPlayer := components.RenderMiniPlayer(m.statusBar, width, false)
 	lines = append(lines, strings.Split(miniPlayer, "\n")...)
 
+	// Summary counts box
+	noteCount := 0
+	tackleCount := 0
+	for _, item := range m.notesList.Items {
+		if item.Type == components.ItemTypeNote {
+			noteCount++
+		} else {
+			tackleCount++
+		}
+	}
+	summaryStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
+	summaryLines := []string{
+		summaryStyle.Render(fmt.Sprintf(" Notes:   %d", noteCount)),
+		summaryStyle.Render(fmt.Sprintf(" Tackles: %d", tackleCount)),
+		summaryStyle.Render(fmt.Sprintf(" Total:   %d", noteCount+tackleCount)),
+	}
+	summaryBox := components.RenderInfoBox("Summary", summaryLines, width)
+	lines = append(lines, strings.Split(summaryBox, "\n")...)
+
 	// Current tag detail card (selected item) — bordered box
 	item := m.notesList.GetSelectedItem()
 	if item != nil {
@@ -69,14 +88,18 @@ func (m *Model) renderColumn1(width, height int) string {
 
 // renderColumn2 renders Column 2: Scrollable list of all tags/events.
 func (m *Model) renderColumn2(width, height int) string {
-	// Use a taller list that fills the column
-	listHeight := height
-	if listHeight < 3 {
-		listHeight = 3
+	// Reduce height by 2 for InfoBox top+bottom border lines
+	innerHeight := height - 2
+	if innerHeight < 3 {
+		innerHeight = 3
 	}
 
-	return layout.Container{Width: width, Height: height}.Render(
-		components.NotesList(m.notesList, width, listHeight, m.statusBar.TimePos))
+	// Render notes list with reduced width (InfoBox adds 2 border chars)
+	notesOutput := components.NotesList(m.notesList, width-2, innerHeight, m.statusBar.TimePos)
+	notesLines := strings.Split(notesOutput, "\n")
+
+	infoBox := components.RenderInfoBox("Notes", notesLines, width)
+	return layout.Container{Width: width, Height: height}.Render(infoBox)
 }
 
 // renderColumn3 renders Column 3: Live stats summary, bar graph, top players leaderboard.

@@ -313,6 +313,10 @@ func (c *Client) sendCommand(command string, args ...interface{}) (interface{}, 
 	// Send newline-terminated JSON
 	data = append(data, '\n')
 	if _, err := c.conn.Write(data); err != nil {
+		// Connection is broken — clean up so IsConnected() returns false
+		c.conn.Close()
+		c.conn = nil
+		c.reader = nil
 		return nil, fmt.Errorf("mpv: failed to send command: %w", err)
 	}
 
@@ -320,6 +324,10 @@ func (c *Client) sendCommand(command string, args ...interface{}) (interface{}, 
 	for {
 		line, err := c.reader.ReadBytes('\n')
 		if err != nil {
+			// Connection is broken — clean up so IsConnected() returns false
+			c.conn.Close()
+			c.conn = nil
+			c.reader = nil
 			return nil, fmt.Errorf("mpv: failed to read response: %w", err)
 		}
 

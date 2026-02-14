@@ -246,36 +246,12 @@ func RenderControlBox(group ControlGroup, width int) string {
 }
 
 // RenderMiniPlayer renders a compact playback card for narrow terminals.
-// The card uses the same bordered tab-header style as RenderControlBox.
-//
-// Layout matches wireframe/mini-player.txt:
-//
-//	 ┌──────────┐
-//	┌┤ Playback ├┐
-//	│└──────────┘└────────────┐
-//	│ ⏸ Paused      Step: 30s │
-//	├─────────────────────────┤
-//	│ Time: 1:11:22 / 1:08:11 │
-//	└─────────────────────────┘
+// Uses RenderInfoBox for consistent styling across all containers.
 func RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool) string {
-	borderStyle := lipgloss.NewStyle().Foreground(styles.Purple)
-	headerStyle := lipgloss.NewStyle().Foreground(styles.Pink).Bold(true)
 	textStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
 	warningStyle := lipgloss.NewStyle().Foreground(styles.Lavender).Italic(true)
 
-	// Box-drawing characters
-	const (
-		hBar = "─"
-		vBar = "│"
-		tl   = "┌"
-		tr   = "┐"
-		bl   = "└"
-		br   = "┘"
-		teeL = "├"
-		teeR = "┤"
-	)
-
-	// Build content lines to determine card width
+	// Build content lines
 	playState := "▶ Playing"
 	if state.Paused {
 		playState = "⏸ Paused"
@@ -296,6 +272,18 @@ func RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool) str
 		overlayLine = "Overlay: on"
 	}
 
+	videoLine := "Video: Closed"
+	if state.VideoOpen {
+		videoLine = "Video: Open"
+	}
+
+	contentLines := []string{
+		textStyle.Render(statusLine),
+		textStyle.Render(timeLine),
+		textStyle.Render(overlayLine),
+		textStyle.Render(videoLine),
+	}
+
 	// Card width: fit the widest content line + 4 (2 border chars + 2 padding spaces)
 	contentW := lipgloss.Width(statusLine)
 	if lipgloss.Width(timeLine) > contentW {
@@ -304,64 +292,18 @@ func RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool) str
 	if lipgloss.Width(overlayLine) > contentW {
 		contentW = lipgloss.Width(overlayLine)
 	}
+	if lipgloss.Width(videoLine) > contentW {
+		contentW = lipgloss.Width(videoLine)
+	}
 	cardWidth := contentW + 4 // │ + space + content + space + │
 
-	// Tab header label
-	tabLabel := " Playback "
-	tabInnerW := lipgloss.Width(tabLabel)
-
-	// Ensure card is at least wide enough for the tab
-	minCardW := tabInnerW + 7 // tab overhead: space+┌+┐ line1, ┌┤├┐ line2, │└┘└┐ line3
+	// Ensure card is at least wide enough for the tab header
+	minCardW := lipgloss.Width(" Playback ") + 5 // tab overhead: ╭─ + ─╮
 	if cardWidth < minCardW {
 		cardWidth = minCardW
 	}
 
-	innerW := cardWidth - 2
-
-	// Line 1:  ┌──────────┐
-	line1 := " " + borderStyle.Render(tl+strings.Repeat(hBar, tabInnerW)+tr)
-
-	// Line 2: ┌┤ Playback ├┐
-	line2 := borderStyle.Render(tl+teeR) + headerStyle.Render(tabLabel) + borderStyle.Render(teeL+tr)
-
-	// Line 3: │└──────────┘└────────────┐
-	tabBottomW := tabInnerW
-	remainW := innerW - tabBottomW - 3
-	if remainW < 0 {
-		remainW = 0
-	}
-	line3 := borderStyle.Render(vBar+bl+strings.Repeat(hBar, tabBottomW)+br+bl+strings.Repeat(hBar, remainW)+tr)
-
-	// Content row helper
-	renderRow := func(content string) string {
-		visW := lipgloss.Width(content)
-		padRight := innerW - 2 - visW // -2 for leading and trailing space
-		if padRight < 0 {
-			padRight = 0
-		}
-		row := borderStyle.Render(vBar) + " " + content + strings.Repeat(" ", padRight) + " " + borderStyle.Render(vBar)
-		if lipgloss.Width(row) > cardWidth {
-			row = ansi.Truncate(row, cardWidth, "")
-		}
-		return row
-	}
-
-	// Divider
-	divider := borderStyle.Render(teeL + strings.Repeat(hBar, innerW) + teeR)
-
-	// Bottom border
-	bottom := borderStyle.Render(bl + strings.Repeat(hBar, innerW) + br)
-
-	var lines []string
-	lines = append(lines, line1, line2, line3)
-	lines = append(lines, renderRow(textStyle.Render(statusLine)))
-	lines = append(lines, divider)
-	lines = append(lines, renderRow(textStyle.Render(timeLine)))
-	lines = append(lines, divider)
-	lines = append(lines, renderRow(textStyle.Render(overlayLine)))
-	lines = append(lines, bottom)
-
-	card := strings.Join(lines, "\n")
+	card := RenderInfoBox("Playback", contentLines, cardWidth)
 
 	// Center the card horizontally if terminal is wider than card
 	if termWidth > cardWidth {
