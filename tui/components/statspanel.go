@@ -93,7 +93,7 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 		}
 	}
 
-	eventBox := RenderInfoBox("Event Distribution", eventLines, width)
+	eventBox := RenderInfoBox("Event Distribution", eventLines, width, false)
 
 	// --- Tackle Stats Table ---
 	var tackleLines []string
@@ -164,7 +164,7 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 		}
 	}
 
-	tackleBox := RenderInfoBox("Tackle Stats", tackleLines, width)
+	tackleBox := RenderInfoBox("Tackle Stats", tackleLines, width, false)
 
 	return eventBox + "\n\n" + tackleBox
 }

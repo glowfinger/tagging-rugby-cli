@@ -81,7 +81,7 @@ func GetControlGroups() []ControlGroup {
 // RenderInfoBox renders a generic bordered box with a tab-style header and content lines.
 // Content lines are rendered as-is (caller handles styling). The box uses the same
 // box-drawing characters as RenderVideoBox.
-func RenderInfoBox(title string, contentLines []string, width int) string {
+func RenderInfoBox(title string, contentLines []string, width int, focused bool) string {
 	if width < 4 {
 		return ""
 	}
@@ -93,6 +93,9 @@ func RenderInfoBox(title string, contentLines []string, width int) string {
 
 	headerStyle := lipgloss.NewStyle().Foreground(styles.Pink).Bold(true)
 	borderColor := styles.Purple
+	if focused {
+		borderColor = styles.Pink
+	}
 
 	// Tab header: ╭─ Title ─────╮
 	headerText := headerStyle.Render(" " + title + " ")
@@ -295,7 +298,7 @@ func RenderVideoBox(state StatusBarState, width int, showWarning bool) string {
 		textStyle.Render(videoLine),
 	}
 
-	card := RenderInfoBox("Video", contentLines, width)
+	card := RenderInfoBox("Video", contentLines, width, false)
 
 	if !showWarning {
 		return card

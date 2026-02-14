@@ -35,7 +35,7 @@ func (m *Model) renderColumn1(width, height int) string {
 		summaryStyle.Render(fmt.Sprintf(" Tackles: %d", tackleCount)),
 		summaryStyle.Render(fmt.Sprintf(" Total:   %d", noteCount+tackleCount)),
 	}
-	summaryBox := components.RenderInfoBox("Summary", summaryLines, width)
+	summaryBox := components.RenderInfoBox("Summary", summaryLines, width, false)
 	lines = append(lines, strings.Split(summaryBox, "\n")...)
 
 	// Current tag detail card (selected item) — bordered box
@@ -79,7 +79,7 @@ func (m *Model) renderColumn1(width, height int) string {
 			contentLines = append(contentLines, detailStyle.Render(" "+text))
 		}
 
-		infoBox := components.RenderInfoBox("Selected Tag", contentLines, width)
+		infoBox := components.RenderInfoBox("Selected Tag", contentLines, width, false)
 		lines = append(lines, strings.Split(infoBox, "\n")...)
 	}
 
@@ -98,7 +98,7 @@ func (m *Model) renderColumn2(width, height int) string {
 	notesOutput := components.NotesList(m.notesList, width-2, innerHeight, m.statusBar.TimePos)
 	notesLines := strings.Split(notesOutput, "\n")
 
-	infoBox := components.RenderInfoBox("Notes", notesLines, width)
+	infoBox := components.RenderInfoBox("Notes", notesLines, width, false)
 	return layout.Container{Width: width, Height: height}.Render(infoBox)
 }
 
