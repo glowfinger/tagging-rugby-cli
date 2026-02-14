@@ -1,0 +1,66 @@
+# Ralph Progress Log
+# Branch: ralph/search-notes
+# Started: 2026-02-14
+
+## Codebase Patterns
+- Use `CGO_ENABLED=0` for all Go build/vet commands (modernc.org/sqlite requirement)
+- Go binary at `/home/node/go/bin/go` — export PATH before commands
+- ALWAYS use Container component — every renderColumn function MUST wrap output in layout.Container{Width, Height}.Render(content)
+- InfoBox inner width = width - 4 (2 border + 2 padding)
+- PadToWidth is the single source of truth for exact column line width
+- Use ansi.Truncate() from charmbracelet/x/ansi for ANSI+grapheme-aware truncation
+- huh forms: store *huh.Form + result struct in Model (nil when inactive), delegate ALL messages
+- RenderInfoBox has 4 params: (title, contentLines, width, focused) — focused=true uses Pink border
+- FocusTarget type is in tui package (tui/focus.go), not components — avoids circular imports
+- Key handling is focus-routed: global keys → focus-specific handler (handleSearchInput/handleVideoKeys/handleNotesKeys)
+- NotesList accepts matches []int and currentMatch int for search highlighting
+
+---
+
+## 2026-02-14 - US-003 through US-014
+- US-003: Created tui/focus.go with FocusTarget type, added focus field to Model
+- US-004: Created tui/components/searchinput.go — search input with mode switching and match indicator
+- US-005: Integrated search input into column 2 (3-line search box + notes list below)
+- US-006: Created tui/components/modeindicator.go — shows focus panel and input mode in column 1
+- US-007: Added Tab/Shift+Tab focus cycling (Video → Search → Notes)
+- US-008: Restructured key handling into focus-routed handlers (global + per-focus)
+- US-009: Search matching with highlight (Amber for matches, Pink for current match)
+- US-010: Mode switching — : on empty search enters command mode, backspace to empty returns to search
+- US-011: Tab cycles through matches when in FocusSearch with matches
+- US-012: Removed left/right arrow keys from video seek (H/L only now)
+- US-013: Vim-style navigation: nG, gg, 0, $, number buffer
+- US-014: Updated TUI-ARCHITECTURE.md with all new components and behaviors
+- Files changed: tui/focus.go, tui/tui.go, tui/columns.go, tui/components/searchinput.go, tui/components/modeindicator.go, tui/components/noteslist.go, tui/components/controls.go, tui/components/statspanel.go, tui/TUI-ARCHITECTURE.md
+- **Learnings for future iterations:**
+  - Focus system lives in tui package to avoid circular imports with components
+  - Search mode switching uses Mode field ("search"/"command"), not separate Active booleans
+  - Number buffer for Vim nav must be cleared on any non-digit/non-G key to prevent stale state
+  - Match highlighting priority: currentMatch (Pink) > match (Amber) > selected (BrightPurple) > default
+---
+
+## 2026-02-14 - US-003
+- Created tui/focus.go with FocusTarget type (FocusVideo=0, FocusSearch=1, FocusNotes=2)
+- Added focus field to Model, defaults to FocusNotes in Init()
+- Files changed: tui/focus.go (new), tui/tui.go
+- **Learnings for future iterations:**
+  - FocusTarget constants are in tui package, not components — avoids circular imports
+  - Default is FocusNotes (value 2), not FocusVideo (value 0), so zero-value won't work
+---
+
+## 2026-02-14 - US-002
+- Added `focused bool` parameter to RenderInfoBox — when true, border uses styles.Pink instead of styles.Purple
+- Files changed: tui/components/controls.go, tui/components/statspanel.go, tui/columns.go
+- **Learnings for future iterations:**
+  - RenderInfoBox now has 4 params: (title, contentLines, width, focused) — all new callers must pass focused
+  - Call sites: RenderVideoBox, StatsPanel (2x), renderColumn1 (2x), renderColumn2 (1x)
+---
+
+## 2026-02-14 - US-001
+- Added row numbers (#1, #2, etc.) as first column in notes list
+- Files changed: tui/components/noteslist.go
+- **Learnings for future iterations:**
+  - renderTableRow signature expanded with rowNum, rowWidth params — all future callers must pass these
+  - textWidth spacing constant changed from 8 to 10 to account for the new column's spacing
+  - Row number is 1-indexed from full list (itemIndex + 1), not relative to scroll offset
+---
+

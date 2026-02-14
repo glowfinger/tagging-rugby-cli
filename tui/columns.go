@@ -142,7 +142,8 @@ func (m *Model) renderColumn4(width, height int) string {
 
 	groups := components.GetControlGroups()
 	for i, group := range groups {
-		box := components.RenderControlBox(group, width)
+		contentLines := components.ControlGroupLines(group, width-4)
+		box := components.RenderInfoBox(group.Name, contentLines, width, false)
 		lines = append(lines, box)
 
 		// 1 blank line gap between bordered containers
