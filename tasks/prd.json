@@ -57,7 +57,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Follow the pattern of RenderInfoBox in controls.go or the info box in renderColumn1 of columns.go. The component is a pure render function — state is owned by tui.Model."
     },
     {
