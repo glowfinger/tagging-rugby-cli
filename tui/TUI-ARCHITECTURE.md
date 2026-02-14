@@ -145,9 +145,11 @@ Each component in `tui/components/` follows the pattern:
 ### NotesList (`noteslist.go`)
 
 - **State:** `NotesListState{Items []ListItem, SelectedIndex, ScrollOffset}`
-- **Signature:** `NotesList(state NotesListState, width, height int, currentTimePos float64, matches []int, currentMatch int) string`
-- Renders: dynamically-sized scrollable table with row numbers (#1, #2, ...), notes and tackles
-- Matching rows highlighted with Amber background, current match with Pink background
+- **Signature:** `NotesList(state NotesListState, width, height int, currentTimePos float64, matches []int, currentMatch int, query string) string`
+- Renders: dynamically-sized scrollable table with right-aligned row numbers (1, 2, ...), notes and tackles
+- Row number column: 5 chars wide, right-aligned, no `#` prefix (e.g., `  1`, ` 12`, `123`)
+- **Inline match highlighting:** matched rows get a subtle `MatchBg` background; the matching substring within each field is highlighted with Amber (match) or Pink (current match) background
+- Highlight priority: current match inline > match inline > selected (BrightPurple full row) > default
 - `ListItem` struct: `{ID, Type, TimestampSeconds, Text, Starred, Category, Player, Team}`
 
 ### SearchInput (`searchinput.go`)
@@ -161,14 +163,14 @@ Each component in `tui/components/` follows the pattern:
 ### ModeIndicator (`modeindicator.go`)
 
 - **Signature:** `ModeIndicator(focusName, mode string, width int) string`
-- Renders: 3-line InfoBox showing `Focus: <panel>` left-aligned and mode name right-aligned
+- Renders: 4-line InfoBox (borders + 2 content lines): `Focus: <panel>` on line 1, `Mode: <mode>` on line 2, each with label left-aligned and value right-aligned
 - Placed in column 1 between video box and summary box
 
 ### Controls (`controls.go`)
 
 - **Signature:** `GetControlGroups() []ControlGroup` — returns keybinding groups
 - **Signature:** `RenderInfoBox(title string, contentLines []string, width int, focused bool) string` — generic bordered box; when focused=true, border uses Pink instead of Purple
-- **Signature:** `RenderVideoBox(state StatusBarState, width int, showWarning bool) string` — renders video status card using `RenderInfoBox` style
+- **Signature:** `RenderVideoBox(state StatusBarState, width int, showWarning bool, focused bool) string` — renders video status card using `RenderInfoBox` style; focused=true gives Pink border when Video panel has focus
 - **Signature:** `RenderControlBox(group ControlGroup, width int) string` — renders bordered box
 - `ControlGroup{Name, SubGroups [][]Control}` — sub-groups separated by dividers
 
@@ -208,9 +210,9 @@ Default focus is `FocusNotes`.
 - When in FocusSearch with active matches, Tab/Shift+Tab cycle through matches instead
 - Tab/Shift+Tab always handled regardless of focus
 
-### Global Keys (work in all focus modes)
+### Global Keys
 
-`?` (help), `S` (stats), `Ctrl+C` (quit), `N` (note form), `T` (tackle form)
+`Ctrl+C` (quit) works in all focus modes. The following keys are guarded — they work in FocusVideo and FocusNotes but are passed to the search input in FocusSearch: `?` (help), `S` (stats), `N` (note form), `T` (tackle form)
 
 ## Vim Navigation (FocusNotes)
 
@@ -300,6 +302,7 @@ The colour palette is **Ciapre** (warm, earthy) from the Gogh terminal themes pr
 | `Amber` | `#CC8B3F` | Sub-headers |
 | `Red` | `#AC3835` | Warnings, errors |
 | `Green` | `#A6A75D` | Success messages |
+| `MatchBg` | `#2A2D3A` | Subtle background for search-matched rows |
 
 Pre-defined styles: `Background`, `Panel`, `Border`, `Highlight`, `PrimaryText`,
 `SecondaryText`, `Warning`, `Success`.

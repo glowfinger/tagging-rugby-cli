@@ -16,7 +16,7 @@ func (m *Model) renderColumn1(width, height int) string {
 	var lines []string
 
 	// Video status card
-	videoBox := components.RenderVideoBox(m.statusBar, width, false)
+	videoBox := components.RenderVideoBox(m.statusBar, width, false, m.focus == FocusVideo)
 	lines = append(lines, strings.Split(videoBox, "\n")...)
 
 	// Mode indicator
@@ -122,7 +122,7 @@ func (m *Model) renderColumn2(width, height int) string {
 	}
 
 	// Render notes list with reduced width (InfoBox adds 2 border chars)
-	notesOutput := components.NotesList(m.notesList, width-2, innerHeight, m.statusBar.TimePos, m.searchInput.Matches, m.searchInput.CurrentMatch)
+	notesOutput := components.NotesList(m.notesList, width-2, innerHeight, m.statusBar.TimePos, m.searchInput.Matches, m.searchInput.CurrentMatch, m.searchInput.Input)
 	notesLines := strings.Split(notesOutput, "\n")
 
 	infoBox := components.RenderInfoBox("Notes", notesLines, width, m.focus == FocusNotes)

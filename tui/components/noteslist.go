@@ -54,7 +54,7 @@ type NotesListState struct {
 // It displays notes and tackles sorted by timestamp.
 // The visible row count is derived from the height parameter (height - 1 for the header row).
 // The currentTimePos parameter is used to auto-scroll to show notes near the current video timestamp.
-func NotesList(state NotesListState, width, height int, currentTimePos float64, matches []int, currentMatch int) string {
+func NotesList(state NotesListState, width, height int, currentTimePos float64, matches []int, currentMatch int, query string) string {
 	// Compute visible rows from height (subtract 1 for header row)
 	visibleRows := height - 1
 	if visibleRows <= 0 {
@@ -81,8 +81,8 @@ func NotesList(state NotesListState, width, height int, currentTimePos float64, 
 	}
 
 	// Build header row
-	header := fmt.Sprintf(" %-*s %-*s %-*s %-*s %-*s",
-		rowWidth, "#",
+	header := fmt.Sprintf(" %*s %-*s %-*s %-*s %-*s",
+		rowWidth, "Row",
 		idWidth, "ID",
 		timeWidth, "Time",
 		catWidth, "Category",
@@ -144,7 +144,7 @@ func NotesList(state NotesListState, width, height int, currentTimePos float64, 
 			rowNum := itemIndex + 1
 			isMatch := matchSet[itemIndex]
 			isCurrentMatch := itemIndex == currentMatchIdx
-			lines = append(lines, renderTableRow(item, isSelected, isMatch, isCurrentMatch, rowNum, rowWidth, idWidth, timeWidth, catWidth, textWidth, width))
+			lines = append(lines, renderTableRow(item, isSelected, isMatch, isCurrentMatch, rowNum, rowWidth, idWidth, timeWidth, catWidth, textWidth, width, query))
 		} else {
 			// Empty row
 			lines = append(lines, "")
@@ -189,9 +189,11 @@ func (s *NotesListState) scrollToCurrentTime(currentTimePos float64, visibleRows
 }
 
 // renderTableRow renders a single table row.
-func renderTableRow(item ListItem, selected, isMatch, isCurrentMatch bool, rowNum, rowWidth, idWidth, timeWidth, catWidth, textWidth, fullWidth int) string {
-	// Format row number
-	rowStr := fmt.Sprintf("#%d", rowNum)
+// When query is non-empty and the row is a match, the matching substring is highlighted
+// inline rather than coloring the whole row. Matched rows get a subtle background.
+func renderTableRow(item ListItem, selected, isMatch, isCurrentMatch bool, rowNum, rowWidth, idWidth, timeWidth, catWidth, textWidth, fullWidth int, query string) string {
+	// Format row number: right-aligned, no # prefix (e.g., "  1", " 12", "123")
+	rowStr := fmt.Sprintf("%*d", rowWidth, rowNum)
 
 	// Format ID with star symbol if starred
 	idStr := fmt.Sprintf("%d", item.ID)
@@ -214,42 +216,94 @@ func renderTableRow(item ListItem, selected, isMatch, isCurrentMatch bool, rowNu
 		text = text[:textWidth-3] + "..."
 	}
 
-	// Build row content
-	content := fmt.Sprintf(" %-*s %-*s %-*s %-*s %-*s",
-		rowWidth, truncateStr(rowStr, rowWidth),
-		idWidth, truncateStr(idStr, idWidth),
-		timeWidth, timeStr,
-		catWidth, truncateStr(catStr, catWidth),
-		textWidth, text)
-
-	// Apply style based on match/selection state
-	// Priority: currentMatch > match > selected > default
-	var lineStyle lipgloss.Style
+	// Determine highlight color for matching substrings
+	var highlightBg lipgloss.Color
 	if isCurrentMatch {
-		lineStyle = lipgloss.NewStyle().
-			Background(styles.Pink).
-			Foreground(styles.LightLavender).
-			Bold(true).
-			Width(fullWidth)
+		highlightBg = styles.Pink
 	} else if isMatch {
-		lineStyle = lipgloss.NewStyle().
-			Background(styles.Amber).
-			Foreground(styles.LightLavender).
-			Bold(true).
-			Width(fullWidth)
-	} else if selected {
-		lineStyle = lipgloss.NewStyle().
-			Background(styles.BrightPurple).
-			Foreground(styles.LightLavender).
-			Bold(true).
-			Width(fullWidth)
-	} else {
-		lineStyle = lipgloss.NewStyle().
-			Foreground(styles.LightLavender).
-			Width(fullWidth)
+		highlightBg = styles.Amber
 	}
 
-	return lineStyle.Render(content)
+	// Choose base text style based on state
+	var baseStyle lipgloss.Style
+	if selected && !isMatch && !isCurrentMatch {
+		baseStyle = lipgloss.NewStyle().
+			Background(styles.BrightPurple).
+			Foreground(styles.LightLavender).
+			Bold(true)
+	} else if isMatch || isCurrentMatch {
+		// Matched rows get subtle background
+		baseStyle = lipgloss.NewStyle().
+			Background(styles.MatchBg).
+			Foreground(styles.LightLavender)
+	} else {
+		baseStyle = lipgloss.NewStyle().
+			Foreground(styles.LightLavender)
+	}
+
+	// Helper to render a field with inline query highlighting
+	renderField := func(s string, fieldWidth int) string {
+		truncated := truncateStr(s, fieldWidth)
+		padded := fmt.Sprintf("%-*s", fieldWidth, truncated)
+		if query != "" && (isMatch || isCurrentMatch) {
+			return highlightSubstring(padded, query, baseStyle, highlightBg)
+		}
+		return baseStyle.Render(padded)
+	}
+
+	// Build row with inline highlighting per field
+	space := baseStyle.Render(" ")
+	row := space +
+		renderField(rowStr, rowWidth) + space +
+		renderField(idStr, idWidth) + space +
+		renderField(timeStr, timeWidth) + space +
+		renderField(catStr, catWidth) + space +
+		renderField(text, textWidth)
+
+	// Pad to full width
+	rowVisW := lipgloss.Width(row)
+	if rowVisW < fullWidth {
+		row += baseStyle.Render(strings.Repeat(" ", fullWidth-rowVisW))
+	}
+
+	return row
+}
+
+// highlightSubstring renders a string with the query substring highlighted using
+// the given highlight background color. The rest uses the base style.
+func highlightSubstring(s, query string, baseStyle lipgloss.Style, highlightBg lipgloss.Color) string {
+	if query == "" {
+		return baseStyle.Render(s)
+	}
+
+	lower := strings.ToLower(s)
+	lowerQuery := strings.ToLower(query)
+
+	highlightStyle := baseStyle.
+		Background(highlightBg).
+		Foreground(styles.LightLavender).
+		Bold(true)
+
+	var result strings.Builder
+	pos := 0
+	for {
+		idx := strings.Index(lower[pos:], lowerQuery)
+		if idx < 0 {
+			// No more matches — render the rest
+			result.WriteString(baseStyle.Render(s[pos:]))
+			break
+		}
+		// Render text before the match
+		if idx > 0 {
+			result.WriteString(baseStyle.Render(s[pos : pos+idx]))
+		}
+		// Render the matching substring
+		matchEnd := pos + idx + len(lowerQuery)
+		result.WriteString(highlightStyle.Render(s[pos+idx : matchEnd]))
+		pos = matchEnd
+	}
+
+	return result.String()
 }
 
 // truncateStr truncates a string to maxLen characters.

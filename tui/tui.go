@@ -228,22 +228,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Global keys (work in all focus modes)
+		// Global keys (work in all focus modes, except text-input modes)
 		switch msg.String() {
-		case "?":
-			m.showHelp = true
-			return m, nil
-		case "s", "S":
-			m.loadTackleStats()
-			m.statsView.Active = true
-			return m, nil
 		case "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
+		case "?":
+			if m.focus != FocusSearch {
+				m.showHelp = true
+				return m, nil
+			}
+		case "s", "S":
+			if m.focus != FocusSearch {
+				m.loadTackleStats()
+				m.statsView.Active = true
+				return m, nil
+			}
 		case "n", "N":
-			return m.openNoteInput()
+			if m.focus != FocusSearch {
+				return m.openNoteInput()
+			}
 		case "t", "T":
-			return m.openTackleInput()
+			if m.focus != FocusSearch {
+				return m.openTackleInput()
+			}
 		}
 
 		// Focus-specific key routing

@@ -27,6 +27,8 @@ const (
 	Red = lipgloss.Color("#AC3835")
 	// Green is used for success messages (Ciapre ANSI 2)
 	Green = lipgloss.Color("#A6A75D")
+	// MatchBg is a subtle background for search-matched rows (slightly lighter than DeepPurple)
+	MatchBg = lipgloss.Color("#2A2D3A")
 )
 
 // Pre-defined styles using the color palette

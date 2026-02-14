@@ -250,7 +250,7 @@ func RenderControlBox(group ControlGroup, width int) string {
 
 // RenderVideoBox renders the video status card at full column width.
 // Uses RenderInfoBox for consistent styling across all containers.
-func RenderVideoBox(state StatusBarState, width int, showWarning bool) string {
+func RenderVideoBox(state StatusBarState, width int, showWarning bool, focused bool) string {
 	textStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
 	warningStyle := lipgloss.NewStyle().Foreground(styles.Lavender).Italic(true)
 
@@ -298,7 +298,7 @@ func RenderVideoBox(state StatusBarState, width int, showWarning bool) string {
 		textStyle.Render(videoLine),
 	}
 
-	card := RenderInfoBox("Video", contentLines, width, false)
+	card := RenderInfoBox("Video", contentLines, width, focused)
 
 	if !showWarning {
 		return card
