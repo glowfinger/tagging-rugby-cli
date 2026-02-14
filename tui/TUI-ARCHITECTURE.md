@@ -28,6 +28,8 @@ tui/
     statspanel.go     # StatsPanel() — stats summary, event distribution, tackle stats table
     statsview.go      # StatsViewState, PlayerStats, StatsView() — full-screen stats overlay
     help.go           # HelpOverlay() — keybinding reference overlay
+    exportprogress.go # ExportProgress() — progress bar for clip export
+    clipsview.go      # ClipsView() — full-screen exported clips list overlay
   forms/
     theme.go          # Theme() — custom huh theme matching the Ciapre palette
     noteform.go       # NoteFormResult, NewNoteForm() — note input form
@@ -63,7 +65,7 @@ Each column is rendered independently by a method on `*Model`:
 
 | Column | Method | Content |
 |--------|--------|---------|
-| 1 | `renderColumn1(width, height)` | Playback status, selected tag detail |
+| 1 | `renderColumn1(width, height)` | Playback status, selected tag detail, export progress |
 | 2 | `renderColumn2(width, height)` | Scrollable notes/tackles table |
 | 3 | `renderColumn3(width, height)` | Live stats panel (bar graph, tackle stats table) |
 | 4 | `renderColumn4(width, height)` | Keybinding control groups (Playback, Navigation, Views) |
@@ -167,6 +169,60 @@ Each component in `tui/components/` follows the pattern:
 
 - **Signature:** `HelpOverlay(width, height int) string`
 - Renders: full-screen keybinding reference grouped by function
+
+### ExportProgress (`exportprogress.go`)
+
+- **State:** `ExportProgressState{Active, Total, Completed, Errors, CurrentFile string}`
+- **Signature:** `ExportProgress(state ExportProgressState, width int) string`
+- Renders: bordered info box in Column 1 with progress bar (`█░`), percentage, `N/M clips` counter, current clip file name
+- Only rendered when `Active == true` (export in progress or just completed)
+- Colours: `Green` for completed bar, `Amber` for in-progress, `Red` for error count
+- Follows `RenderInfoBox` pattern with Container wrapping
+
+### ClipsView (`clipsview.go`)
+
+- **State:** `ClipsViewState{Active, Clips []ExportedClip, ScrollOffset}`
+- **Signature:** `ClipsView(state ClipsViewState, width, height int) string`
+- Renders: full-screen overlay listing exported clips grouped by video
+- Each entry shows: file name, player, category, outcome, duration, status
+- Errors shown in `Red` with error message
+- Toggle with keybinding, dismiss with `Esc`
+
+## Export Pipeline
+
+The export pipeline runs tackle clip extraction via ffmpeg in a background
+goroutine, communicating progress back to the TUI through `tea.Cmd` messages.
+
+### Flow
+
+```
+1. User presses Ctrl+E
+2. Guard checks: no active form, overlay, or existing export
+3. Query all tackle notes (joined with note_timing, note_videos, note_tackles)
+4. Filter out notes with existing completed note_clips entries (idempotent)
+5. For each clip:
+   a. Enforce minimum 4-second duration (extend end if needed)
+   b. Build output path: clips/{video_filename}/{category}/{player}/{hhmmss}-{player}-{category}-{outcome}.mp4
+   c. Insert note_clips row (started_at = now)
+   d. Run ffmpeg with -c copy (stream copy)
+   e. Update note_clips (finished_at or error_at + error)
+   f. Send progress tea.Cmd to update ExportProgressState
+6. Send completion tea.Cmd
+```
+
+### Output Path Convention
+
+```
+clips/
+  {video_filename_no_ext}/
+    {category}/
+      {player}/
+        {hhmmss}-{player}-{category}-{outcome}.mp4
+```
+
+- `{hhmmss}` derived from `note_timing.start` (e.g., 3661.5s → `010101`)
+- Player/outcome sanitized for filesystem safety (special chars → `_`)
+- Directories created recursively
 
 ## Forms Integration (`tui/forms/`)
 

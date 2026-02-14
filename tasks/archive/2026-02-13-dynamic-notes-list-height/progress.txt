@@ -1,0 +1,35 @@
+# Ralph Progress Log
+# Branch: ralph/dynamic-notes-list-height
+# Started: 2026-02-13
+
+## Codebase Patterns
+- Use `CGO_ENABLED=0` for all Go build/vet commands (modernc.org/sqlite requirement)
+- Go binary at `/home/node/go/bin/go` — export PATH before commands
+- NotesList component in tui/components/noteslist.go — currently uses hardcoded `const tableRows = 10`
+- The `height` parameter is already passed from renderColumn2 (tui/columns.go) into NotesList
+- scrollToCurrentTime is a method on *NotesListState that references tableRows directly
+- TUI-ARCHITECTURE.md at tui/TUI-ARCHITECTURE.md — NotesList section around line 144
+
+---
+
+## 2026-02-13 - US-001
+- Removed `const tableRows = 10` and replaced with `visibleRows := height - 1` computed from the height parameter
+- Updated all 4 references: render loop, empty-state padding, scroll-offset clamping, and scrollToCurrentTime
+- Changed scrollToCurrentTime signature to accept `visibleRows int` parameter
+- Added guard for non-positive visibleRows (returns empty string)
+- Files changed: tui/components/noteslist.go
+- **Learnings for future iterations:**
+  - scrollToCurrentTime is only called internally from NotesList(), so changing its signature required no external plumbing
+  - The height param was already passed through from renderColumn2 — no changes needed in columns.go
+  - CGO_ENABLED=0 go vet ./... passes cleanly
+---
+
+## 2026-02-13 - US-002
+- Updated NotesList section in TUI-ARCHITECTURE.md to describe dynamic height instead of fixed-row
+- Changed "fixed-row scrollable table" to "dynamically-sized scrollable table (visible row count derived from height parameter)"
+- Files changed: tui/TUI-ARCHITECTURE.md
+- **Learnings for future iterations:**
+  - NotesList section is at line 146 of TUI-ARCHITECTURE.md
+  - Only the Renders bullet needed updating — the signature already showed the height parameter
+---
+

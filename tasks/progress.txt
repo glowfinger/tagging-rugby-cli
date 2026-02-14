@@ -81,3 +81,19 @@
   - InsertNoteClip takes 7 params matching INSERT INTO note_clips (note_id, name, duration, started_at, finished_at, error_at, error)
 ---
 
+## 2026-02-13 - US-006
+- Created tui/components/clipsview.go with ClipsViewState struct, ExportedClip struct, and ClipsView render function
+- Created db/sql/select_exported_clips.sql joining note_clips, notes, note_tackles, note_videos
+- Added ExportedClipRow struct to db/models.go and SelectExportedClips function to db/functions.go
+- Added //go:embed for select_exported_clips.sql in db/queries.go
+- Added clipsView field to Model, guard in Update(), 'C' keybinding, early return in View()
+- Added handleClipsViewInput (backspace/esc to exit, j/k to scroll) and loadExportedClips methods
+- Added 'View clips [C]' to Views control group in controls.go
+- Files changed: tui/components/clipsview.go, db/sql/select_exported_clips.sql, db/models.go, db/functions.go, db/queries.go, tui/tui.go, tui/components/controls.go, tasks/prd.json
+- **Learnings for future iterations:**
+  - Follow StatsView pattern exactly for full-screen overlays: State struct with Active bool, guard in Update(), early return in View(), dedicated input handler
+  - Clips grouped by extracting video name from clip path (look for "clips/" segment)
+  - centerContent() from statsview.go is reusable for any full-screen overlay panel
+  - The SQL uses CASE/WHEN to derive status from finished_at/error_at columns
+---
+
