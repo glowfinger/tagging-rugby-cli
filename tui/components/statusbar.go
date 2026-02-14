@@ -23,6 +23,8 @@ type StatusBarState struct {
 	StepSize float64
 	// OverlayEnabled indicates if the mpv overlay is enabled
 	OverlayEnabled bool
+	// VideoOpen indicates if the mpv video player is connected
+	VideoOpen bool
 }
 
 // StatusBar renders the status bar component.

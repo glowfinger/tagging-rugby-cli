@@ -1545,8 +1545,10 @@ func (m *Model) updateOverlay() {
 // updateStatusFromMpv polls mpv for current playback status and updates the status bar.
 func (m *Model) updateStatusFromMpv() {
 	if m.client == nil || !m.client.IsConnected() {
+		m.statusBar.VideoOpen = false
 		return
 	}
+	m.statusBar.VideoOpen = true
 
 	// Get pause state
 	paused, err := m.client.GetPaused()

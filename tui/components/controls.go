@@ -272,10 +272,16 @@ func RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool) str
 		overlayLine = "Overlay: on"
 	}
 
+	videoLine := "Video: Closed"
+	if state.VideoOpen {
+		videoLine = "Video: Open"
+	}
+
 	contentLines := []string{
 		textStyle.Render(statusLine),
 		textStyle.Render(timeLine),
 		textStyle.Render(overlayLine),
+		textStyle.Render(videoLine),
 	}
 
 	// Card width: fit the widest content line + 4 (2 border chars + 2 padding spaces)
@@ -285,6 +291,9 @@ func RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool) str
 	}
 	if lipgloss.Width(overlayLine) > contentW {
 		contentW = lipgloss.Width(overlayLine)
+	}
+	if lipgloss.Width(videoLine) > contentW {
+		contentW = lipgloss.Width(videoLine)
 	}
 	cardWidth := contentW + 4 // │ + space + content + space + │
 
