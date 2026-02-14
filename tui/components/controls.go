@@ -70,6 +70,7 @@ func GetControlGroups() []ControlGroup {
 				{
 					{Name: "Stats", Shortcut: "S"},
 					{Name: "Sort", Shortcut: "X"},
+					{Name: "Export clips", Shortcut: "Ctrl+E"},
 					{Name: "Help", Shortcut: "?"},
 					{Name: "Quit", Shortcut: "Ctrl+C"},
 				},

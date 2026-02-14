@@ -95,7 +95,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "Use p.Send() (store *tea.Program in Model) or return a tea.Cmd that wraps a channel. The goroutine needs its own *sql.DB — call db.Open() inside startExportClips. Follow the existing keybinding guard pattern (check m.noteForm, m.tackleForm, m.confirmForm, m.helpActive, m.statsView.Active, m.commandInput.Active). The BuildClipPath and EffectiveEnd functions are in pkg/export/."
     },
     {

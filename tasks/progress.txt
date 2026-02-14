@@ -12,6 +12,8 @@
 - Container component MUST wrap all column render output for exact dimensions
 - RenderInfoBox pattern for bordered boxes in Column 1
 - Keybinding guards: check noteForm, tackleForm, confirmForm, helpActive, statsView.Active, commandInput.Active
+- Channel-based tea.Cmd for background work: create chan, goroutine sends msgs, waitForX returns tea.Cmd that reads from chan
+- Handle background progress msgs BEFORE form delegation in Update() to avoid them being swallowed
 
 ---
 
@@ -59,5 +61,23 @@
 - **Learnings for future iterations:**
   - Adding a new display element to Column 1 is straightforward: append to the lines slice before the Container wrap
   - The Container component handles scroll/truncation if the content exceeds available height
+---
+
+## 2026-02-13 - US-005
+- Added Ctrl+E keybinding in Update() normal mode to trigger startExportClips()
+- Guard prevents Ctrl+E when forms, help overlay, stats view, command input, or export already active
+- startExportClips() opens separate DB connection, queries SelectTackleClipsForExport, filters already-exported (ClipFinishedAt non-nil)
+- Launches goroutine that processes clips sequentially via export.RunFfmpeg
+- Before each ffmpeg: inserts note_clips row with started_at via db.InsertNoteClip
+- After success: UPDATE note_clips SET finished_at, duration; after error: UPDATE note_clips SET error_at, error
+- Uses channel-based tea.Cmd pattern (waitForExportMsg) to send ExportProgressMsg back to Update()
+- ExportProgressMsg handled at top of Update() before form delegation (so progress updates aren't blocked by forms)
+- Added 'Export clips [Ctrl+E]' to Views control group in controls.go
+- Files changed: tui/tui.go, tui/components/controls.go, tasks/prd.json
+- **Learnings for future iterations:**
+  - Channel-based tea.Cmd pattern: create chan, goroutine sends to it, waitForX func returns tea.Cmd that reads from chan
+  - Handle progress messages BEFORE form delegation in Update() so they aren't swallowed
+  - Export goroutine needs its own db.Open() — cannot share *sql.DB across goroutines safely with sqlite
+  - InsertNoteClip takes 7 params matching INSERT INTO note_clips (note_id, name, duration, started_at, finished_at, error_at, error)
 ---
 

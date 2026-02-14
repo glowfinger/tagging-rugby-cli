@@ -3,6 +3,7 @@ package tui
 import (
 	"database/sql"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/mpv"
+	"github.com/user/tagging-rugby-cli/pkg/export"
 	"github.com/user/tagging-rugby-cli/pkg/timeutil"
 	"github.com/user/tagging-rugby-cli/tui/components"
 	"github.com/user/tagging-rugby-cli/tui/forms"
@@ -36,6 +38,14 @@ type tickMsg time.Time
 
 // clearResultMsg is sent to clear the command result message.
 type clearResultMsg struct{}
+
+// ExportProgressMsg is sent from the export goroutine to update progress.
+type ExportProgressMsg struct {
+	Completed   int
+	Errors      int
+	CurrentFile string
+	Done        bool
+}
 
 // Model is the Bubbletea model for the TUI application.
 // It implements the tea.Model interface with Init, Update, and View methods.
@@ -94,6 +104,8 @@ type Model struct {
 	editTackleFormResult forms.EditTackleFormResult
 	// exportProgress holds the state for the export progress display in Column 1
 	exportProgress components.ExportProgressState
+	// exportCh receives progress updates from the background export goroutine
+	exportCh chan ExportProgressMsg
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -123,6 +135,11 @@ func tickCmd() tea.Cmd {
 
 // Update handles messages and updates the model state.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Handle export progress messages regardless of form state
+	if eMsg, ok := msg.(ExportProgressMsg); ok {
+		return m.handleExportProgressMsg(eMsg)
+	}
+
 	// Delegate all messages to active huh form (it needs non-key messages too)
 	if m.confirmDiscardForm != nil || m.noteForm != nil || m.tackleForm != nil {
 		if _, isKey := msg.(tea.KeyMsg); !isKey {
@@ -296,6 +313,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "e", "E":
 			// E opens edit form for selected tackle
 			return m.openEditTackleInput()
+		case "ctrl+e":
+			// Ctrl+E starts exporting all tackle clips
+			return m.startExportClips()
 		case "x", "X":
 			// X deletes the selected item
 			return m.deleteSelectedItem()
@@ -1356,6 +1376,139 @@ func (m *Model) deleteSelectedItem() (tea.Model, tea.Cmd) {
 	return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
 		return clearResultMsg{}
 	})
+}
+
+// startExportClips begins the background export of all tackle clips.
+func (m *Model) startExportClips() (tea.Model, tea.Cmd) {
+	// Guard: ignore if export is already active
+	if m.exportProgress.Active {
+		m.commandInput.SetResult("Export already in progress", true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Open a separate DB connection for the export goroutine
+	exportDB, err := db.Open()
+	if err != nil {
+		m.commandInput.SetResult("Error: "+err.Error(), true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Query all tackle clips for export
+	clips, err := db.SelectTackleClipsForExport(exportDB)
+	if err != nil {
+		exportDB.Close()
+		m.commandInput.SetResult("Error: "+err.Error(), true)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Filter out already-exported clips (ClipFinishedAt is non-nil)
+	var toExport []db.TackleClipRow
+	for _, c := range clips {
+		if c.ClipFinishedAt == nil {
+			toExport = append(toExport, c)
+		}
+	}
+
+	if len(toExport) == 0 {
+		exportDB.Close()
+		m.commandInput.SetResult("No clips to export", false)
+		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+			return clearResultMsg{}
+		})
+	}
+
+	// Set up progress state
+	m.exportProgress = components.ExportProgressState{
+		Active: true,
+		Total:  len(toExport),
+	}
+
+	// Create channel for progress updates
+	ch := make(chan ExportProgressMsg, len(toExport)+1)
+	m.exportCh = ch
+
+	// Launch background goroutine
+	go func() {
+		defer exportDB.Close()
+		defer close(ch)
+
+		completed := 0
+		errors := 0
+
+		for _, clip := range toExport {
+			outputPath := export.BuildClipPath(clip.VideoPath, clip.Category, clip.Player, clip.Outcome, clip.Start)
+			effectiveEnd := export.EffectiveEnd(clip.Start, clip.End)
+			clipDuration := effectiveEnd - clip.Start
+
+			// Insert note_clips row with started_at
+			now := time.Now()
+			_ = db.InsertNoteClip(exportDB, clip.NoteID, outputPath, clipDuration, now, nil, nil, "")
+
+			// Run ffmpeg
+			err := export.RunFfmpeg(clip.VideoPath, clip.Start, effectiveEnd, outputPath)
+
+			if err != nil {
+				errors++
+				// Update note_clips with error_at and error message
+				errNow := time.Now()
+				_, _ = exportDB.Exec(
+					"UPDATE note_clips SET error_at = ?, error = ? WHERE note_id = ? AND name = ?",
+					errNow, err.Error(), clip.NoteID, outputPath,
+				)
+			} else {
+				completed++
+				// Update note_clips with finished_at
+				finNow := time.Now()
+				_, _ = exportDB.Exec(
+					"UPDATE note_clips SET finished_at = ?, duration = ? WHERE note_id = ? AND name = ?",
+					finNow, clipDuration, clip.NoteID, outputPath,
+				)
+			}
+
+			ch <- ExportProgressMsg{
+				Completed:   completed,
+				Errors:      errors,
+				CurrentFile: filepath.Base(outputPath),
+				Done:        completed+errors == len(toExport),
+			}
+		}
+	}()
+
+	// Return a command that waits for the first message
+	return m, waitForExportMsg(ch)
+}
+
+// handleExportProgressMsg updates export progress state from a background goroutine message.
+func (m *Model) handleExportProgressMsg(msg ExportProgressMsg) (tea.Model, tea.Cmd) {
+	m.exportProgress.Completed = msg.Completed
+	m.exportProgress.Errors = msg.Errors
+	m.exportProgress.CurrentFile = msg.CurrentFile
+
+	if msg.Done {
+		// Keep Active true so the "Export complete" message shows, but stop listening
+		m.exportCh = nil
+		return m, nil
+	}
+
+	// Wait for next message
+	return m, waitForExportMsg(m.exportCh)
+}
+
+// waitForExportMsg returns a tea.Cmd that waits for the next export progress message.
+func waitForExportMsg(ch chan ExportProgressMsg) tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := <-ch
+		if !ok {
+			return ExportProgressMsg{Done: true}
+		}
+		return msg
+	}
 }
 
 // jumpToSelectedItem seeks mpv to the selected item's timestamp and displays details.
