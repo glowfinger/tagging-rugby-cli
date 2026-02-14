@@ -46,7 +46,7 @@ tui/
 `View()` in `tui.go` orchestrates the full screen render each frame:
 
 ```
-1. Early returns (quitting, error, help overlay, stats view, mini player)
+1. Early returns (quitting, error, help overlay, stats view, video box)
 2. Form overlays (confirm discard, note form, tackle form)
 3. Normal multi-column layout:
    a. StatusBar          — full width, 1 line
@@ -63,7 +63,7 @@ Each column is rendered independently by a method on `*Model`:
 
 | Column | Method | Content |
 |--------|--------|---------|
-| 1 | `renderColumn1(width, height)` | Playback status, summary counts, selected tag detail |
+| 1 | `renderColumn1(width, height)` | Video status, summary counts, selected tag detail |
 | 2 | `renderColumn2(width, height)` | Scrollable notes/tackles table (wrapped in InfoBox) |
 | 3 | `renderColumn3(width, height)` | Event distribution bar graph, tackle stats table |
 | 4 | `renderColumn4(width, height)` | Keybinding control groups (Playback, Navigation, Views) |
@@ -149,7 +149,7 @@ Each component in `tui/components/` follows the pattern:
 ### Controls (`controls.go`)
 
 - **Signature:** `GetControlGroups() []ControlGroup` — returns keybinding groups
-- **Signature:** `RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool) string` — renders compact playback card using `RenderInfoBox` style
+- **Signature:** `RenderVideoBox(state StatusBarState, width int, showWarning bool) string` — renders video status card using `RenderInfoBox` style
 - **Signature:** `RenderControlBox(group ControlGroup, width int) string` — renders bordered box
 - `ControlGroup{Name, SubGroups [][]Control}` — sub-groups separated by dividers
 
