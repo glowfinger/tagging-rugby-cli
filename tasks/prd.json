@@ -18,7 +18,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "In renderColumn4 (tui/columns.go line ~112), replace the call to components.RenderControlBox(group, width) with inline row building. For each ControlGroup: (1) Find maxNameW by iterating all SubGroups' controls. (2) Flatten all SubGroups into a single list of rows (no dividers). (3) Format each row: namePart = nameStyle.Render(fmt.Sprintf(\"%-*s\", maxNameW, c.Name)), shortcutPart = shortcutStyle.Render(\"[ \" + c.Shortcut + \" ]\"), contentStr = \" \" + namePart + \"  \" + shortcutPart. The leading space provides padding inside the InfoBox. (4) Collect rows into contentLines []string. (5) Call components.RenderInfoBox(group.Name, contentLines, width). Styles needed: nameStyle = lipgloss.NewStyle().Foreground(styles.LightLavender), shortcutStyle = lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true). These imports are already in tui/columns.go."
     },
     {
@@ -33,7 +33,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Delete the entire RenderControlBox function from tui/components/controls.go — this includes the docstring comment block (lines ~133-144 with wireframe) and the function body (lines ~145-246). After deletion, remove the ansi import (line 9: \"github.com/charmbracelet/x/ansi\") since ansi.Truncate on line 229 was the only usage. Keep all other imports: fmt (used by RenderVideoBox line ~277), strings (used throughout), lipgloss (used throughout), timeutil (used by RenderVideoBox), styles (used throughout). Run 'CGO_ENABLED=0 go vet ./...' to verify no unused imports remain."
     },
     {
@@ -49,7 +49,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "File: tui/TUI-ARCHITECTURE.md. Three spots to update: (1) Line ~27 directory structure: controls.go description currently says 'ControlGroup, GetControlGroups(), RenderControlBox()' — remove 'RenderControlBox()'. (2) Line ~153: remove the line '- **Signature:** `RenderControlBox(group ControlGroup, width int) string` — renders bordered box'. (3) Add a note near the Controls section that control groups are now rendered using RenderInfoBox in renderColumn4 (e.g., '- Control groups in column 4 are rendered by `renderColumn4` using `RenderInfoBox` for each group'). Keep the ControlGroup struct description on line ~154."
     }
   ]

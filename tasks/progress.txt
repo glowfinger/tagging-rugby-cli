@@ -16,3 +16,30 @@
 
 ---
 
+## 2026-02-14 - US-001
+- Replaced RenderControlBox call with inline row building + RenderInfoBox in renderColumn4
+- Files changed: tui/columns.go
+- **Learnings for future iterations:**
+  - Main branch still uses RenderMiniPlayer (rename happened on separate branch) — don't assume prior branch changes are merged
+  - RenderInfoBox handles padding/borders; content lines just need leading space for inner padding
+  - No new imports needed in columns.go — lipgloss, styles, fmt, components already imported
+---
+
+## 2026-02-14 - US-002
+- Deleted RenderControlBox function and wireframe comment from controls.go (lines 133-246)
+- Removed `ansi` import (charmbracelet/x/ansi) — only used by RenderControlBox
+- Files changed: tui/components/controls.go
+- **Learnings for future iterations:**
+  - grep shows references in docs/tasks/archives but those are fine — only Go source matters for compilation
+  - The `fmt` import was preserved since RenderMiniPlayer still uses it
+---
+
+## 2026-02-14 - US-003
+- Updated TUI-ARCHITECTURE.md: removed RenderControlBox from directory structure and Controls section
+- Added note that control groups are rendered via RenderInfoBox in renderColumn4
+- Files changed: tui/TUI-ARCHITECTURE.md
+- **Learnings for future iterations:**
+  - TUI-ARCHITECTURE.md has three relevant sections: directory structure (~line 27), Controls signatures (~line 153), and ControlGroup description
+  - Keep ControlGroup struct description since it's still used by GetControlGroups and renderColumn4
+---
+
