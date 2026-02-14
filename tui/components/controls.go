@@ -178,18 +178,10 @@ func ControlGroupLines(group ControlGroup, innerWidth int) []string {
 	return lines
 }
 
+// Deprecated: Use RenderInfoBox with ControlGroupLines instead.
+//
 // RenderControlBox renders a control group inside a bordered box with tab header
 // and horizontal dividers between sub-groups.
-//
-// Layout matches wireframe/playback.txt:
-//
-//	 ┌──────────┐
-//	┌┤ Playback ├┐
-//	│└──────────┘└────────────┐
-//	│ Play    [ Space ]       │
-//	├─────────────────────────┤
-//	│ Step -  [ , / < ]       │
-//	└─────────────────────────┘
 func RenderControlBox(group ControlGroup, width int) string {
 	if width < 6 {
 		return ""
