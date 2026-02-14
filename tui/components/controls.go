@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/user/tagging-rugby-cli/pkg/timeutil"
 	"github.com/user/tagging-rugby-cli/tui/styles"
 )
@@ -128,121 +127,6 @@ func RenderInfoBox(title string, contentLines []string, width int) string {
 	renderedLines = append(renderedLines, bottomLine)
 
 	return strings.Join(renderedLines, "\n")
-}
-
-// RenderControlBox renders a control group inside a bordered box with tab header
-// and horizontal dividers between sub-groups.
-//
-// Layout matches wireframe/playback.txt:
-//
-//	 ┌──────────┐
-//	┌┤ Playback ├┐
-//	│└──────────┘└────────────┐
-//	│ Play    [ Space ]       │
-//	├─────────────────────────┤
-//	│ Step -  [ , / < ]       │
-//	└─────────────────────────┘
-func RenderControlBox(group ControlGroup, width int) string {
-	if width < 6 {
-		return ""
-	}
-
-	borderStyle := lipgloss.NewStyle().Foreground(styles.Purple)
-	headerStyle := lipgloss.NewStyle().Foreground(styles.Pink).Bold(true)
-	nameStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
-	shortcutStyle := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
-
-	// Box-drawing characters
-	const (
-		hBar = "─"
-		vBar = "│"
-		tl   = "┌"
-		tr   = "┐"
-		bl   = "└"
-		br   = "┘"
-		teeL = "├"
-		teeR = "┤"
-	)
-
-	// Inner width is total width minus 2 border chars
-	innerW := width - 2
-
-	// Build tab header (3 lines)
-	// Line 1:  ┌──<name>──┐
-	// Line 2: ┌┤ <name> ├┐
-	// Line 3: │└──<name>──┘└───...───┐
-	tabLabel := " " + group.Name + " "
-	tabW := lipgloss.Width(tabLabel) + 2 // +2 for ┤ and ├ (but they're border chars on tab)
-
-	// Line 1: space + ┌ + ─ repeated for tab inner width + ┐
-	tabInnerW := lipgloss.Width(tabLabel)
-	line1 := " " + borderStyle.Render(tl+strings.Repeat(hBar, tabInnerW)+tr)
-
-	// Line 2: ┌┤ Name ├┐  (but the outer ┐ is at the right edge if tab is short)
-	// Actually looking at wireframe more carefully:
-	// Line 2: ┌┤ Playback ├┐
-	// This is just the tab bracket line, no extension to the right
-	_ = tabW
-	line2 := borderStyle.Render(tl+teeR) + headerStyle.Render(tabLabel) + borderStyle.Render(teeL+tr)
-
-	// Line 3: │└──────────┘└────────────┐
-	// Left border │, then tab bottom └─...─┘, then extension └─...─┐
-	tabBottomW := tabInnerW // width of ─ inside └...┘
-	remainW := innerW - tabBottomW - 3 // -3 for └, ┘, └ between tab bottom and right extension
-	if remainW < 0 {
-		remainW = 0
-	}
-	line3 := borderStyle.Render(vBar+bl+strings.Repeat(hBar, tabBottomW)+br+bl+strings.Repeat(hBar, remainW)+tr)
-
-	var lines []string
-	lines = append(lines, line1, line2, line3)
-
-	// Find max control name width for alignment
-	maxNameW := 0
-	for _, sg := range group.SubGroups {
-		for _, c := range sg {
-			if len(c.Name) > maxNameW {
-				maxNameW = len(c.Name)
-			}
-		}
-	}
-
-	// Render control rows
-	for si, subGroup := range group.SubGroups {
-		for _, c := range subGroup {
-			// Format: │ Name    [ Shortcut ] │
-			// Left-align name, right-align shortcut bracket
-			namePart := nameStyle.Render(fmt.Sprintf("%-*s", maxNameW, c.Name))
-			shortcutPart := shortcutStyle.Render("[ " + c.Shortcut + " ]")
-
-			// Calculate padding between name and shortcut
-			contentStr := namePart + "  " + shortcutPart
-			contentVisW := lipgloss.Width(contentStr)
-			padRight := innerW - 2 - contentVisW // -2 for leading and trailing space
-			if padRight < 0 {
-				padRight = 0
-			}
-
-			row := borderStyle.Render(vBar) + " " + contentStr + strings.Repeat(" ", padRight) + " " + borderStyle.Render(vBar)
-			// Truncate to width if needed
-			if lipgloss.Width(row) > width {
-				row = ansi.Truncate(row, width, "")
-			}
-			lines = append(lines, row)
-		}
-
-		// Horizontal divider between sub-groups (not after the last)
-		if si < len(group.SubGroups)-1 {
-			divider := borderStyle.Render(teeL + strings.Repeat(hBar, innerW) + teeR)
-			lines = append(lines, divider)
-		}
-	}
-
-	// Bottom border
-	bottom := borderStyle.Render(bl + strings.Repeat(hBar, innerW) + br)
-	lines = append(lines, bottom)
-
-	return strings.Join(lines, "\n")
 }
 
 // RenderMiniPlayer renders a compact playback card for narrow terminals.
