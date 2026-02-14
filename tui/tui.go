@@ -201,7 +201,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleCommandInput(msg)
 		}
 
-		// Tab / Shift+Tab for focus cycling (always available in normal mode)
+		// Tab / Shift+Tab for focus cycling
 		switch msg.String() {
 		case "tab":
 			m.cycleFocus(true)
@@ -211,111 +211,142 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Normal mode key handling
+		// Global keys (work in all focus modes)
 		switch msg.String() {
 		case "?":
-			// Toggle help overlay
 			m.showHelp = true
 			return m, nil
 		case "s", "S":
-			// Open stats view
 			m.loadTackleStats()
 			m.statsView.Active = true
 			return m, nil
 		case "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
-		case ":":
-			// Enter command mode
-			m.commandInput.Active = true
-			m.commandInput.Input = ""
-			m.commandInput.CursorPos = 0
-			m.commandInput.ClearResult()
-			return m, nil
-		case " ":
-			// Space toggles play/pause
-			if m.client != nil && m.client.IsConnected() {
-				_ = m.client.TogglePause()
-			}
-			return m, nil
-		case "m", "M":
-			// M toggles mute
-			if m.client != nil && m.client.IsConnected() {
-				muted, err := m.client.GetMute()
-				if err == nil {
-					_ = m.client.SetMute(!muted)
-				}
-			}
-			return m, nil
-		case "ctrl+h":
-			// Ctrl+H steps backward by one frame
-			if m.client != nil && m.client.IsConnected() {
-				_ = m.client.FrameBackStep()
-			}
-			return m, nil
-		case "ctrl+l":
-			// Ctrl+L steps forward by one frame
-			if m.client != nil && m.client.IsConnected() {
-				_ = m.client.FrameStep()
-			}
-			return m, nil
-		case "h", "H", "left":
-			// H / Left arrow steps backward by current step size
-			if m.client != nil && m.client.IsConnected() {
-				_ = m.client.SeekRelative(-m.statusBar.StepSize)
-			}
-			return m, nil
-		case "l", "L", "right":
-			// L / Right arrow steps forward by current step size
-			if m.client != nil && m.client.IsConnected() {
-				_ = m.client.SeekRelative(m.statusBar.StepSize)
-			}
-			return m, nil
-		case "<", ",":
-			// < / , decreases step size
-			m.decreaseStepSize()
-			return m, nil
-		case ">", ".":
-			// > / . increases step size
-			m.increaseStepSize()
-			return m, nil
-		case "j", "J", "up":
-			// J / Up arrow moves selection to previous note/tackle in list
-			m.notesList.MoveUp()
-			return m, nil
-		case "k", "K", "down":
-			// K / Down arrow moves selection to next note/tackle in list
-			m.notesList.MoveDown()
-			return m, nil
-		case "enter":
-			// Enter on selected item seeks mpv to that timestamp
-			return m.jumpToSelectedItem()
-		case "o", "O":
-			// O toggles overlay on/off
-			m.overlayEnabled = !m.overlayEnabled
-			m.statusBar.OverlayEnabled = m.overlayEnabled
-			if !m.overlayEnabled {
-				// Hide overlay when disabled
-				if m.client != nil && m.client.IsConnected() {
-					_ = m.client.HideOverlay(1)
-				}
-			}
-			return m, nil
 		case "n", "N":
-			// N opens quick note input prompt
 			return m.openNoteInput()
 		case "t", "T":
-			// T opens quick tackle input prompt
 			return m.openTackleInput()
-		case "e", "E":
-			// E opens edit form for selected tackle
-			return m.openEditTackleInput()
-		case "x", "X":
-			// X deletes the selected item
-			return m.deleteSelectedItem()
+		}
+
+		// Focus-specific key routing
+		switch m.focus {
+		case FocusSearch:
+			return m.handleSearchInput(msg)
+		case FocusVideo:
+			return m.handleVideoKeys(msg)
+		case FocusNotes:
+			return m.handleNotesKeys(msg)
 		}
 	}
 
+	return m, nil
+}
+
+// handleSearchInput handles key events when the search input is focused.
+func (m *Model) handleSearchInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.searchInput.Clear()
+		m.focus = FocusNotes
+		return m, nil
+	case "backspace":
+		m.searchInput.Backspace()
+		return m, nil
+	case "left":
+		m.searchInput.MoveCursorLeft()
+		return m, nil
+	case "right":
+		m.searchInput.MoveCursorRight()
+		return m, nil
+	case "enter":
+		return m, nil
+	default:
+		// Insert printable characters
+		if len(msg.String()) == 1 {
+			m.searchInput.InsertChar(rune(msg.String()[0]))
+		}
+		return m, nil
+	}
+}
+
+// handleVideoKeys handles key events when the video panel is focused.
+func (m *Model) handleVideoKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case " ":
+		if m.client != nil && m.client.IsConnected() {
+			_ = m.client.TogglePause()
+		}
+		return m, nil
+	case "m", "M":
+		if m.client != nil && m.client.IsConnected() {
+			muted, err := m.client.GetMute()
+			if err == nil {
+				_ = m.client.SetMute(!muted)
+			}
+		}
+		return m, nil
+	case "ctrl+h":
+		if m.client != nil && m.client.IsConnected() {
+			_ = m.client.FrameBackStep()
+		}
+		return m, nil
+	case "ctrl+l":
+		if m.client != nil && m.client.IsConnected() {
+			_ = m.client.FrameStep()
+		}
+		return m, nil
+	case "h", "H", "left":
+		if m.client != nil && m.client.IsConnected() {
+			_ = m.client.SeekRelative(-m.statusBar.StepSize)
+		}
+		return m, nil
+	case "l", "L", "right":
+		if m.client != nil && m.client.IsConnected() {
+			_ = m.client.SeekRelative(m.statusBar.StepSize)
+		}
+		return m, nil
+	case "<", ",":
+		m.decreaseStepSize()
+		return m, nil
+	case ">", ".":
+		m.increaseStepSize()
+		return m, nil
+	case "o", "O":
+		m.overlayEnabled = !m.overlayEnabled
+		m.statusBar.OverlayEnabled = m.overlayEnabled
+		if !m.overlayEnabled {
+			if m.client != nil && m.client.IsConnected() {
+				_ = m.client.HideOverlay(1)
+			}
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
+// handleNotesKeys handles key events when the notes list is focused.
+func (m *Model) handleNotesKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "j", "J", "up":
+		m.notesList.MoveUp()
+		return m, nil
+	case "k", "K", "down":
+		m.notesList.MoveDown()
+		return m, nil
+	case "enter":
+		return m.jumpToSelectedItem()
+	case "e", "E":
+		return m.openEditTackleInput()
+	case "x", "X":
+		return m.deleteSelectedItem()
+	case ":":
+		m.commandInput.Active = true
+		m.commandInput.Input = ""
+		m.commandInput.CursorPos = 0
+		m.commandInput.ClearResult()
+		return m, nil
+	}
 	return m, nil
 }
 
