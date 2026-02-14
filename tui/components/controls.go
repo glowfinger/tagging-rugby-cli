@@ -80,7 +80,7 @@ func GetControlGroups() []ControlGroup {
 
 // RenderInfoBox renders a generic bordered box with a tab-style header and content lines.
 // Content lines are rendered as-is (caller handles styling). The box uses the same
-// box-drawing characters as RenderMiniPlayer.
+// box-drawing characters as RenderVideoBox.
 func RenderInfoBox(title string, contentLines []string, width int) string {
 	if width < 4 {
 		return ""
@@ -245,9 +245,9 @@ func RenderControlBox(group ControlGroup, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-// RenderMiniPlayer renders a compact playback card for narrow terminals.
+// RenderVideoBox renders the video status card.
 // Uses RenderInfoBox for consistent styling across all containers.
-func RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool) string {
+func RenderVideoBox(state StatusBarState, termWidth int, showWarning bool) string {
 	textStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
 	warningStyle := lipgloss.NewStyle().Foreground(styles.Lavender).Italic(true)
 
@@ -298,12 +298,12 @@ func RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool) str
 	cardWidth := contentW + 4 // │ + space + content + space + │
 
 	// Ensure card is at least wide enough for the tab header
-	minCardW := lipgloss.Width(" Playback ") + 5 // tab overhead: ╭─ + ─╮
+	minCardW := lipgloss.Width(" Video ") + 5 // tab overhead: ╭─ + ─╮
 	if cardWidth < minCardW {
 		cardWidth = minCardW
 	}
 
-	card := RenderInfoBox("Playback", contentLines, cardWidth)
+	card := RenderInfoBox("Video", contentLines, cardWidth)
 
 	// Center the card horizontally if terminal is wider than card
 	if termWidth > cardWidth {
