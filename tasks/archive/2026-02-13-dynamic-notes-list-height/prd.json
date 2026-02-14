@@ -1,0 +1,39 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/dynamic-notes-list-height",
+  "description": "Dynamic Notes List Height - Make the notes list component use all available vertical space instead of a fixed 10-row table",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Remove fixed tableRows constant and derive row count from height parameter",
+      "description": "As a user, I want the notes list to fill all available vertical space so the list responds correctly when the terminal is resized vertically.",
+      "acceptanceCriteria": [
+        "The `const tableRows = 10` is removed from tui/components/noteslist.go",
+        "NotesList() computes visibleRows from the height parameter (height - 1 for the header row)",
+        "The render loop iterates visibleRows times instead of the old constant",
+        "The empty-state branch pads to visibleRows instead of the old constant",
+        "scrollToCurrentTime() accepts a visibleRows int parameter instead of referencing tableRows",
+        "All scroll-offset clamping logic (SelectedIndex bounds, maxOffset calculation) uses visibleRows",
+        "Non-positive visibleRows (<= 0) does not panic — returns header only or empty string",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Key file: tui/components/noteslist.go. The `height` param is already passed from renderColumn2 in tui/columns.go — no new plumbing needed. There are 4 references to `tableRows`: the render loop (line 123), empty-state padding (line 94), scroll-offset clamping (lines 106, 114), and scrollToCurrentTime (lines 155, 161). The scrollToCurrentTime method signature must change to accept visibleRows as a parameter."
+    },
+    {
+      "id": "US-002",
+      "title": "Update TUI-ARCHITECTURE.md NotesList section",
+      "description": "As a developer, I want the architecture doc to accurately describe the NotesList component so I can trust it as a reference.",
+      "acceptanceCriteria": [
+        "The NotesList bullet in tui/TUI-ARCHITECTURE.md no longer says 'fixed-row' or '10-row'",
+        "The description states that the visible row count is derived from the height parameter",
+        "No other sections of TUI-ARCHITECTURE.md are modified",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "TUI-ARCHITECTURE.md is at tui/TUI-ARCHITECTURE.md. The NotesList section is around line 144. Current text says 'fixed-row scrollable table' — change to describe dynamic height derived from the height parameter."
+    }
+  ]
+}
