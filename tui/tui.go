@@ -96,6 +96,10 @@ type Model struct {
 	focus FocusTarget
 	// searchInput holds the state for the search input component
 	searchInput components.SearchInputState
+	// numberBuffer accumulates digit keypresses for Vim-style row navigation
+	numberBuffer string
+	// lastKeyG tracks if the last key pressed was 'g' for gg command
+	lastKeyG bool
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -405,27 +409,104 @@ func (m *Model) handleVideoKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleNotesKeys handles key events when the notes list is focused.
 func (m *Model) handleNotesKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
+	key := msg.String()
+
+	// Digit keys: accumulate into numberBuffer
+	if len(key) == 1 && key[0] >= '0' && key[0] <= '9' {
+		// 0 with empty buffer means jump to first row
+		if key == "0" && m.numberBuffer == "" {
+			m.jumpToRow(0)
+			m.lastKeyG = false
+			return m, nil
+		}
+		m.numberBuffer += key
+		m.lastKeyG = false
+		return m, nil
+	}
+
+	switch key {
+	case "g":
+		if m.lastKeyG {
+			// gg: jump to first row
+			m.jumpToRow(0)
+			m.lastKeyG = false
+			m.numberBuffer = ""
+			return m, nil
+		}
+		m.lastKeyG = true
+		return m, nil
+	case "G":
+		if m.numberBuffer != "" {
+			// nG: jump to row n (1-indexed)
+			n, err := strconv.Atoi(m.numberBuffer)
+			if err == nil {
+				m.jumpToRow(n - 1)
+			}
+			m.numberBuffer = ""
+		} else {
+			// G: jump to last row
+			m.jumpToRow(len(m.notesList.Items) - 1)
+		}
+		m.lastKeyG = false
+		return m, nil
+	case "$":
+		m.jumpToRow(len(m.notesList.Items) - 1)
+		m.numberBuffer = ""
+		m.lastKeyG = false
+		return m, nil
 	case "j", "J", "up":
 		m.notesList.MoveUp()
+		m.numberBuffer = ""
+		m.lastKeyG = false
 		return m, nil
 	case "k", "K", "down":
 		m.notesList.MoveDown()
+		m.numberBuffer = ""
+		m.lastKeyG = false
 		return m, nil
 	case "enter":
+		m.numberBuffer = ""
+		m.lastKeyG = false
 		return m.jumpToSelectedItem()
 	case "e", "E":
+		m.numberBuffer = ""
+		m.lastKeyG = false
 		return m.openEditTackleInput()
 	case "x", "X":
+		m.numberBuffer = ""
+		m.lastKeyG = false
 		return m.deleteSelectedItem()
 	case ":":
+		m.numberBuffer = ""
+		m.lastKeyG = false
 		m.commandInput.Active = true
 		m.commandInput.Input = ""
 		m.commandInput.CursorPos = 0
 		m.commandInput.ClearResult()
 		return m, nil
+	case "esc":
+		m.numberBuffer = ""
+		m.lastKeyG = false
+		return m, nil
+	default:
+		m.numberBuffer = ""
+		m.lastKeyG = false
 	}
 	return m, nil
+}
+
+// jumpToRow sets the selected index to the given row, clamping to valid range.
+func (m *Model) jumpToRow(row int) {
+	if len(m.notesList.Items) == 0 {
+		return
+	}
+	if row < 0 {
+		row = 0
+	}
+	if row >= len(m.notesList.Items) {
+		row = len(m.notesList.Items) - 1
+	}
+	m.notesList.SelectedIndex = row
 }
 
 // handleCommandInput handles key events when in command mode.
