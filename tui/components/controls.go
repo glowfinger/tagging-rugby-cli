@@ -133,6 +133,51 @@ func RenderInfoBox(title string, contentLines []string, width int, focused bool)
 	return strings.Join(renderedLines, "\n")
 }
 
+// controlGroupLines converts a ControlGroup into content lines for RenderInfoBox.
+// Each control renders as a styled line with left-aligned name and right-aligned shortcut bracket.
+// Sub-groups are separated by a blank line.
+func ControlGroupLines(group ControlGroup, innerWidth int) []string {
+	nameStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
+	shortcutStyle := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
+
+	// Find max control name width for alignment
+	maxNameW := 0
+	for _, sg := range group.SubGroups {
+		for _, c := range sg {
+			if len(c.Name) > maxNameW {
+				maxNameW = len(c.Name)
+			}
+		}
+	}
+
+	var lines []string
+	for si, subGroup := range group.SubGroups {
+		for _, c := range subGroup {
+			namePart := nameStyle.Render(fmt.Sprintf("%-*s", maxNameW, c.Name))
+			shortcutPart := shortcutStyle.Render("[ " + c.Shortcut + " ]")
+
+			contentStr := " " + namePart + "  " + shortcutPart
+			contentVisW := lipgloss.Width(contentStr)
+			padRight := innerWidth - contentVisW
+			if padRight < 0 {
+				padRight = 0
+			}
+			line := contentStr + strings.Repeat(" ", padRight)
+			if lipgloss.Width(line) > innerWidth {
+				line = ansi.Truncate(line, innerWidth, "")
+			}
+			lines = append(lines, line)
+		}
+
+		// Blank line between sub-groups (not after the last)
+		if si < len(group.SubGroups)-1 {
+			lines = append(lines, "")
+		}
+	}
+
+	return lines
+}
+
 // RenderControlBox renders a control group inside a bordered box with tab header
 // and horizontal dividers between sub-groups.
 //
