@@ -23,14 +23,11 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 		return ""
 	}
 
-	var sections []string
+	// Inner width for content (InfoBox adds 2 border chars)
+	innerWidth := width - 2
 
-	summaryHeaderStyle := lipgloss.NewStyle().
-		Foreground(styles.Pink).
-		Bold(true)
-
-	// --- Bar graph of event distribution ---
-	sections = append(sections, summaryHeaderStyle.Render("Event Distribution"))
+	// --- Event Distribution ---
+	var eventLines []string
 
 	// Count categories from items
 	catCounts := make(map[string]int)
@@ -65,10 +62,10 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 
 	if len(categories) == 0 {
 		dimStyle := lipgloss.NewStyle().Foreground(styles.Purple).Italic(true)
-		sections = append(sections, dimStyle.Render(" No events yet"))
+		eventLines = append(eventLines, dimStyle.Render(" No events yet"))
 	} else {
 		maxCount := categories[0].Count
-		barMaxWidth := width - 16 // label (8) + count (4) + padding (4)
+		barMaxWidth := innerWidth - 16 // label (8) + count (4) + padding (4)
 		if barMaxWidth < 5 {
 			barMaxWidth = 5
 		}
@@ -88,21 +85,22 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 				}
 			}
 			bar := strings.Repeat("█", barLen)
-			sections = append(sections, fmt.Sprintf(" %s %s %s",
+			eventLines = append(eventLines, fmt.Sprintf(" %s %s %s",
 				labelStyle.Render(fmt.Sprintf("%-8s", label)),
 				barStyle.Render(bar),
 				countStyle.Render(fmt.Sprintf("%d", cat.Count)),
 			))
 		}
 	}
-	sections = append(sections, "")
+
+	eventBox := RenderInfoBox("Event Distribution", eventLines, width)
 
 	// --- Tackle Stats Table ---
-	sections = append(sections, summaryHeaderStyle.Render("Tackle Stats"))
+	var tackleLines []string
 
 	if len(tackleStats) == 0 {
 		dimStyle := lipgloss.NewStyle().Foreground(styles.Purple).Italic(true)
-		sections = append(sections, dimStyle.Render(" No tackle data"))
+		tackleLines = append(tackleLines, dimStyle.Render(" No tackle data"))
 	} else {
 		// Sort by total tackles descending, alphabetical name as tiebreaker
 		sorted := make([]PlayerStats, len(tackleStats))
@@ -115,13 +113,13 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 		})
 
 		// Column widths: Total(5) + Comp(5) + Miss(5) + %(5) + spacing(4) = 24
-		nameWidth := width - 24
+		nameWidth := innerWidth - 24
 		if nameWidth < 6 {
 			nameWidth = 6
 		}
 
 		headerStyle := lipgloss.NewStyle().Foreground(styles.Pink).Bold(true)
-		sections = append(sections, fmt.Sprintf(" %s %s %s %s %s",
+		tackleLines = append(tackleLines, fmt.Sprintf(" %s %s %s %s %s",
 			headerStyle.Render(fmt.Sprintf("%-*s", nameWidth, "Player")),
 			headerStyle.Render(fmt.Sprintf("%4s", "Tot")),
 			headerStyle.Render(fmt.Sprintf("%4s", "Comp")),
@@ -141,7 +139,7 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 		if sumComp+sumMiss > 0 {
 			totalPctStr = fmt.Sprintf("%.0f", float64(sumComp)/float64(sumComp+sumMiss)*100)
 		}
-		sections = append(sections, totalsStyle.Render(fmt.Sprintf(" %-*s %4d %4d %4d %4s",
+		tackleLines = append(tackleLines, totalsStyle.Render(fmt.Sprintf(" %-*s %4d %4d %4d %4s",
 			nameWidth, "TOTAL", sumTotal, sumComp, sumMiss, totalPctStr,
 		)))
 
@@ -156,7 +154,7 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 			if p.Completed+p.Missed > 0 {
 				pctStr = fmt.Sprintf("%.0f", p.Percentage)
 			}
-			sections = append(sections, fmt.Sprintf(" %s %s %s %s %s",
+			tackleLines = append(tackleLines, fmt.Sprintf(" %s %s %s %s %s",
 				nameStyle.Render(fmt.Sprintf("%-*s", nameWidth, name)),
 				numStyle.Render(fmt.Sprintf("%4d", p.Total)),
 				numStyle.Render(fmt.Sprintf("%4d", p.Completed)),
@@ -166,6 +164,7 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 		}
 	}
 
-	content := strings.Join(sections, "\n")
-	return content
+	tackleBox := RenderInfoBox("Tackle Stats", tackleLines, width)
+
+	return eventBox + "\n\n" + tackleBox
 }
