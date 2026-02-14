@@ -1,0 +1,53 @@
+# Ralph Progress Log
+# Branch: ralph/rename-playback-to-video
+# Started: 2026-02-14
+
+## Codebase Patterns
+- Use `CGO_ENABLED=0` for all Go build/vet commands (modernc.org/sqlite requirement)
+- Go binary at `/home/node/go/bin/go` — export PATH before commands
+- RenderMiniPlayer defined in tui/components/controls.go line ~250 — only call site is tui/columns.go line ~19
+- No mini-player early return in tui/tui.go View() — narrow terminal just renders renderColumn1 alone
+- RenderInfoBox comment at line ~83 references RenderMiniPlayer
+- TUI-ARCHITECTURE.md references: line ~49 (mini player), ~66 (Playback status), ~152 (RenderMiniPlayer signature)
+- Inner width for InfoBox content = width - 4 (2 border chars + 2 padding spaces)
+- RenderVideoBox (formerly RenderMiniPlayer) defined in tui/components/controls.go line ~248
+
+---
+
+## 2026-02-14 - US-001
+- Renamed RenderMiniPlayer → RenderVideoBox in tui/components/controls.go
+- Changed InfoBox title from 'Playback' to 'Video'
+- Updated comment on RenderInfoBox (line ~83) to reference RenderVideoBox
+- Updated call site in tui/columns.go: variable miniPlayer → videoBox, comment updated
+- Updated minCardW to use ' Video ' instead of ' Playback '
+- Files changed: tui/components/controls.go, tui/columns.go
+- **Learnings for future iterations:**
+  - Only one call site for RenderVideoBox in tui/columns.go — simple rename
+  - The minCardW calculation references the title string — must update when renaming
+---
+
+## 2026-02-14 - US-002
+- Removed auto-sizing cardWidth logic (contentW computation, minCardW check)
+- Removed centering logic block
+- RenderVideoBox now uses width parameter directly as box width
+- First line: left-aligns play state (" ⏸ Paused"), right-aligns step size + mute ("Step: 30s  🔇")
+- Padding fills inner width (width - 4) between left and right parts
+- Time, overlay, video lines left-aligned with leading space
+- Warning path unchanged — uses width for centering
+- Renamed termWidth parameter to width for clarity
+- Files changed: tui/components/controls.go
+- **Learnings for future iterations:**
+  - InfoBox inner width = width - 4 (2 border + 2 padding) — use for content alignment math
+  - Leading space on content lines provides visual padding inside the box
+---
+
+## 2026-02-14 - US-003
+- Updated TUI-ARCHITECTURE.md: 3 spots changed
+- Line ~49: "mini player" → "video box" in early returns
+- Line ~66: "Playback status" → "Video status" in Column Rendering table
+- Line ~152: RenderMiniPlayer signature → RenderVideoBox, "compact playback card" → "video status card"
+- Files changed: tui/TUI-ARCHITECTURE.md
+- **Learnings for future iterations:**
+  - TUI-ARCHITECTURE.md has 3 reference points for component renames: early returns, column table, controls section
+---
+

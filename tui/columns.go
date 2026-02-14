@@ -16,8 +16,25 @@ func (m *Model) renderColumn1(width, height int) string {
 	var lines []string
 
 	// Video status card
-	videoBox := components.RenderVideoBox(m.statusBar, width, false)
+	videoBox := components.RenderVideoBox(m.statusBar, width, false, m.focus == FocusVideo)
 	lines = append(lines, strings.Split(videoBox, "\n")...)
+
+	// Mode indicator
+	focusName := "Notes"
+	switch m.focus {
+	case FocusVideo:
+		focusName = "Video"
+	case FocusSearch:
+		focusName = "Search"
+	}
+	mode := "Normal"
+	if m.searchInput.Mode == "command" {
+		mode = "Command"
+	} else if m.focus == FocusSearch {
+		mode = "Search"
+	}
+	modeBox := components.ModeIndicator(focusName, mode, width)
+	lines = append(lines, strings.Split(modeBox, "\n")...)
 
 	// Summary counts box
 	noteCount := 0
@@ -35,7 +52,7 @@ func (m *Model) renderColumn1(width, height int) string {
 		summaryStyle.Render(fmt.Sprintf(" Tackles: %d", tackleCount)),
 		summaryStyle.Render(fmt.Sprintf(" Total:   %d", noteCount+tackleCount)),
 	}
-	summaryBox := components.RenderInfoBox("Summary", summaryLines, width)
+	summaryBox := components.RenderInfoBox("Summary", summaryLines, width, false)
 	lines = append(lines, strings.Split(summaryBox, "\n")...)
 
 	// Current tag detail card (selected item) — bordered box
@@ -79,27 +96,38 @@ func (m *Model) renderColumn1(width, height int) string {
 			contentLines = append(contentLines, detailStyle.Render(" "+text))
 		}
 
-		infoBox := components.RenderInfoBox("Selected Tag", contentLines, width)
+		infoBox := components.RenderInfoBox("Selected Tag", contentLines, width, false)
 		lines = append(lines, strings.Split(infoBox, "\n")...)
 	}
 
 	return layout.Container{Width: width, Height: height}.Render(strings.Join(lines, "\n"))
 }
 
-// renderColumn2 renders Column 2: Scrollable list of all tags/events.
+// renderColumn2 renders Column 2: Search input + scrollable list of all tags/events.
 func (m *Model) renderColumn2(width, height int) string {
-	// Reduce height by 2 for InfoBox top+bottom border lines
-	innerHeight := height - 2
+	// Search box takes 3 lines (InfoBox top border + content + bottom border)
+	searchBoxHeight := 3
+	searchBox := components.SearchInput(m.searchInput, width, m.focus == FocusSearch)
+
+	// Notes list gets remaining height
+	notesHeight := height - searchBoxHeight
+	if notesHeight < 5 {
+		notesHeight = 5
+	}
+
+	// Reduce notes height by 2 for InfoBox top+bottom border lines
+	innerHeight := notesHeight - 2
 	if innerHeight < 3 {
 		innerHeight = 3
 	}
 
 	// Render notes list with reduced width (InfoBox adds 2 border chars)
-	notesOutput := components.NotesList(m.notesList, width-2, innerHeight, m.statusBar.TimePos)
+	notesOutput := components.NotesList(m.notesList, width-2, innerHeight, m.statusBar.TimePos, m.searchInput.Matches, m.searchInput.CurrentMatch, m.searchInput.Input)
 	notesLines := strings.Split(notesOutput, "\n")
 
-	infoBox := components.RenderInfoBox("Notes", notesLines, width)
-	return layout.Container{Width: width, Height: height}.Render(infoBox)
+	infoBox := components.RenderInfoBox("Notes", notesLines, width, m.focus == FocusNotes)
+	combined := searchBox + "\n" + infoBox
+	return layout.Container{Width: width, Height: height}.Render(combined)
 }
 
 // renderColumn3 renders Column 3: Live stats summary, bar graph, top players leaderboard.

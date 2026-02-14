@@ -19,12 +19,15 @@ The TUI is built on:
 tui/
   tui.go              # Model struct, Init, Update, View (orchestration)
   columns.go          # renderColumn1/2/3/4, formatStepSize (column render methods)
+  focus.go            # FocusTarget type (FocusVideo, FocusSearch, FocusNotes), cycleFocus()
   components/
     statusbar.go      # StatusBarState, StatusBar()
     timeline.go       # Timeline() — progress bar with event markers
     commandinput.go   # CommandInputState, CommandInput() — : command mode
     noteslist.go      # ListItem, NotesListState, NotesList() — scrollable tag table
-    controls.go       # ControlGroup, GetControlGroups(), RenderControlBox()
+    searchinput.go    # SearchInputState, SearchInput() — search/command input with match indicator
+    modeindicator.go  # ModeIndicator() — displays current focus and input mode
+    controls.go       # ControlGroup, GetControlGroups(), RenderControlBox(), RenderInfoBox()
     statspanel.go     # StatsPanel() — stats summary, event distribution, tackle stats table
     statsview.go      # StatsViewState, PlayerStats, StatsView() — full-screen stats overlay
     help.go           # HelpOverlay() — keybinding reference overlay
@@ -63,8 +66,8 @@ Each column is rendered independently by a method on `*Model`:
 
 | Column | Method | Content |
 |--------|--------|---------|
-| 1 | `renderColumn1(width, height)` | Video status, summary counts, selected tag detail |
-| 2 | `renderColumn2(width, height)` | Scrollable notes/tackles table (wrapped in InfoBox) |
+| 1 | `renderColumn1(width, height)` | Video status, mode indicator, summary counts, selected tag detail |
+| 2 | `renderColumn2(width, height)` | Search input (3 lines) + scrollable notes/tackles table (wrapped in InfoBox) |
 | 3 | `renderColumn3(width, height)` | Event distribution bar graph, tackle stats table |
 | 4 | `renderColumn4(width, height)` | Keybinding control groups (Playback, Navigation, Views) |
 
@@ -142,14 +145,32 @@ Each component in `tui/components/` follows the pattern:
 ### NotesList (`noteslist.go`)
 
 - **State:** `NotesListState{Items []ListItem, SelectedIndex, ScrollOffset}`
-- **Signature:** `NotesList(state NotesListState, width, height int, currentTimePos float64) string`
-- Renders: dynamically-sized scrollable table of notes and tackles (visible row count derived from height parameter), auto-scrolls to current timestamp
+- **Signature:** `NotesList(state NotesListState, width, height int, currentTimePos float64, matches []int, currentMatch int, query string) string`
+- Renders: dynamically-sized scrollable table with right-aligned row numbers (1, 2, ...), notes and tackles
+- Row number column: 5 chars wide, right-aligned, no `#` prefix (e.g., `  1`, ` 12`, `123`)
+- **Inline match highlighting:** matched rows get a subtle `MatchBg` background; the matching substring within each field is highlighted with Amber (match) or Pink (current match) background
+- Highlight priority: current match inline > match inline > selected (BrightPurple full row) > default
 - `ListItem` struct: `{ID, Type, TimestampSeconds, Text, Starred, Category, Player, Team}`
+
+### SearchInput (`searchinput.go`)
+
+- **State:** `SearchInputState{Input, CursorPos, Mode ("search"|"command"), Matches []int, CurrentMatch}`
+- **Signature:** `SearchInput(state SearchInputState, width int, focused bool) string`
+- Renders: bordered input box (3 lines) with `/` or `:` prefix, cursor, and [M/N] match indicator
+- Mode switching: typing `:` on empty search input switches to command mode; backspace on empty command input switches back
+- Methods: `InsertChar`, `Backspace`, `MoveCursorLeft`, `MoveCursorRight`, `Clear`
+
+### ModeIndicator (`modeindicator.go`)
+
+- **Signature:** `ModeIndicator(focusName, mode string, width int) string`
+- Renders: 4-line InfoBox (borders + 2 content lines): `Focus: <panel>` on line 1, `Mode: <mode>` on line 2, each with label left-aligned and value right-aligned
+- Placed in column 1 between video box and summary box
 
 ### Controls (`controls.go`)
 
 - **Signature:** `GetControlGroups() []ControlGroup` — returns keybinding groups
-- **Signature:** `RenderVideoBox(state StatusBarState, width int, showWarning bool) string` — renders video status card using `RenderInfoBox` style
+- **Signature:** `RenderInfoBox(title string, contentLines []string, width int, focused bool) string` — generic bordered box; when focused=true, border uses Pink instead of Purple
+- **Signature:** `RenderVideoBox(state StatusBarState, width int, showWarning bool, focused bool) string` — renders video status card using `RenderInfoBox` style; focused=true gives Pink border when Video panel has focus
 - **Signature:** `RenderControlBox(group ControlGroup, width int) string` — renders bordered box
 - `ControlGroup{Name, SubGroups [][]Control}` — sub-groups separated by dividers
 
@@ -168,6 +189,73 @@ Each component in `tui/components/` follows the pattern:
 
 - **Signature:** `HelpOverlay(width, height int) string`
 - Renders: full-screen keybinding reference grouped by function
+
+## Focus System (`tui/focus.go`)
+
+The TUI has a focus system that routes keyboard input to the correct panel.
+
+### FocusTarget Type
+
+`FocusTarget` is an int type with three constants:
+- `FocusVideo` (0) — video panel receives playback keys (Space, H/L, Ctrl+H/L, etc.)
+- `FocusSearch` (1) — search input receives text input, mode switching, match cycling
+- `FocusNotes` (2) — notes list receives navigation keys (J/K, Enter, Vim commands)
+
+Default focus is `FocusNotes`.
+
+### Focus Cycling
+
+- **Tab** cycles forward: Video → Search → Notes → Video
+- **Shift+Tab** cycles backward: Video → Notes → Search → Video
+- When in FocusSearch with active matches, Tab/Shift+Tab cycle through matches instead
+- Tab/Shift+Tab always handled regardless of focus
+
+### Global Keys
+
+`Ctrl+C` (quit) works in all focus modes. The following keys are guarded — they work in FocusVideo and FocusNotes but are passed to the search input in FocusSearch: `?` (help), `S` (stats), `N` (note form), `T` (tackle form)
+
+## Vim Navigation (FocusNotes)
+
+When notes list is focused, Vim-style navigation commands are available:
+
+| Command | Action |
+|---------|--------|
+| `0` (empty buffer) | Jump to first row |
+| `$` | Jump to last row |
+| `G` (empty buffer) | Jump to last row |
+| `nG` (digits + G) | Jump to row n (1-indexed) |
+| `gg` (two g presses) | Jump to first row |
+| `J`/`K` | Move up/down one row |
+
+Digit keys accumulate in a number buffer. Any non-digit/non-G key clears the buffer.
+
+## Keybindings
+
+### Video Focus (FocusVideo)
+- `Space` — toggle play/pause
+- `H` — seek backward by step size
+- `L` — seek forward by step size
+- `Ctrl+H` / `Ctrl+L` — frame step backward/forward
+- `,`/`<` and `.`/`>` — decrease/increase step size
+- `M` — toggle mute
+- `O` — toggle overlay
+
+### Search Focus (FocusSearch)
+- Printable chars — insert into search input
+- `Backspace` — delete character
+- `Left`/`Right` — move cursor
+- `Escape` — clear search, return to FocusNotes
+- `:` (on empty input) — switch to command mode
+- `Tab`/`Shift+Tab` — cycle through matches (if any)
+- `Enter` (command mode) — execute command
+
+### Notes Focus (FocusNotes)
+- `J`/`K` — navigate up/down
+- `Enter` — jump to selected item timestamp
+- `E` — edit selected tackle
+- `X` — delete selected item
+- `:` — enter command mode
+- Vim commands (see above)
 
 ## Forms Integration (`tui/forms/`)
 
@@ -214,6 +302,7 @@ The colour palette is **Ciapre** (warm, earthy) from the Gogh terminal themes pr
 | `Amber` | `#CC8B3F` | Sub-headers |
 | `Red` | `#AC3835` | Warnings, errors |
 | `Green` | `#A6A75D` | Success messages |
+| `MatchBg` | `#2A2D3A` | Subtle background for search-matched rows |
 
 Pre-defined styles: `Background`, `Panel`, `Border`, `Highlight`, `PrimaryText`,
 `SecondaryText`, `Warning`, `Success`.

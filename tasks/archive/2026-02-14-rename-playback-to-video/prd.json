@@ -1,0 +1,60 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/rename-playback-to-video",
+  "description": "Rename Playback to Video - Rename RenderMiniPlayer to RenderVideoBox, change title to 'Video', make full column width with split-aligned first line",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Rename RenderMiniPlayer to RenderVideoBox and change title to Video",
+      "description": "As a user, I want the playback card to be titled 'Video' so the label accurately describes the section content.",
+      "acceptanceCriteria": [
+        "RenderMiniPlayer in tui/components/controls.go is renamed to RenderVideoBox",
+        "The InfoBox title in the function changes from 'Playback' to 'Video'",
+        "The function docstring/comment is updated to reference 'Video' instead of 'playback' or 'mini player'",
+        "The comment on RenderInfoBox (line ~83) that references RenderMiniPlayer is updated to RenderVideoBox",
+        "The call site in renderColumn1 (tui/columns.go line ~19) is updated: components.RenderVideoBox instead of components.RenderMiniPlayer",
+        "The variable name 'miniPlayer' in renderColumn1 is renamed to 'videoBox'",
+        "The comment '// Bordered mini player card' in renderColumn1 is updated to '// Video status card'",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "There is only ONE call site for RenderMiniPlayer: tui/columns.go line 19. There is NO mini-player early return in tui/tui.go View() — the narrow terminal case just renders renderColumn1 alone. References to update: (1) function definition at tui/components/controls.go line ~250, (2) call site at tui/columns.go line ~19, (3) comment on RenderInfoBox at tui/components/controls.go line ~83. The minCardW calculation (line ~301) references ' Playback ' — change to ' Video '."
+    },
+    {
+      "id": "US-002",
+      "title": "Make Video box full column width with split-aligned first line",
+      "description": "As a user, I want the Video box to match the Summary box width with play state left-aligned and step size right-aligned.",
+      "acceptanceCriteria": [
+        "RenderVideoBox uses the passed width parameter directly as the box width — no more auto-computed cardWidth",
+        "The cardWidth auto-sizing logic (computing widest content line + 4) is removed",
+        "The minCardW check is removed",
+        "The centering logic block (if termWidth > cardWidth with padding) is removed",
+        "The first content line left-aligns play/pause state (e.g., ' ⏸ Paused') and right-aligns step size + mute icon (e.g., 'Step: 30s  🔇')",
+        "Padding between left and right parts fills to inner width (width - 4 for InfoBox border overhead)",
+        "Time, overlay, and video lines remain left-aligned as plain content lines with leading space",
+        "The showWarning path still works — warning line rendered below the full-width box",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "In RenderVideoBox (tui/components/controls.go), the key change is: (1) Remove the contentW/cardWidth calculation block (lines ~287-304). (2) Use the width parameter (previously termWidth) directly: call RenderInfoBox('Video', contentLines, width). (3) For the first line, compute innerW = width - 4 (2 border + 2 padding from InfoBox). Build leftPart = ' ' + playState (e.g., ' ⏸ Paused'), rightPart = 'Step: ' + stepStr + muteIcon. Padding = innerW - lipgloss.Width(leftPart) - lipgloss.Width(rightPart). First content line = textStyle.Render(leftPart + strings.Repeat(' ', padding) + rightPart). (4) Remove the centering block entirely (if termWidth > cardWidth). (5) The termWidth parameter can be renamed to width for clarity. The showWarning path stays — it uses width for the warning padding calculation (which already works since the box is now full-width)."
+    },
+    {
+      "id": "US-003",
+      "title": "Update TUI-ARCHITECTURE.md to reflect Video rename",
+      "description": "As a developer, I want the architecture doc to reference 'Video' and RenderVideoBox so it stays accurate.",
+      "acceptanceCriteria": [
+        "The Controls section (line ~152) lists RenderVideoBox instead of RenderMiniPlayer",
+        "The Controls signature description says 'renders video status card' instead of 'compact playback card'",
+        "The Column Rendering table (line ~66) for column 1 says 'Video status, summary counts, selected tag detail' instead of 'Playback status, summary counts, selected tag detail'",
+        "The Rendering Pipeline early returns (line ~49) says 'video box' instead of 'mini player'",
+        "No other sections are modified unnecessarily",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "File: tui/TUI-ARCHITECTURE.md. Four spots to update: (1) Line ~49 in Rendering Pipeline: 'mini player' → 'video box'. (2) Line ~66 Column Rendering table Col1: 'Playback status' → 'Video status'. (3) Line ~152 Controls section: 'RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool)' → 'RenderVideoBox(state StatusBarState, width int, showWarning bool)' and 'compact playback card' → 'video status card'. (4) Line ~83 comment reference if present in docs."
+    }
+  ]
+}

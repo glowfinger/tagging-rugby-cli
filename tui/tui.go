@@ -92,6 +92,14 @@ type Model struct {
 	editingNoteID int64
 	// editTackleFormResult holds the bound values for the edit tackle form
 	editTackleFormResult forms.EditTackleFormResult
+	// focus tracks which panel currently has input focus
+	focus FocusTarget
+	// searchInput holds the state for the search input component
+	searchInput components.SearchInputState
+	// numberBuffer accumulates digit keypresses for Vim-style row navigation
+	numberBuffer string
+	// lastKeyG tracks if the last key pressed was 'g' for gg command
+	lastKeyG bool
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -108,6 +116,8 @@ func NewModel(client *mpv.Client, db *sql.DB, videoPath string) *Model {
 
 // Init initializes the model. It returns an optional command to run.
 func (m *Model) Init() tea.Cmd {
+	m.focus = FocusNotes
+	m.searchInput.Mode = "search"
 	// Start the ticker for polling mpv status
 	return tickCmd()
 }
@@ -195,112 +205,316 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleCommandInput(msg)
 		}
 
-		// Normal mode key handling
+		// Tab / Shift+Tab: cycle matches when in search with matches, else cycle focus
 		switch msg.String() {
-		case "?":
-			// Toggle help overlay
-			m.showHelp = true
+		case "tab":
+			if m.focus == FocusSearch && len(m.searchInput.Matches) > 0 {
+				m.searchInput.CurrentMatch = (m.searchInput.CurrentMatch + 1) % len(m.searchInput.Matches)
+				m.notesList.SelectedIndex = m.searchInput.Matches[m.searchInput.CurrentMatch]
+			} else {
+				m.cycleFocus(true)
+			}
 			return m, nil
-		case "s", "S":
-			// Open stats view
-			m.loadTackleStats()
-			m.statsView.Active = true
+		case "shift+tab":
+			if m.focus == FocusSearch && len(m.searchInput.Matches) > 0 {
+				m.searchInput.CurrentMatch--
+				if m.searchInput.CurrentMatch < 0 {
+					m.searchInput.CurrentMatch = len(m.searchInput.Matches) - 1
+				}
+				m.notesList.SelectedIndex = m.searchInput.Matches[m.searchInput.CurrentMatch]
+			} else {
+				m.cycleFocus(false)
+			}
 			return m, nil
+		}
+
+		// Global keys (work in all focus modes, except text-input modes)
+		switch msg.String() {
 		case "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
-		case ":":
-			// Enter command mode
-			m.commandInput.Active = true
-			m.commandInput.Input = ""
-			m.commandInput.CursorPos = 0
-			m.commandInput.ClearResult()
-			return m, nil
-		case " ":
-			// Space toggles play/pause
-			if m.client != nil && m.client.IsConnected() {
-				_ = m.client.TogglePause()
+		case "?":
+			if m.focus != FocusSearch {
+				m.showHelp = true
+				return m, nil
 			}
-			return m, nil
-		case "m", "M":
-			// M toggles mute
-			if m.client != nil && m.client.IsConnected() {
-				muted, err := m.client.GetMute()
-				if err == nil {
-					_ = m.client.SetMute(!muted)
-				}
+		case "s", "S":
+			if m.focus != FocusSearch {
+				m.loadTackleStats()
+				m.statsView.Active = true
+				return m, nil
 			}
-			return m, nil
-		case "ctrl+h":
-			// Ctrl+H steps backward by one frame
-			if m.client != nil && m.client.IsConnected() {
-				_ = m.client.FrameBackStep()
-			}
-			return m, nil
-		case "ctrl+l":
-			// Ctrl+L steps forward by one frame
-			if m.client != nil && m.client.IsConnected() {
-				_ = m.client.FrameStep()
-			}
-			return m, nil
-		case "h", "H", "left":
-			// H / Left arrow steps backward by current step size
-			if m.client != nil && m.client.IsConnected() {
-				_ = m.client.SeekRelative(-m.statusBar.StepSize)
-			}
-			return m, nil
-		case "l", "L", "right":
-			// L / Right arrow steps forward by current step size
-			if m.client != nil && m.client.IsConnected() {
-				_ = m.client.SeekRelative(m.statusBar.StepSize)
-			}
-			return m, nil
-		case "<", ",":
-			// < / , decreases step size
-			m.decreaseStepSize()
-			return m, nil
-		case ">", ".":
-			// > / . increases step size
-			m.increaseStepSize()
-			return m, nil
-		case "j", "J", "up":
-			// J / Up arrow moves selection to previous note/tackle in list
-			m.notesList.MoveUp()
-			return m, nil
-		case "k", "K", "down":
-			// K / Down arrow moves selection to next note/tackle in list
-			m.notesList.MoveDown()
-			return m, nil
-		case "enter":
-			// Enter on selected item seeks mpv to that timestamp
-			return m.jumpToSelectedItem()
-		case "o", "O":
-			// O toggles overlay on/off
-			m.overlayEnabled = !m.overlayEnabled
-			m.statusBar.OverlayEnabled = m.overlayEnabled
-			if !m.overlayEnabled {
-				// Hide overlay when disabled
-				if m.client != nil && m.client.IsConnected() {
-					_ = m.client.HideOverlay(1)
-				}
-			}
-			return m, nil
 		case "n", "N":
-			// N opens quick note input prompt
-			return m.openNoteInput()
+			if m.focus != FocusSearch {
+				return m.openNoteInput()
+			}
 		case "t", "T":
-			// T opens quick tackle input prompt
-			return m.openTackleInput()
-		case "e", "E":
-			// E opens edit form for selected tackle
-			return m.openEditTackleInput()
-		case "x", "X":
-			// X deletes the selected item
-			return m.deleteSelectedItem()
+			if m.focus != FocusSearch {
+				return m.openTackleInput()
+			}
+		}
+
+		// Focus-specific key routing
+		switch m.focus {
+		case FocusSearch:
+			return m.handleSearchInput(msg)
+		case FocusVideo:
+			return m.handleVideoKeys(msg)
+		case FocusNotes:
+			return m.handleNotesKeys(msg)
 		}
 	}
 
 	return m, nil
+}
+
+// updateSearchMatches recomputes search matches based on current search input.
+func (m *Model) updateSearchMatches() {
+	query := strings.ToLower(m.searchInput.Input)
+	if query == "" {
+		m.searchInput.Matches = nil
+		m.searchInput.CurrentMatch = 0
+		return
+	}
+
+	var matches []int
+	for i, item := range m.notesList.Items {
+		// Search across text, ID, player, and category
+		idStr := fmt.Sprintf("%d", item.ID)
+		if strings.Contains(strings.ToLower(item.Text), query) ||
+			strings.Contains(idStr, query) ||
+			strings.Contains(strings.ToLower(item.Player), query) ||
+			strings.Contains(strings.ToLower(item.Category), query) {
+			matches = append(matches, i)
+		}
+	}
+	m.searchInput.Matches = matches
+	m.searchInput.CurrentMatch = 0
+}
+
+// handleSearchInput handles key events when the search input is focused.
+func (m *Model) handleSearchInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.searchInput.Clear()
+		m.focus = FocusNotes
+		return m, nil
+	case "backspace":
+		if m.searchInput.Mode == "command" && m.searchInput.Input == "" {
+			// Backspace on empty command input switches back to search mode
+			m.searchInput.Mode = "search"
+			return m, nil
+		}
+		m.searchInput.Backspace()
+		if m.searchInput.Mode == "search" {
+			m.updateSearchMatches()
+		}
+		return m, nil
+	case "left":
+		m.searchInput.MoveCursorLeft()
+		return m, nil
+	case "right":
+		m.searchInput.MoveCursorRight()
+		return m, nil
+	case "enter":
+		if m.searchInput.Mode == "command" {
+			// Execute command
+			cmd := m.searchInput.Input
+			m.searchInput.Clear()
+			m.focus = FocusNotes
+			if cmd != "" {
+				result, err := m.executeCommand(cmd)
+				if err != nil {
+					m.commandInput.SetResult("Error: "+err.Error(), true)
+					return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+						return clearResultMsg{}
+					})
+				}
+				if result == "OPEN_NOTE_INPUT" {
+					return m.openNoteInput()
+				}
+				if result == "OPEN_TACKLE_INPUT" {
+					return m.openTackleInput()
+				}
+				m.commandInput.SetResult(result, false)
+				return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+					return clearResultMsg{}
+				})
+			}
+		}
+		return m, nil
+	default:
+		// Check for : to switch to command mode when input is empty
+		if msg.String() == ":" && m.searchInput.Input == "" && m.searchInput.Mode == "search" {
+			m.searchInput.Mode = "command"
+			return m, nil
+		}
+		// Insert printable characters
+		if len(msg.String()) == 1 {
+			m.searchInput.InsertChar(rune(msg.String()[0]))
+			if m.searchInput.Mode == "search" {
+				m.updateSearchMatches()
+			}
+		}
+		return m, nil
+	}
+}
+
+// handleVideoKeys handles key events when the video panel is focused.
+func (m *Model) handleVideoKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case " ":
+		if m.client != nil && m.client.IsConnected() {
+			_ = m.client.TogglePause()
+		}
+		return m, nil
+	case "m", "M":
+		if m.client != nil && m.client.IsConnected() {
+			muted, err := m.client.GetMute()
+			if err == nil {
+				_ = m.client.SetMute(!muted)
+			}
+		}
+		return m, nil
+	case "ctrl+h":
+		if m.client != nil && m.client.IsConnected() {
+			_ = m.client.FrameBackStep()
+		}
+		return m, nil
+	case "ctrl+l":
+		if m.client != nil && m.client.IsConnected() {
+			_ = m.client.FrameStep()
+		}
+		return m, nil
+	case "h", "H":
+		if m.client != nil && m.client.IsConnected() {
+			_ = m.client.SeekRelative(-m.statusBar.StepSize)
+		}
+		return m, nil
+	case "l", "L":
+		if m.client != nil && m.client.IsConnected() {
+			_ = m.client.SeekRelative(m.statusBar.StepSize)
+		}
+		return m, nil
+	case "<", ",":
+		m.decreaseStepSize()
+		return m, nil
+	case ">", ".":
+		m.increaseStepSize()
+		return m, nil
+	case "o", "O":
+		m.overlayEnabled = !m.overlayEnabled
+		m.statusBar.OverlayEnabled = m.overlayEnabled
+		if !m.overlayEnabled {
+			if m.client != nil && m.client.IsConnected() {
+				_ = m.client.HideOverlay(1)
+			}
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
+// handleNotesKeys handles key events when the notes list is focused.
+func (m *Model) handleNotesKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+
+	// Digit keys: accumulate into numberBuffer
+	if len(key) == 1 && key[0] >= '0' && key[0] <= '9' {
+		// 0 with empty buffer means jump to first row
+		if key == "0" && m.numberBuffer == "" {
+			m.jumpToRow(0)
+			m.lastKeyG = false
+			return m, nil
+		}
+		m.numberBuffer += key
+		m.lastKeyG = false
+		return m, nil
+	}
+
+	switch key {
+	case "g":
+		if m.lastKeyG {
+			// gg: jump to first row
+			m.jumpToRow(0)
+			m.lastKeyG = false
+			m.numberBuffer = ""
+			return m, nil
+		}
+		m.lastKeyG = true
+		return m, nil
+	case "G":
+		if m.numberBuffer != "" {
+			// nG: jump to row n (1-indexed)
+			n, err := strconv.Atoi(m.numberBuffer)
+			if err == nil {
+				m.jumpToRow(n - 1)
+			}
+			m.numberBuffer = ""
+		} else {
+			// G: jump to last row
+			m.jumpToRow(len(m.notesList.Items) - 1)
+		}
+		m.lastKeyG = false
+		return m, nil
+	case "$":
+		m.jumpToRow(len(m.notesList.Items) - 1)
+		m.numberBuffer = ""
+		m.lastKeyG = false
+		return m, nil
+	case "j", "J", "up":
+		m.notesList.MoveUp()
+		m.numberBuffer = ""
+		m.lastKeyG = false
+		return m, nil
+	case "k", "K", "down":
+		m.notesList.MoveDown()
+		m.numberBuffer = ""
+		m.lastKeyG = false
+		return m, nil
+	case "enter":
+		m.numberBuffer = ""
+		m.lastKeyG = false
+		return m.jumpToSelectedItem()
+	case "e", "E":
+		m.numberBuffer = ""
+		m.lastKeyG = false
+		return m.openEditTackleInput()
+	case "x", "X":
+		m.numberBuffer = ""
+		m.lastKeyG = false
+		return m.deleteSelectedItem()
+	case ":":
+		m.numberBuffer = ""
+		m.lastKeyG = false
+		m.commandInput.Active = true
+		m.commandInput.Input = ""
+		m.commandInput.CursorPos = 0
+		m.commandInput.ClearResult()
+		return m, nil
+	case "esc":
+		m.numberBuffer = ""
+		m.lastKeyG = false
+		return m, nil
+	default:
+		m.numberBuffer = ""
+		m.lastKeyG = false
+	}
+	return m, nil
+}
+
+// jumpToRow sets the selected index to the given row, clamping to valid range.
+func (m *Model) jumpToRow(row int) {
+	if len(m.notesList.Items) == 0 {
+		return
+	}
+	if row < 0 {
+		row = 0
+	}
+	if row >= len(m.notesList.Items) {
+		row = len(m.notesList.Items) - 1
+	}
+	m.notesList.SelectedIndex = row
 }
 
 // handleCommandInput handles key events when in command mode.

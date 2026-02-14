@@ -1,60 +1,254 @@
 {
   "project": "tagging-rugby-cli",
-  "branchName": "ralph/rename-playback-to-video",
-  "description": "Rename Playback to Video - Rename RenderMiniPlayer to RenderVideoBox, change title to 'Video', make full column width with split-aligned first line",
+  "branchName": "ralph/search-notes",
+  "description": "Search & Navigate Notes - Add search input, focus system, mode indicator, row numbers, and Vim navigation to the TUI",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Rename RenderMiniPlayer to RenderVideoBox and change title to Video",
-      "description": "As a user, I want the playback card to be titled 'Video' so the label accurately describes the section content.",
+      "title": "Add row numbers to notes list",
+      "description": "As a user, I want each note row to show a sequential row number alongside the DB ID so I can reference rows by position.",
       "acceptanceCriteria": [
-        "RenderMiniPlayer in tui/components/controls.go is renamed to RenderVideoBox",
-        "The InfoBox title in the function changes from 'Playback' to 'Video'",
-        "The function docstring/comment is updated to reference 'Video' instead of 'playback' or 'mini player'",
-        "The comment on RenderInfoBox (line ~83) that references RenderMiniPlayer is updated to RenderVideoBox",
-        "The call site in renderColumn1 (tui/columns.go line ~19) is updated: components.RenderVideoBox instead of components.RenderMiniPlayer",
-        "The variable name 'miniPlayer' in renderColumn1 is renamed to 'videoBox'",
-        "The comment '// Bordered mini player card' in renderColumn1 is updated to '// Video status card'",
+        "Each row displays a 1-indexed row number prefixed with # (e.g., #1, #2, #3) as the first column",
+        "The DB ID column remains as the second column unchanged",
+        "Header row updated: new # column label before ID",
+        "Row number column width is 5 characters",
+        "Existing column widths adjusted: textWidth calculation subtracts the extra 5+1 chars for the new # column",
+        "The renderTableRow function receives the row number (itemIndex - scrollOffset + 1 for display, but actually 1-indexed from the full list: scrollOffset + row + 1)",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "There is only ONE call site for RenderMiniPlayer: tui/columns.go line 19. There is NO mini-player early return in tui/tui.go View() — the narrow terminal case just renders renderColumn1 alone. References to update: (1) function definition at tui/components/controls.go line ~250, (2) call site at tui/columns.go line ~19, (3) comment on RenderInfoBox at tui/components/controls.go line ~83. The minCardW calculation (line ~301) references ' Playback ' — change to ' Video '."
+      "notes": "File: tui/components/noteslist.go. Add rowWidth=5 constant. Update header format string to include # column. Update renderTableRow signature to accept rowNum int. In NotesList render loop, pass itemIndex+1 as the row number. Adjust textWidth = width - rowWidth - idWidth - timeWidth - catWidth - 10."
     },
     {
       "id": "US-002",
-      "title": "Make Video box full column width with split-aligned first line",
-      "description": "As a user, I want the Video box to match the Summary box width with play state left-aligned and step size right-aligned.",
+      "title": "Add focused parameter to RenderInfoBox",
+      "description": "As a developer, I need RenderInfoBox to accept a focused flag so panels can render with a pink border when focused.",
       "acceptanceCriteria": [
-        "RenderVideoBox uses the passed width parameter directly as the box width — no more auto-computed cardWidth",
-        "The cardWidth auto-sizing logic (computing widest content line + 4) is removed",
-        "The minCardW check is removed",
-        "The centering logic block (if termWidth > cardWidth with padding) is removed",
-        "The first content line left-aligns play/pause state (e.g., ' ⏸ Paused') and right-aligns step size + mute icon (e.g., 'Step: 30s  🔇')",
-        "Padding between left and right parts fills to inner width (width - 4 for InfoBox border overhead)",
-        "Time, overlay, and video lines remain left-aligned as plain content lines with leading space",
-        "The showWarning path still works — warning line rendered below the full-width box",
+        "RenderInfoBox signature changes to: RenderInfoBox(title string, contentLines []string, width int, focused bool)",
+        "When focused=true, border characters use styles.Pink color instead of styles.Purple",
+        "When focused=true, the title also uses styles.Pink (already does, but ensure it stays consistent)",
+        "When focused=false, behavior is identical to current implementation",
+        "All existing call sites updated to pass focused=false (no visual change yet)",
+        "Call sites: renderColumn1 (summaryBox, infoBox for selected tag), renderColumn2 (notes InfoBox), renderColumn3 (StatsPanel calls), renderColumn4 (RenderControlBox), RenderVideoBox in controls.go",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "In RenderVideoBox (tui/components/controls.go), the key change is: (1) Remove the contentW/cardWidth calculation block (lines ~287-304). (2) Use the width parameter (previously termWidth) directly: call RenderInfoBox('Video', contentLines, width). (3) For the first line, compute innerW = width - 4 (2 border + 2 padding from InfoBox). Build leftPart = ' ' + playState (e.g., ' ⏸ Paused'), rightPart = 'Step: ' + stepStr + muteIcon. Padding = innerW - lipgloss.Width(leftPart) - lipgloss.Width(rightPart). First content line = textStyle.Render(leftPart + strings.Repeat(' ', padding) + rightPart). (4) Remove the centering block entirely (if termWidth > cardWidth). (5) The termWidth parameter can be renamed to width for clarity. The showWarning path stays — it uses width for the warning padding calculation (which already works since the box is now full-width)."
+      "notes": "File: tui/components/controls.go (RenderInfoBox definition ~line 83, RenderVideoBox, RenderControlBox). Also update StatsPanel in statspanel.go which calls RenderInfoBox. Search all callers with grep. The border style is built with lipgloss — conditionally use styles.Pink or styles.Purple for Foreground on the border style."
     },
     {
       "id": "US-003",
-      "title": "Update TUI-ARCHITECTURE.md to reflect Video rename",
-      "description": "As a developer, I want the architecture doc to reference 'Video' and RenderVideoBox so it stays accurate.",
+      "title": "Add FocusTarget type and focus state to Model",
+      "description": "As a developer, I need a focus system so the TUI can route input to the correct panel.",
       "acceptanceCriteria": [
-        "The Controls section (line ~152) lists RenderVideoBox instead of RenderMiniPlayer",
-        "The Controls signature description says 'renders video status card' instead of 'compact playback card'",
-        "The Column Rendering table (line ~66) for column 1 says 'Video status, summary counts, selected tag detail' instead of 'Playback status, summary counts, selected tag detail'",
-        "The Rendering Pipeline early returns (line ~49) says 'video box' instead of 'mini player'",
-        "No other sections are modified unnecessarily",
+        "FocusTarget type defined as int with constants: FocusVideo=0, FocusSearch=1, FocusNotes=2",
+        "FocusTarget type and constants are exported and defined in a new file tui/focus.go",
+        "Model struct in tui.go gains a 'focus FocusTarget' field, defaulting to FocusNotes",
+        "Init() sets m.focus = FocusNotes",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "File: tui/TUI-ARCHITECTURE.md. Four spots to update: (1) Line ~49 in Rendering Pipeline: 'mini player' → 'video box'. (2) Line ~66 Column Rendering table Col1: 'Playback status' → 'Video status'. (3) Line ~152 Controls section: 'RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool)' → 'RenderVideoBox(state StatusBarState, width int, showWarning bool)' and 'compact playback card' → 'video status card'. (4) Line ~83 comment reference if present in docs."
+      "notes": "Create tui/focus.go with the type and constants. Add the field to Model in tui/tui.go. Set default in Init or struct literal."
+    },
+    {
+      "id": "US-004",
+      "title": "Add SearchInputState and search input component",
+      "description": "As a user, I want a search input above the notes list so I can search for specific notes.",
+      "acceptanceCriteria": [
+        "SearchInputState struct defined in tui/components/searchinput.go with fields: Input string, CursorPos int, Mode string (search or command), Matches []int, CurrentMatch int",
+        "SearchInput(state SearchInputState, width int, focused bool) string render function",
+        "When Mode=search, prefix is / rendered in Cyan; when Mode=command, prefix is : rendered in Cyan",
+        "Cursor rendered as _ at CursorPos",
+        "Match indicator [M/N] right-aligned when len(Matches) > 0 (M=CurrentMatch+1, N=len(Matches))",
+        "Rendered inside RenderInfoBox with title Search and focused parameter",
+        "Component is 3 lines tall (InfoBox top border + content + bottom border)",
+        "InsertChar, Backspace, MoveCursorLeft, MoveCursorRight, Clear methods on SearchInputState",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Create tui/components/searchinput.go. Follow the same pattern as CommandInput in commandinput.go. The component renders a single content line inside RenderInfoBox('Search', []string{contentLine}, width, focused). Methods mirror CommandInputState methods."
+    },
+    {
+      "id": "US-005",
+      "title": "Integrate search input into column 2 layout",
+      "description": "As a user, I want the search input rendered above the notes list in column 2.",
+      "acceptanceCriteria": [
+        "Model struct gains searchInput components.SearchInputState field",
+        "renderColumn2 renders SearchInput at top (3 lines) then Notes InfoBox below",
+        "Search box uses full column 2 width",
+        "Notes InfoBox height = column height - 3 (search box height)",
+        "Search box focused parameter reads from m.focus == FocusSearch",
+        "Notes InfoBox focused parameter reads from m.focus == FocusNotes",
+        "Visual layout: search box on top, notes list below, no gap",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "In tui/tui.go add searchInput field. In tui/columns.go renderColumn2: searchBox := components.SearchInput(m.searchInput, width, m.focus == FocusSearch). Then notesHeight := height - 3. Render notes InfoBox with notesHeight. Combine: searchBox + '\\n' + notesInfoBox. Wrap in Container{Width: width, Height: height}."
+    },
+    {
+      "id": "US-006",
+      "title": "Add mode indicator component to column 1",
+      "description": "As a user, I want to see which panel is focused and what input mode is active in column 1.",
+      "acceptanceCriteria": [
+        "ModeIndicator(focus FocusTarget, mode string, width int) string function in tui/components/modeindicator.go",
+        "FocusTarget imported from tui package — but to avoid circular imports, pass focus as int or string. Use focusName string and mode string parameters instead",
+        "Left side shows Focus: followed by panel name (Video, Search, Notes)",
+        "Right side shows mode name (Normal, Search, Command) right-aligned",
+        "Content rendered inside RenderInfoBox with title Mode, focused=false",
+        "renderColumn1 renders ModeIndicator between video box and summary box",
+        "Focus name derived from m.focus: FocusVideo=Video, FocusSearch=Search, FocusNotes=Notes",
+        "Mode derived: if searchInput.Mode==command then Command, if focus==FocusSearch then Search, else Normal",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Create tui/components/modeindicator.go. Signature: ModeIndicator(focusName, mode string, width int) string. Build a single content line: left = ' Focus: ' + focusName, right = mode. Padding = innerW - len(left) - len(right). Use lipgloss.Width for measurement. Wrap in RenderInfoBox('Mode', []string{line}, width, false). In columns.go renderColumn1, insert between videoBox lines and summaryBox lines."
+    },
+    {
+      "id": "US-007",
+      "title": "Implement Tab/Shift+Tab focus cycling in normal mode",
+      "description": "As a user, I want Tab to cycle focus between Video, Search, and Notes panels.",
+      "acceptanceCriteria": [
+        "Tab key in normal mode (no form active, not in search input) cycles: FocusVideo -> FocusSearch -> FocusNotes -> FocusVideo",
+        "Shift+Tab cycles in reverse: FocusVideo -> FocusNotes -> FocusSearch -> FocusVideo",
+        "When focus changes to FocusSearch, the search input becomes active (cursor visible)",
+        "When focus leaves FocusSearch, search input stays populated but cursor hidden",
+        "Focus change does not clear search input text or matches",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "In tui/tui.go Update(), handle key.Matches for tab and shift+tab. Add a cycleFocus(forward bool) method on Model. When entering FocusSearch, no special init needed (cursor just shows). Guard: skip if any form is active (noteForm, tackleForm, etc)."
+    },
+    {
+      "id": "US-008",
+      "title": "Route keyboard input based on focus target",
+      "description": "As a developer, I need key events routed to the correct handler based on the current focus.",
+      "acceptanceCriteria": [
+        "When focus==FocusSearch, printable characters go to searchInput.InsertChar, backspace to searchInput.Backspace",
+        "When focus==FocusSearch, Escape clears search and sets focus to FocusNotes",
+        "When focus==FocusSearch, left/right arrow keys move cursor in search input",
+        "When focus==FocusNotes, J/K navigate notes list, Enter jumps to timestamp (existing behavior)",
+        "When focus==FocusVideo, H/L seek, Space toggles play/pause, comma/period change step (existing behavior)",
+        "Tab and Shift+Tab always handled regardless of focus (for focus cycling or match cycling)",
+        "Global keys still work in all focus modes: N (note form), T (tackle form), S (stats), ? (help), Ctrl+C (quit)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "Restructure the key handling in Update(). Current flow: forms checked first, then single big switch. New flow: forms first, then focus-aware routing. Extract video keys and notes keys into focus-guarded blocks. Search input keys in FocusSearch block. Keep global keys (N, T, S, ?, q, Ctrl+C, Ctrl+E) outside focus guards."
+    },
+    {
+      "id": "US-009",
+      "title": "Implement search matching and highlighting",
+      "description": "As a user, I want search to highlight matching rows in the notes list with the current match in a distinct color.",
+      "acceptanceCriteria": [
+        "When searchInput.Input is non-empty, compute Matches: indices of Items where text, ID (as string), player, or category contains the search string (case-insensitive)",
+        "Matches recomputed on every character change in search input",
+        "NotesList receives matches []int and currentMatch int parameters",
+        "Matching rows render with styles.Amber background (not the selected row style)",
+        "The current match row renders with styles.Pink background",
+        "If a row is both selected and a match, match color takes precedence",
+        "When search input is empty, no highlighting applied (normal rendering)",
+        "CurrentMatch defaults to 0 (first match) when matches are found",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Add matches []int and currentMatch int params to NotesList function. In renderTableRow, add isMatch and isCurrentMatch bool params. Update row style: if isCurrentMatch -> Pink bg, elif isMatch -> Amber bg, elif isSelected -> BrightPurple bg, else default. In tui.go, add updateSearchMatches() method that rebuilds searchInput.Matches using strings.Contains + strings.ToLower. Call it whenever searchInput.Input changes."
+    },
+    {
+      "id": "US-010",
+      "title": "Implement search mode switching (search vs command)",
+      "description": "As a user, I want typing : as the first character to switch to command mode, and deleting it to switch back.",
+      "acceptanceCriteria": [
+        "When search input is empty and user types :, Mode switches to command",
+        "The : is NOT stored in Input — it's implied by Mode=command",
+        "When in command mode and user backspaces to empty Input, Mode switches back to search",
+        "When in command mode and user presses Enter, the command is executed (delegate to existing command handling)",
+        "The prefix display changes: / for search mode, : for command mode",
+        "Escape in either mode clears input, resets to search mode, and moves focus to Notes",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "In the FocusSearch key handler in tui.go Update(): when receiving ':', check if Input is empty -> set Mode=command. In backspace handler: if Mode==command and Input is empty -> set Mode=search. On Enter in command mode: call existing command execution logic (same as commandInput flow). The existing CommandInput component may be deprecated in favor of this unified input."
+    },
+    {
+      "id": "US-011",
+      "title": "Implement Tab cycling through search matches",
+      "description": "As a user, I want Tab to cycle through search matches when the search input is focused.",
+      "acceptanceCriteria": [
+        "When focus==FocusSearch and len(Matches)>0, Tab advances CurrentMatch to next match (wrapping to 0 at end)",
+        "Shift+Tab moves to previous match (wrapping to last at beginning)",
+        "The notes list auto-scrolls to keep the current match visible (set SelectedIndex to Matches[CurrentMatch])",
+        "Match indicator updates to show new current match position [M/N]",
+        "When focus==FocusSearch and len(Matches)==0, Tab cycles focus normally",
+        "When focus!=FocusSearch, Tab cycles focus normally (not match cycling)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "In Update() Tab handler: if m.focus == FocusSearch && len(m.searchInput.Matches) > 0 -> cycle match. Else -> cycle focus. Update m.notesList.SelectedIndex = m.searchInput.Matches[m.searchInput.CurrentMatch] so the list scrolls to the match."
+    },
+    {
+      "id": "US-012",
+      "title": "Remove left/right arrow keys from video seek",
+      "description": "As a user, I want arrow keys freed up for future navigation patterns.",
+      "acceptanceCriteria": [
+        "Left arrow key no longer triggers seekBackward",
+        "Right arrow key no longer triggers seekForward",
+        "H still seeks backward, L still seeks forward",
+        "Help overlay text updated: remove left/right references from seek controls",
+        "GetControlGroups() in controls.go updated: remove Left/Right from Back/Fwd control entries",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "In tui.go Update(), the seek handlers match on 'h', 'left' and 'l', 'right'. Remove 'left' and 'right' from the key.Matches calls. In controls.go GetControlGroups(), update Shortcut strings: 'H / ←' becomes 'H', 'L / →' becomes 'L'. In help.go, update the help text similarly."
+    },
+    {
+      "id": "US-013",
+      "title": "Implement Vim-style row navigation",
+      "description": "As a user, I want to jump to specific rows using Vim commands when Notes is focused.",
+      "acceptanceCriteria": [
+        "Model gains numberBuffer string field for accumulating digit keypresses",
+        "When focus==FocusNotes, digit keys (0-9) append to numberBuffer (except 0 when buffer is empty — see below)",
+        "G with non-empty numberBuffer: jump to row number (1-indexed), clamp to valid range, clear buffer",
+        "G with empty numberBuffer: jump to last row",
+        "gg (two consecutive g presses): jump to first row",
+        "0 with empty numberBuffer: jump to first row",
+        "$ jumps to last row",
+        "Number buffer clears on Escape or any non-digit/non-G keypress",
+        "Notes list auto-scrolls to show the target row after jump",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": "Add numberBuffer string and lastKeyG bool to Model. In FocusNotes key handler: digits append to buffer. 'G': if buffer non-empty parse int and jump (m.notesList.SelectedIndex = n-1 clamped), else jump to last. 'g': if lastKeyG then jump to first and clear, else set lastKeyG=true and return. '0' when buffer empty: jump to first. '$': jump to last. Other keys: clear buffer and lastKeyG."
+    },
+    {
+      "id": "US-014",
+      "title": "Update TUI-ARCHITECTURE.md for search and focus system",
+      "description": "As a developer, I want the architecture doc updated to reflect all new components and behaviors.",
+      "acceptanceCriteria": [
+        "Directory structure updated: searchinput.go, modeindicator.go, focus.go listed",
+        "SearchInput component documented: state struct, render signature, mode switching",
+        "ModeIndicator component documented: placement in column 1, render signature",
+        "Focus system documented: FocusTarget type, Tab/Shift+Tab cycling behavior",
+        "Vim navigation documented: number buffer, commands (nG, gg, 0, $)",
+        "Column 2 rendering updated: search input (3 lines) + notes list",
+        "Column 1 rendering updated: video box + mode indicator + summary + selected tag",
+        "Keybindings section updated: left/right removed from seek, Tab/Shift+Tab for focus",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": "File: tui/TUI-ARCHITECTURE.md. Add new sections for SearchInput, ModeIndicator, and Focus System. Update Directory Structure, Column Rendering table, and Component Contracts sections."
     }
   ]
 }
