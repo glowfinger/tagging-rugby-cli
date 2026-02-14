@@ -33,8 +33,8 @@ func GetControlGroups() []ControlGroup {
 			SubGroups: [][]Control{
 				{
 					{Name: "Play", Shortcut: "Space"},
-					{Name: "Back", Shortcut: "H / \u2190"},
-					{Name: "Fwd", Shortcut: "L / \u2192"},
+					{Name: "Back", Shortcut: "H"},
+					{Name: "Fwd", Shortcut: "L"},
 				},
 				{
 					{Name: "Step -", Shortcut: ", / <"},

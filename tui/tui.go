@@ -374,12 +374,12 @@ func (m *Model) handleVideoKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			_ = m.client.FrameStep()
 		}
 		return m, nil
-	case "h", "H", "left":
+	case "h", "H":
 		if m.client != nil && m.client.IsConnected() {
 			_ = m.client.SeekRelative(-m.statusBar.StepSize)
 		}
 		return m, nil
-	case "l", "L", "right":
+	case "l", "L":
 		if m.client != nil && m.client.IsConnected() {
 			_ = m.client.SeekRelative(m.statusBar.StepSize)
 		}
