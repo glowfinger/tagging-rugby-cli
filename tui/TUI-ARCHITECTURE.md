@@ -63,14 +63,14 @@ Each column is rendered independently by a method on `*Model`:
 
 | Column | Method | Content |
 |--------|--------|---------|
-| 1 | `renderColumn1(width, height)` | Playback status, selected tag detail |
-| 2 | `renderColumn2(width, height)` | Scrollable notes/tackles table |
-| 3 | `renderColumn3(width, height)` | Live stats panel (bar graph, tackle stats table) |
+| 1 | `renderColumn1(width, height)` | Playback status, summary counts, selected tag detail |
+| 2 | `renderColumn2(width, height)` | Scrollable notes/tackles table (wrapped in InfoBox) |
+| 3 | `renderColumn3(width, height)` | Event distribution bar graph, tackle stats table |
 | 4 | `renderColumn4(width, height)` | Keybinding control groups (Playback, Navigation, Views) |
 
 Each method wraps its output in `layout.Container{Width, Height}.Render(...)` to
 guarantee exact dimensions. The containerized columns are then joined by
-`layout.JoinColumns()` with purple `│` separators.
+`layout.JoinColumns()` flush with no separators.
 
 ## Layout System (`tui/layout/`)
 
@@ -97,7 +97,7 @@ Constrains content to an exact `Width x Height` bounding box:
 
 ### ComputeColumnWidths(termWidth int) (col1, col2, col3, col4 int, showCol2, showCol3, showCol4 bool)
 
-Responsive column width calculation. Constants: `Col1Width = 30`, `Col3Width = 40`, `Col4Width = 30`, `ColMinWidth = 30`, `Col4ShowThreshold = 170`. Column 3 is fixed at 40 cells; Column 2 gets all remaining space.
+Responsive column width calculation with no border separator overhead (borders = 0). Constants: `Col1Width = 30`, `Col3Width = 40`, `Col4Width = 30`, `ColMinWidth = 30`, `Col4ShowThreshold = 170`. Column 3 is fixed at 40 cells; Column 2 gets all remaining space.
 
 | Terminal Width | Layout | Column Sizing |
 |---------------|--------|---------------|
@@ -110,7 +110,7 @@ Hide order: Col 4 first (< 170), then Col 3 (when Col 2 would fall below 30 cell
 
 ### JoinColumns(columns []string, widths []int, height int) string
 
-Joins pre-rendered column strings side by side with purple `│` border separators.
+Joins pre-rendered column strings side by side flush with no separators.
 Splits each column into lines, then assembles rows by concatenating corresponding
 lines from each column. Columns should already be containerized for exact
 dimensions, but includes a fallback for out-of-bounds rows.
@@ -124,7 +124,7 @@ Each component in `tui/components/` follows the pattern:
 
 ### StatusBar (`statusbar.go`)
 
-- **State:** `StatusBarState{Paused, Muted, TimePos, Duration, StepSize, OverlayEnabled}`
+- **State:** `StatusBarState{Paused, Muted, TimePos, Duration, StepSize, OverlayEnabled, VideoOpen}`
 - **Signature:** `StatusBar(state StatusBarState, width int) string`
 - Renders: play/pause icon, timestamp, duration, step size, mute/overlay indicators
 
@@ -149,13 +149,14 @@ Each component in `tui/components/` follows the pattern:
 ### Controls (`controls.go`)
 
 - **Signature:** `GetControlGroups() []ControlGroup` — returns keybinding groups
+- **Signature:** `RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool) string` — renders compact playback card using `RenderInfoBox` style
 - **Signature:** `RenderControlBox(group ControlGroup, width int) string` — renders bordered box
 - `ControlGroup{Name, SubGroups [][]Control}` — sub-groups separated by dividers
 
 ### StatsPanel (`statspanel.go`)
 
 - **Signature:** `StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) string`
-- Renders: stats summary, bar graph of event distribution, tackle stats table
+- Renders: event distribution bar graph and tackle stats table, each wrapped in `RenderInfoBox`
 
 ### StatsView (`statsview.go`)
 
@@ -204,7 +205,7 @@ The colour palette is **Ciapre** (warm, earthy) from the Gogh terminal themes pr
 |----------|-----|-------|
 | `DeepPurple` | `#191C27` | Main background |
 | `DarkPurple` | `#181818` | Secondary dark background |
-| `Purple` | `#5C4F4B` | Borders, dim accents, column separators |
+| `Purple` | `#5C4F4B` | Borders, dim accents |
 | `BrightPurple` | `#724D7C` | Highlights, focus states |
 | `Lavender` | `#AEA47A` | Secondary text |
 | `LightLavender` | `#F3DBB2` | Primary text |
