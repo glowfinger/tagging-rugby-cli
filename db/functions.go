@@ -459,6 +459,25 @@ func LoadNoteForEdit(database *sql.DB, noteID int64) (*EditTackleData, error) {
 	return data, nil
 }
 
+// SelectTackleClipsForExport returns all tackle notes joined with timing, video, tackle, and clip data for export.
+func SelectTackleClipsForExport(database *sql.DB) ([]TackleClipRow, error) {
+	rows, err := database.Query(SelectTackleClipsForExportSQL)
+	if err != nil {
+		return nil, fmt.Errorf("select tackle clips for export: %w", err)
+	}
+	defer rows.Close()
+
+	var clips []TackleClipRow
+	for rows.Next() {
+		var c TackleClipRow
+		if err := rows.Scan(&c.NoteID, &c.Category, &c.Start, &c.End, &c.VideoPath, &c.Player, &c.Outcome, &c.ClipFinishedAt); err != nil {
+			return nil, fmt.Errorf("scan tackle clip row: %w", err)
+		}
+		clips = append(clips, c)
+	}
+	return clips, rows.Err()
+}
+
 // DeleteNote deletes a note by ID. Cascade handles child records.
 func DeleteNote(database *sql.DB, id int64) error {
 	result, err := database.Exec(DeleteNoteSQL, id)
