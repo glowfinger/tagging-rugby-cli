@@ -15,9 +15,9 @@ import (
 func (m *Model) renderColumn1(width, height int) string {
 	var lines []string
 
-	// Bordered mini player card
-	miniPlayer := components.RenderMiniPlayer(m.statusBar, width, false)
-	lines = append(lines, strings.Split(miniPlayer, "\n")...)
+	// Video status card
+	videoBox := components.RenderVideoBox(m.statusBar, width, false)
+	lines = append(lines, strings.Split(videoBox, "\n")...)
 
 	// Summary counts box
 	noteCount := 0

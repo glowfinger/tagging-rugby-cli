@@ -80,7 +80,7 @@ func GetControlGroups() []ControlGroup {
 
 // RenderInfoBox renders a generic bordered box with a tab-style header and content lines.
 // Content lines are rendered as-is (caller handles styling). The box uses the same
-// box-drawing characters as RenderMiniPlayer.
+// box-drawing characters as RenderVideoBox.
 func RenderInfoBox(title string, contentLines []string, width int) string {
 	if width < 4 {
 		return ""
@@ -245,36 +245,47 @@ func RenderControlBox(group ControlGroup, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-// RenderMiniPlayer renders a compact playback card for narrow terminals.
+// RenderVideoBox renders the video status card at full column width.
 // Uses RenderInfoBox for consistent styling across all containers.
-func RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool) string {
+func RenderVideoBox(state StatusBarState, width int, showWarning bool) string {
 	textStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
 	warningStyle := lipgloss.NewStyle().Foreground(styles.Lavender).Italic(true)
 
-	// Build content lines
+	// Build first line: left-align play state, right-align step size + mute
 	playState := "▶ Playing"
 	if state.Paused {
 		playState = "⏸ Paused"
 	}
 
 	stepStr := formatStepSize(state.StepSize)
-	statusLine := playState + "      Step: " + stepStr
+	leftPart := " " + playState
+	rightPart := "Step: " + stepStr
 	if state.Muted {
-		statusLine += "  🔇"
+		rightPart += "  🔇"
 	}
 
-	timeLine := fmt.Sprintf("Time: %s / %s",
+	innerW := width - 4 // 2 border chars + 2 padding spaces from InfoBox
+	if innerW < 1 {
+		innerW = 1
+	}
+	padding := innerW - lipgloss.Width(leftPart) - lipgloss.Width(rightPart)
+	if padding < 1 {
+		padding = 1
+	}
+	statusLine := leftPart + strings.Repeat(" ", padding) + rightPart
+
+	timeLine := fmt.Sprintf(" Time: %s / %s",
 		timeutil.FormatTime(state.TimePos),
 		timeutil.FormatTime(state.Duration))
 
-	overlayLine := "Overlay: off"
+	overlayLine := " Overlay: off"
 	if state.OverlayEnabled {
-		overlayLine = "Overlay: on"
+		overlayLine = " Overlay: on"
 	}
 
-	videoLine := "Video: Closed"
+	videoLine := " Video: Closed"
 	if state.VideoOpen {
-		videoLine = "Video: Open"
+		videoLine = " Video: Open"
 	}
 
 	contentLines := []string{
@@ -284,37 +295,7 @@ func RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool) str
 		textStyle.Render(videoLine),
 	}
 
-	// Card width: fit the widest content line + 4 (2 border chars + 2 padding spaces)
-	contentW := lipgloss.Width(statusLine)
-	if lipgloss.Width(timeLine) > contentW {
-		contentW = lipgloss.Width(timeLine)
-	}
-	if lipgloss.Width(overlayLine) > contentW {
-		contentW = lipgloss.Width(overlayLine)
-	}
-	if lipgloss.Width(videoLine) > contentW {
-		contentW = lipgloss.Width(videoLine)
-	}
-	cardWidth := contentW + 4 // │ + space + content + space + │
-
-	// Ensure card is at least wide enough for the tab header
-	minCardW := lipgloss.Width(" Playback ") + 5 // tab overhead: ╭─ + ─╮
-	if cardWidth < minCardW {
-		cardWidth = minCardW
-	}
-
-	card := RenderInfoBox("Playback", contentLines, cardWidth)
-
-	// Center the card horizontally if terminal is wider than card
-	if termWidth > cardWidth {
-		padding := (termWidth - cardWidth) / 2
-		padStr := strings.Repeat(" ", padding)
-		var centeredLines []string
-		for _, l := range strings.Split(card, "\n") {
-			centeredLines = append(centeredLines, padStr+l)
-		}
-		card = strings.Join(centeredLines, "\n")
-	}
+	card := RenderInfoBox("Video", contentLines, width)
 
 	if !showWarning {
 		return card
@@ -323,7 +304,7 @@ func RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool) str
 	// Warning line below card
 	warning := warningStyle.Render("Mini player mode - resize for full view")
 	warnW := lipgloss.Width(warning)
-	warnPad := (termWidth - warnW) / 2
+	warnPad := (width - warnW) / 2
 	if warnPad < 0 {
 		warnPad = 0
 	}
