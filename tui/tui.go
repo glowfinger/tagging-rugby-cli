@@ -275,8 +275,15 @@ func (m *Model) handleSearchInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focus = FocusNotes
 		return m, nil
 	case "backspace":
+		if m.searchInput.Mode == "command" && m.searchInput.Input == "" {
+			// Backspace on empty command input switches back to search mode
+			m.searchInput.Mode = "search"
+			return m, nil
+		}
 		m.searchInput.Backspace()
-		m.updateSearchMatches()
+		if m.searchInput.Mode == "search" {
+			m.updateSearchMatches()
+		}
 		return m, nil
 	case "left":
 		m.searchInput.MoveCursorLeft()
@@ -285,12 +292,44 @@ func (m *Model) handleSearchInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchInput.MoveCursorRight()
 		return m, nil
 	case "enter":
+		if m.searchInput.Mode == "command" {
+			// Execute command
+			cmd := m.searchInput.Input
+			m.searchInput.Clear()
+			m.focus = FocusNotes
+			if cmd != "" {
+				result, err := m.executeCommand(cmd)
+				if err != nil {
+					m.commandInput.SetResult("Error: "+err.Error(), true)
+					return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+						return clearResultMsg{}
+					})
+				}
+				if result == "OPEN_NOTE_INPUT" {
+					return m.openNoteInput()
+				}
+				if result == "OPEN_TACKLE_INPUT" {
+					return m.openTackleInput()
+				}
+				m.commandInput.SetResult(result, false)
+				return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
+					return clearResultMsg{}
+				})
+			}
+		}
 		return m, nil
 	default:
+		// Check for : to switch to command mode when input is empty
+		if msg.String() == ":" && m.searchInput.Input == "" && m.searchInput.Mode == "search" {
+			m.searchInput.Mode = "command"
+			return m, nil
+		}
 		// Insert printable characters
 		if len(msg.String()) == 1 {
 			m.searchInput.InsertChar(rune(msg.String()[0]))
-			m.updateSearchMatches()
+			if m.searchInput.Mode == "search" {
+				m.updateSearchMatches()
+			}
 		}
 		return m, nil
 	}
