@@ -92,6 +92,8 @@ type Model struct {
 	editingNoteID int64
 	// editTackleFormResult holds the bound values for the edit tackle form
 	editTackleFormResult forms.EditTackleFormResult
+	// exportProgress holds the state for the export progress display in Column 1
+	exportProgress components.ExportProgressState
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.

@@ -72,7 +72,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "renderColumn1 is in tui/columns.go. Add the export progress rendering after the selected tag info box block (after the if item != nil block). The Container wrapping at the end handles height clamping."
     },
     {

@@ -50,3 +50,14 @@
   - Use ansi.Truncate for filename truncation to handle ANSI sequences correctly
 ---
 
+## 2026-02-13 - US-004
+- Added exportProgress field (ExportProgressState) to Model in tui/tui.go
+- Added ExportProgress rendering in renderColumn1 (tui/columns.go) after the selected tag detail block
+- Export progress box only renders when exportProgress.Active is true — no layout change when inactive
+- Container wrapping at the end of renderColumn1 handles height clamping automatically
+- Files changed: tui/tui.go, tui/columns.go, tasks/prd.json
+- **Learnings for future iterations:**
+  - Adding a new display element to Column 1 is straightforward: append to the lines slice before the Container wrap
+  - The Container component handles scroll/truncation if the content exceeds available height
+---
+
