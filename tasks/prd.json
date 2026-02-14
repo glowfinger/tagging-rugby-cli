@@ -118,7 +118,7 @@
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "Follow the StatsView pattern: full-screen overlay with early return in View(). The query to populate clips can be a new SQL embedded query or inline. Group clips by extracting the video filename from the path. Use Container for exact dimensions."
     }
   ]

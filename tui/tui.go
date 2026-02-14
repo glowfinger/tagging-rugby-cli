@@ -104,6 +104,8 @@ type Model struct {
 	editTackleFormResult forms.EditTackleFormResult
 	// exportProgress holds the state for the export progress display in Column 1
 	exportProgress components.ExportProgressState
+	// clipsView holds the state for the clips list view overlay
+	clipsView components.ClipsViewState
 	// exportCh receives progress updates from the background export goroutine
 	exportCh chan ExportProgressMsg
 }
@@ -194,6 +196,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleStatsViewInput(msg)
 		}
 
+		// Handle clips view input
+		if m.clipsView.Active {
+			return m.handleClipsViewInput(msg)
+		}
+
 		// Handle confirm discard dialog (huh form)
 		if m.confirmDiscardForm != nil {
 			return m.handleConfirmDiscardUpdate(msg)
@@ -224,6 +231,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Open stats view
 			m.loadTackleStats()
 			m.statsView.Active = true
+			return m, nil
+		case "c", "C":
+			// Open clips view
+			m.loadExportedClips()
+			m.clipsView.Active = true
 			return m, nil
 		case "ctrl+c":
 			m.quitting = true
@@ -1749,6 +1761,11 @@ func (m *Model) View() string {
 		return components.StatsView(m.statsView, m.width, m.height)
 	}
 
+	// If clips view is active, show it instead of normal view
+	if m.clipsView.Active {
+		return components.ClipsView(m.clipsView, m.width, m.height)
+	}
+
 	// Check if confirm discard dialog is active — show it as overlay
 	if m.confirmDiscardForm != nil {
 		controlsDisplay := components.ControlsDisplay(m.width)
@@ -2019,6 +2036,57 @@ func (m *Model) handleStatsFilterInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+}
+
+// handleClipsViewInput handles key events when the clips view is active.
+func (m *Model) handleClipsViewInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "backspace", "esc":
+		m.clipsView.Active = false
+		return m, nil
+	case "j", "J":
+		m.clipsView.MoveDown(m.height-10, len(m.clipsView.Clips)*3+10)
+		return m, nil
+	case "k", "K":
+		m.clipsView.MoveUp()
+		return m, nil
+	case "ctrl+c":
+		m.quitting = true
+		return m, tea.Quit
+	case "?":
+		m.showHelp = true
+		return m, nil
+	}
+	return m, nil
+}
+
+// loadExportedClips queries the database for all exported clips and populates the clips view state.
+func (m *Model) loadExportedClips() {
+	if m.db == nil {
+		return
+	}
+
+	rows, err := db.SelectExportedClips(m.db)
+	if err != nil {
+		return
+	}
+
+	clips := make([]components.ExportedClip, len(rows))
+	for i, row := range rows {
+		clips[i] = components.ExportedClip{
+			NoteID:   row.NoteID,
+			FileName: row.FileName,
+			Player:   row.Player,
+			Category: row.Category,
+			Outcome:  row.Outcome,
+			Duration: row.Duration,
+			Status:   row.Status,
+			Error:    row.Error,
+		}
+	}
+
+	m.clipsView.Clips = clips
+	m.clipsView.ScrollOffset = 0
 }
 
 // tackleStatsAllVideosQuery aggregates tackle stats across all videos.
