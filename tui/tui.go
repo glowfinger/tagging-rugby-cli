@@ -201,13 +201,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleCommandInput(msg)
 		}
 
-		// Tab / Shift+Tab for focus cycling
+		// Tab / Shift+Tab: cycle matches when in search with matches, else cycle focus
 		switch msg.String() {
 		case "tab":
-			m.cycleFocus(true)
+			if m.focus == FocusSearch && len(m.searchInput.Matches) > 0 {
+				m.searchInput.CurrentMatch = (m.searchInput.CurrentMatch + 1) % len(m.searchInput.Matches)
+				m.notesList.SelectedIndex = m.searchInput.Matches[m.searchInput.CurrentMatch]
+			} else {
+				m.cycleFocus(true)
+			}
 			return m, nil
 		case "shift+tab":
-			m.cycleFocus(false)
+			if m.focus == FocusSearch && len(m.searchInput.Matches) > 0 {
+				m.searchInput.CurrentMatch--
+				if m.searchInput.CurrentMatch < 0 {
+					m.searchInput.CurrentMatch = len(m.searchInput.Matches) - 1
+				}
+				m.notesList.SelectedIndex = m.searchInput.Matches[m.searchInput.CurrentMatch]
+			} else {
+				m.cycleFocus(false)
+			}
 			return m, nil
 		}
 
