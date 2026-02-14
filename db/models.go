@@ -71,3 +71,27 @@ type NoteHighlight struct {
 	NoteID int64
 	Type   string
 }
+
+// ExportedClipRow represents a joined row for viewing exported clips.
+type ExportedClipRow struct {
+	NoteID   int64
+	FileName string
+	Player   string
+	Category string
+	Outcome  string
+	Duration float64
+	Status   string
+	Error    string
+}
+
+// TackleClipRow represents a joined row for tackle clip export.
+type TackleClipRow struct {
+	NoteID       int64
+	Category     string
+	Start        float64
+	End          float64
+	VideoPath    string
+	Player       string
+	Outcome      string
+	ClipFinishedAt *time.Time
+}

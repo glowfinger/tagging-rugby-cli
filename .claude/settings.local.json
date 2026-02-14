@@ -10,7 +10,8 @@
       "Bash(gh api:*)",
       "Bash(CGO_ENABLED=0 go build:*)",
       "Bash(export PATH=\"/home/node/go/bin:$PATH\")",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash(ls:*)"
     ]
   }
 }

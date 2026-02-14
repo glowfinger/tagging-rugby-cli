@@ -1,39 +1,125 @@
 {
   "project": "tagging-rugby-cli",
-  "branchName": "ralph/dynamic-notes-list-height",
-  "description": "Dynamic Notes List Height - Make the notes list component use all available vertical space instead of a fixed 10-row table",
+  "branchName": "ralph/export-player-tackle-clips",
+  "description": "Export Player Tackle Clips - Bulk export all tackle clips as MP4 files using ffmpeg with progress tracking in Column 1",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Remove fixed tableRows constant and derive row count from height parameter",
-      "description": "As a user, I want the notes list to fill all available vertical space so the list responds correctly when the terminal is resized vertically.",
+      "title": "Add SQL query to select all tackle notes for export",
+      "description": "As the system, I need a query that joins notes, note_timing, note_videos, and note_tackles to gather all data needed for clip export.",
       "acceptanceCriteria": [
-        "The `const tableRows = 10` is removed from tui/components/noteslist.go",
-        "NotesList() computes visibleRows from the height parameter (height - 1 for the header row)",
-        "The render loop iterates visibleRows times instead of the old constant",
-        "The empty-state branch pads to visibleRows instead of the old constant",
-        "scrollToCurrentTime() accepts a visibleRows int parameter instead of referencing tableRows",
-        "All scroll-offset clamping logic (SelectedIndex bounds, maxOffset calculation) uses visibleRows",
-        "Non-positive visibleRows (<= 0) does not panic — returns header only or empty string",
+        "New embedded SQL file db/sql/select_tackle_clips_for_export.sql that joins notes, note_timing, note_videos, note_tackles WHERE notes.category = 'tackle'",
+        "Query returns columns: notes.id, notes.category, note_timing.start, note_timing.end, note_videos.path, note_tackles.player, note_tackles.outcome",
+        "Query orders results by note_videos.path ASC, note_timing.start ASC",
+        "Query uses LEFT JOIN on note_clips to include a finished_at column (for skip-already-exported logic)",
+        "New Go function SelectTackleClipsForExport(db) in db/functions.go that returns a slice of a new TackleClipRow struct",
+        "TackleClipRow struct added to db/models.go with fields: NoteID int64, Category string, Start float64, End float64, VideoPath string, Player string, Outcome string, ClipFinishedAt *time.Time",
+        "New //go:embed directive and var in db/queries.go for the SQL file",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Key file: tui/components/noteslist.go. The `height` param is already passed from renderColumn2 in tui/columns.go — no new plumbing needed. There are 4 references to `tableRows`: the render loop (line 123), empty-state padding (line 94), scroll-offset clamping (lines 106, 114), and scrollToCurrentTime (lines 155, 161). The scrollToCurrentTime method signature must change to accept visibleRows as a parameter."
+      "notes": "Follow existing patterns: see SelectNoteVideosByNote in db/functions.go and the //go:embed pattern in db/queries.go. The LEFT JOIN on note_clips allows filtering out already-exported clips in the caller."
     },
     {
       "id": "US-002",
-      "title": "Update TUI-ARCHITECTURE.md NotesList section",
-      "description": "As a developer, I want the architecture doc to accurately describe the NotesList component so I can trust it as a reference.",
+      "title": "Add clip path builder and ffmpeg runner to pkg/export package",
+      "description": "As the system, I need functions to build the output file path and run ffmpeg so the export logic is reusable.",
       "acceptanceCriteria": [
-        "The NotesList bullet in tui/TUI-ARCHITECTURE.md no longer says 'fixed-row' or '10-row'",
-        "The description states that the visible row count is derived from the height parameter",
-        "No other sections of TUI-ARCHITECTURE.md are modified",
+        "New package pkg/export/ with file export.go",
+        "Function BuildClipPath(videoPath, category, player, outcome string, startSeconds float64) string that returns the full output path",
+        "Path format: {videoDir}/clips/{videoFilenameNoExt}/{category}/{player}/{hhmmss}-{player}-{category}-{outcome}.mp4",
+        "hhmmss is derived from startSeconds (e.g., 3661.5 -> 010101)",
+        "Player and outcome are sanitized: replace characters not safe for filenames (/, \\, :, *, ?, <, >, |, spaces) with _",
+        "Function EffectiveEnd(start, end float64) float64 that returns max(end, start+4.0) to enforce 4-second minimum; also handles end <= 0 by returning start+4.0",
+        "Function RunFfmpeg(videoPath string, start, end float64, outputPath string) error that creates directories, builds ffmpeg args with -c copy, and runs the command",
+        "RunFfmpeg checks deps.CheckFfmpeg() before running",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "TUI-ARCHITECTURE.md is at tui/TUI-ARCHITECTURE.md. The NotesList section is around line 144. Current text says 'fixed-row scrollable table' — change to describe dynamic height derived from the height parameter."
+      "notes": "Reuse the ffmpeg arg-building pattern from cmd/clip.go buildFfmpegArgs(). Use -y -ss start -i video -to duration -c copy output. The deps package already has CheckFfmpeg(). Use os.MkdirAll for directory creation."
+    },
+    {
+      "id": "US-003",
+      "title": "Add ExportProgress component to tui/components",
+      "description": "As a user, I want a progress bar component rendered in Column 1 showing export status.",
+      "acceptanceCriteria": [
+        "New file tui/components/exportprogress.go",
+        "ExportProgressState struct with fields: Active bool, Total int, Completed int, Errors int, CurrentFile string",
+        "Function ExportProgress(state ExportProgressState, width int) string that renders a bordered info box",
+        "Shows a progress bar using filled (█) and empty (░) characters scaled to inner width",
+        "Shows percentage (e.g., '75%'), clip counter (e.g., '9/12 clips'), current file name truncated to fit",
+        "When Errors > 0, shows error count in red (e.g., '3 errors')",
+        "When Completed == Total and Total > 0, shows 'Export complete' in green",
+        "Uses RenderInfoBox with title 'Export' for consistent bordered box styling",
+        "Uses styles.Green for completed bar segments, styles.Amber for remaining, styles.Red for error text",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Follow the pattern of RenderInfoBox in controls.go or the info box in renderColumn1 of columns.go. The component is a pure render function — state is owned by tui.Model."
+    },
+    {
+      "id": "US-004",
+      "title": "Add export state and progress rendering to Column 1",
+      "description": "As a user, I want to see the export progress bar in Column 1 below the selected tag detail when an export is active.",
+      "acceptanceCriteria": [
+        "ExportProgressState field added to Model in tui/tui.go (named exportProgress)",
+        "renderColumn1 in tui/columns.go renders ExportProgress below the selected tag detail when exportProgress.Active is true",
+        "The ExportProgress output is appended to the lines slice before the Container wrap",
+        "When exportProgress.Active is false, nothing extra is rendered (no layout change)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "renderColumn1 is in tui/columns.go. Add the export progress rendering after the selected tag info box block (after the if item != nil block). The Container wrapping at the end handles height clamping."
+    },
+    {
+      "id": "US-005",
+      "title": "Add Ctrl+E keybinding and background export goroutine",
+      "description": "As a user, I want to press Ctrl+E to start exporting all tackle clips with ffmpeg running in the background.",
+      "acceptanceCriteria": [
+        "Ctrl+E keypress in tui/tui.go Update() triggers startExportClips() method",
+        "Guard: Ctrl+E is ignored if a form, help overlay, stats view, command input is active, or if exportProgress.Active is true",
+        "startExportClips() opens a new DB connection, calls SelectTackleClipsForExport, filters out rows where ClipFinishedAt is non-nil",
+        "Sets exportProgress to Active with Total = number of clips to export, Completed = 0",
+        "Launches a goroutine that processes clips sequentially: for each clip calls pkg/export.RunFfmpeg",
+        "Before each ffmpeg: inserts note_clips row with name=output path, started_at=now (use db.InsertNoteClip or raw INSERT)",
+        "After ffmpeg success: updates note_clips with finished_at=now and duration",
+        "After ffmpeg error: updates note_clips with error_at=now and error message",
+        "After each clip: sends a tea.Msg to update exportProgress (Completed++, Errors++ on failure, CurrentFile)",
+        "Define ExportProgressMsg struct as the tea.Msg type with Completed, Errors, CurrentFile, Done fields",
+        "Handle ExportProgressMsg in Update() to update exportProgress state; when Done is true set Active to false after a brief delay or immediately",
+        "Add 'Ctrl+E  Export clips' to the control groups in tui/components/controls.go",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Use p.Send() (store *tea.Program in Model) or return a tea.Cmd that wraps a channel. The goroutine needs its own *sql.DB — call db.Open() inside startExportClips. Follow the existing keybinding guard pattern (check m.noteForm, m.tackleForm, m.confirmForm, m.helpActive, m.statsView.Active, m.commandInput.Active). The BuildClipPath and EffectiveEnd functions are in pkg/export/."
+    },
+    {
+      "id": "US-006",
+      "title": "Add clips list view overlay",
+      "description": "As a user, I want a keybinding to view exported clips so I can verify what was exported.",
+      "acceptanceCriteria": [
+        "New file tui/components/clipsview.go with ClipsViewState struct: Active bool, Clips []ExportedClip, ScrollOffset int",
+        "ExportedClip struct with fields: NoteID int64, FileName string, Player string, Category string, Outcome string, Duration float64, Status string (completed/error), Error string",
+        "ClipsView(state ClipsViewState, width, height int) string renders a full-screen overlay listing clips",
+        "Clips grouped by video file name with headers",
+        "Error clips shown with styles.Red and error message",
+        "Completed clips shown with styles.Green status",
+        "clipsView ClipsViewState field added to Model in tui/tui.go",
+        "Keybinding 'C' toggles the clips view on/off (guarded same as other overlays)",
+        "When toggling on: query note_clips joined with notes, note_tackles, note_videos to populate ExportedClip list",
+        "Esc also dismisses the clips view",
+        "View() in tui.go renders ClipsView as early return when clipsView.Active is true (similar to stats view)",
+        "Add 'C  View clips' to control groups in tui/components/controls.go",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Follow the StatsView pattern: full-screen overlay with early return in View(). The query to populate clips can be a new SQL embedded query or inline. Group clips by extracting the video filename from the path. Use Container for exact dimensions."
     }
   ]
 }

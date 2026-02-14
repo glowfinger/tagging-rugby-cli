@@ -1,35 +1,99 @@
 # Ralph Progress Log
-# Branch: ralph/dynamic-notes-list-height
+# Branch: ralph/export-player-tackle-clips
 # Started: 2026-02-13
 
 ## Codebase Patterns
 - Use `CGO_ENABLED=0` for all Go build/vet commands (modernc.org/sqlite requirement)
 - Go binary at `/home/node/go/bin/go` — export PATH before commands
-- NotesList component in tui/components/noteslist.go — currently uses hardcoded `const tableRows = 10`
-- The `height` parameter is already passed from renderColumn2 (tui/columns.go) into NotesList
-- scrollToCurrentTime is a method on *NotesListState that references tableRows directly
-- TUI-ARCHITECTURE.md at tui/TUI-ARCHITECTURE.md — NotesList section around line 144
+- Database: db/models.go (structs), db/functions.go (query functions), db/sql/*.sql (embedded queries), db/queries.go (//go:embed vars)
+- TUI: tui/tui.go (Model, Update, View), tui/columns.go (renderColumn1-4), tui/components/ (pure render functions)
+- Existing clip export infrastructure in cmd/clip.go (buildFfmpegArgs, ffmpeg execution)
+- deps.CheckFfmpeg() validates ffmpeg is installed
+- Container component MUST wrap all column render output for exact dimensions
+- RenderInfoBox pattern for bordered boxes in Column 1
+- Keybinding guards: check noteForm, tackleForm, confirmForm, helpActive, statsView.Active, commandInput.Active
+- Channel-based tea.Cmd for background work: create chan, goroutine sends msgs, waitForX returns tea.Cmd that reads from chan
+- Handle background progress msgs BEFORE form delegation in Update() to avoid them being swallowed
 
 ---
 
 ## 2026-02-13 - US-001
-- Removed `const tableRows = 10` and replaced with `visibleRows := height - 1` computed from the height parameter
-- Updated all 4 references: render loop, empty-state padding, scroll-offset clamping, and scrollToCurrentTime
-- Changed scrollToCurrentTime signature to accept `visibleRows int` parameter
-- Added guard for non-positive visibleRows (returns empty string)
-- Files changed: tui/components/noteslist.go
+- Implemented SQL query joining notes, note_timing, note_videos, note_tackles with LEFT JOIN on note_clips
+- Added TackleClipRow struct to db/models.go
+- Added SelectTackleClipsForExport function to db/functions.go
+- Added embedded SQL file db/sql/select_tackle_clips_for_export.sql and //go:embed in db/queries.go
+- Files changed: db/models.go, db/functions.go, db/queries.go, db/sql/select_tackle_clips_for_export.sql
 - **Learnings for future iterations:**
-  - scrollToCurrentTime is only called internally from NotesList(), so changing its signature required no external plumbing
-  - The height param was already passed through from renderColumn2 — no changes needed in columns.go
-  - CGO_ENABLED=0 go vet ./... passes cleanly
+  - The LEFT JOIN on note_clips uses finished_at column to allow callers to filter already-exported clips
+  - Follow the existing pattern: SQL embed var in queries.go, scan function in functions.go, struct in models.go
 ---
 
 ## 2026-02-13 - US-002
-- Updated NotesList section in TUI-ARCHITECTURE.md to describe dynamic height instead of fixed-row
-- Changed "fixed-row scrollable table" to "dynamically-sized scrollable table (visible row count derived from height parameter)"
-- Files changed: tui/TUI-ARCHITECTURE.md
+- Created pkg/export/export.go with BuildClipPath, EffectiveEnd, RunFfmpeg functions
+- BuildClipPath sanitizes player/outcome/category for safe filenames, formats hhmmss from startSeconds
+- EffectiveEnd enforces 4-second minimum clip duration, handles end <= 0
+- RunFfmpeg checks deps.CheckFfmpeg(), creates output dirs with os.MkdirAll, uses -c copy for stream copy
+- Files changed: pkg/export/export.go, tasks/prd.json
 - **Learnings for future iterations:**
-  - NotesList section is at line 146 of TUI-ARCHITECTURE.md
-  - Only the Renders bullet needed updating — the signature already showed the height parameter
+  - The ffmpeg args pattern: -y -ss start -i video -to duration -c copy output (duration is relative, not absolute end time)
+  - Use CombinedOutput() instead of Run() to capture ffmpeg stderr for error messages
+  - sanitize() uses regexp to replace / \ : * ? < > | and whitespace with underscore
+---
+
+## 2026-02-13 - US-003
+- Created tui/components/exportprogress.go with ExportProgressState struct and ExportProgress render function
+- Progress bar uses █ (green) and ░ (amber) characters scaled to inner width
+- Shows percentage, clip counter, current file (truncated), error count (red), and "Export complete" (green)
+- Uses RenderInfoBox for consistent bordered box styling
+- Files changed: tui/components/exportprogress.go, tasks/prd.json
+- **Learnings for future iterations:**
+  - RenderInfoBox handles all border rendering — just pass title and content lines
+  - Inner width for content = box width - 4 (2 border chars + 2 padding spaces)
+  - Use ansi.Truncate for filename truncation to handle ANSI sequences correctly
+---
+
+## 2026-02-13 - US-004
+- Added exportProgress field (ExportProgressState) to Model in tui/tui.go
+- Added ExportProgress rendering in renderColumn1 (tui/columns.go) after the selected tag detail block
+- Export progress box only renders when exportProgress.Active is true — no layout change when inactive
+- Container wrapping at the end of renderColumn1 handles height clamping automatically
+- Files changed: tui/tui.go, tui/columns.go, tasks/prd.json
+- **Learnings for future iterations:**
+  - Adding a new display element to Column 1 is straightforward: append to the lines slice before the Container wrap
+  - The Container component handles scroll/truncation if the content exceeds available height
+---
+
+## 2026-02-13 - US-005
+- Added Ctrl+E keybinding in Update() normal mode to trigger startExportClips()
+- Guard prevents Ctrl+E when forms, help overlay, stats view, command input, or export already active
+- startExportClips() opens separate DB connection, queries SelectTackleClipsForExport, filters already-exported (ClipFinishedAt non-nil)
+- Launches goroutine that processes clips sequentially via export.RunFfmpeg
+- Before each ffmpeg: inserts note_clips row with started_at via db.InsertNoteClip
+- After success: UPDATE note_clips SET finished_at, duration; after error: UPDATE note_clips SET error_at, error
+- Uses channel-based tea.Cmd pattern (waitForExportMsg) to send ExportProgressMsg back to Update()
+- ExportProgressMsg handled at top of Update() before form delegation (so progress updates aren't blocked by forms)
+- Added 'Export clips [Ctrl+E]' to Views control group in controls.go
+- Files changed: tui/tui.go, tui/components/controls.go, tasks/prd.json
+- **Learnings for future iterations:**
+  - Channel-based tea.Cmd pattern: create chan, goroutine sends to it, waitForX func returns tea.Cmd that reads from chan
+  - Handle progress messages BEFORE form delegation in Update() so they aren't swallowed
+  - Export goroutine needs its own db.Open() — cannot share *sql.DB across goroutines safely with sqlite
+  - InsertNoteClip takes 7 params matching INSERT INTO note_clips (note_id, name, duration, started_at, finished_at, error_at, error)
+---
+
+## 2026-02-13 - US-006
+- Created tui/components/clipsview.go with ClipsViewState struct, ExportedClip struct, and ClipsView render function
+- Created db/sql/select_exported_clips.sql joining note_clips, notes, note_tackles, note_videos
+- Added ExportedClipRow struct to db/models.go and SelectExportedClips function to db/functions.go
+- Added //go:embed for select_exported_clips.sql in db/queries.go
+- Added clipsView field to Model, guard in Update(), 'C' keybinding, early return in View()
+- Added handleClipsViewInput (backspace/esc to exit, j/k to scroll) and loadExportedClips methods
+- Added 'View clips [C]' to Views control group in controls.go
+- Files changed: tui/components/clipsview.go, db/sql/select_exported_clips.sql, db/models.go, db/functions.go, db/queries.go, tui/tui.go, tui/components/controls.go, tasks/prd.json
+- **Learnings for future iterations:**
+  - Follow StatsView pattern exactly for full-screen overlays: State struct with Active bool, guard in Update(), early return in View(), dedicated input handler
+  - Clips grouped by extracting video name from clip path (look for "clips/" segment)
+  - centerContent() from statsview.go is reusable for any full-screen overlay panel
+  - The SQL uses CASE/WHEN to derive status from finished_at/error_at columns
 ---
 

@@ -64,6 +64,14 @@ func (m *Model) renderColumn1(width, height int) string {
 		lines = append(lines, strings.Split(infoBox, "\n")...)
 	}
 
+	// Export progress bar (only when active)
+	if m.exportProgress.Active {
+		exportBox := components.ExportProgress(m.exportProgress, width)
+		if exportBox != "" {
+			lines = append(lines, strings.Split(exportBox, "\n")...)
+		}
+	}
+
 	return layout.Container{Width: width, Height: height}.Render(strings.Join(lines, "\n"))
 }
 
