@@ -25,34 +25,9 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 
 	var sections []string
 
-	// Title
-	titleStyle := lipgloss.NewStyle().
-		Foreground(styles.Cyan).
-		Bold(true)
-	sections = append(sections, titleStyle.Render("Live Stats"))
-	sections = append(sections, "")
-
-	// --- Stats summary ---
 	summaryHeaderStyle := lipgloss.NewStyle().
 		Foreground(styles.Pink).
 		Bold(true)
-	sections = append(sections, summaryHeaderStyle.Render("Summary"))
-
-	noteCount := 0
-	tackleCount := 0
-	for _, item := range items {
-		if item.Type == ItemTypeNote {
-			noteCount++
-		} else {
-			tackleCount++
-		}
-	}
-
-	infoStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
-	sections = append(sections, infoStyle.Render(fmt.Sprintf(" Notes:   %d", noteCount)))
-	sections = append(sections, infoStyle.Render(fmt.Sprintf(" Tackles: %d", tackleCount)))
-	sections = append(sections, infoStyle.Render(fmt.Sprintf(" Total:   %d", noteCount+tackleCount)))
-	sections = append(sections, "")
 
 	// --- Bar graph of event distribution ---
 	sections = append(sections, summaryHeaderStyle.Render("Event Distribution"))

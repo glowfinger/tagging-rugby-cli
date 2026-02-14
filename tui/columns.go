@@ -19,6 +19,25 @@ func (m *Model) renderColumn1(width, height int) string {
 	miniPlayer := components.RenderMiniPlayer(m.statusBar, width, false)
 	lines = append(lines, strings.Split(miniPlayer, "\n")...)
 
+	// Summary counts box
+	noteCount := 0
+	tackleCount := 0
+	for _, item := range m.notesList.Items {
+		if item.Type == components.ItemTypeNote {
+			noteCount++
+		} else {
+			tackleCount++
+		}
+	}
+	summaryStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
+	summaryLines := []string{
+		summaryStyle.Render(fmt.Sprintf(" Notes:   %d", noteCount)),
+		summaryStyle.Render(fmt.Sprintf(" Tackles: %d", tackleCount)),
+		summaryStyle.Render(fmt.Sprintf(" Total:   %d", noteCount+tackleCount)),
+	}
+	summaryBox := components.RenderInfoBox("Summary", summaryLines, width)
+	lines = append(lines, strings.Split(summaryBox, "\n")...)
+
 	// Current tag detail card (selected item) — bordered box
 	item := m.notesList.GetSelectedItem()
 	if item != nil {
