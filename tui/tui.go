@@ -243,6 +243,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// updateSearchMatches recomputes search matches based on current search input.
+func (m *Model) updateSearchMatches() {
+	query := strings.ToLower(m.searchInput.Input)
+	if query == "" {
+		m.searchInput.Matches = nil
+		m.searchInput.CurrentMatch = 0
+		return
+	}
+
+	var matches []int
+	for i, item := range m.notesList.Items {
+		// Search across text, ID, player, and category
+		idStr := fmt.Sprintf("%d", item.ID)
+		if strings.Contains(strings.ToLower(item.Text), query) ||
+			strings.Contains(idStr, query) ||
+			strings.Contains(strings.ToLower(item.Player), query) ||
+			strings.Contains(strings.ToLower(item.Category), query) {
+			matches = append(matches, i)
+		}
+	}
+	m.searchInput.Matches = matches
+	m.searchInput.CurrentMatch = 0
+}
+
 // handleSearchInput handles key events when the search input is focused.
 func (m *Model) handleSearchInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -252,6 +276,7 @@ func (m *Model) handleSearchInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "backspace":
 		m.searchInput.Backspace()
+		m.updateSearchMatches()
 		return m, nil
 	case "left":
 		m.searchInput.MoveCursorLeft()
@@ -265,6 +290,7 @@ func (m *Model) handleSearchInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Insert printable characters
 		if len(msg.String()) == 1 {
 			m.searchInput.InsertChar(rune(msg.String()[0]))
+			m.updateSearchMatches()
 		}
 		return m, nil
 	}

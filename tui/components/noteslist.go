@@ -54,7 +54,7 @@ type NotesListState struct {
 // It displays notes and tackles sorted by timestamp.
 // The visible row count is derived from the height parameter (height - 1 for the header row).
 // The currentTimePos parameter is used to auto-scroll to show notes near the current video timestamp.
-func NotesList(state NotesListState, width, height int, currentTimePos float64) string {
+func NotesList(state NotesListState, width, height int, currentTimePos float64, matches []int, currentMatch int) string {
 	// Compute visible rows from height (subtract 1 for header row)
 	visibleRows := height - 1
 	if visibleRows <= 0 {
@@ -125,6 +125,16 @@ func NotesList(state NotesListState, width, height int, currentTimePos float64) 
 		state.ScrollOffset = maxOffset
 	}
 
+	// Build a set of match indices for O(1) lookup
+	matchSet := make(map[int]bool, len(matches))
+	for _, idx := range matches {
+		matchSet[idx] = true
+	}
+	currentMatchIdx := -1
+	if len(matches) > 0 && currentMatch >= 0 && currentMatch < len(matches) {
+		currentMatchIdx = matches[currentMatch]
+	}
+
 	// Render visible rows
 	for row := 0; row < visibleRows; row++ {
 		itemIndex := state.ScrollOffset + row
@@ -132,7 +142,9 @@ func NotesList(state NotesListState, width, height int, currentTimePos float64) 
 			item := state.Items[itemIndex]
 			isSelected := itemIndex == state.SelectedIndex
 			rowNum := itemIndex + 1
-			lines = append(lines, renderTableRow(item, isSelected, rowNum, rowWidth, idWidth, timeWidth, catWidth, textWidth, width))
+			isMatch := matchSet[itemIndex]
+			isCurrentMatch := itemIndex == currentMatchIdx
+			lines = append(lines, renderTableRow(item, isSelected, isMatch, isCurrentMatch, rowNum, rowWidth, idWidth, timeWidth, catWidth, textWidth, width))
 		} else {
 			// Empty row
 			lines = append(lines, "")
@@ -177,7 +189,7 @@ func (s *NotesListState) scrollToCurrentTime(currentTimePos float64, visibleRows
 }
 
 // renderTableRow renders a single table row.
-func renderTableRow(item ListItem, selected bool, rowNum, rowWidth, idWidth, timeWidth, catWidth, textWidth, fullWidth int) string {
+func renderTableRow(item ListItem, selected, isMatch, isCurrentMatch bool, rowNum, rowWidth, idWidth, timeWidth, catWidth, textWidth, fullWidth int) string {
 	// Format row number
 	rowStr := fmt.Sprintf("#%d", rowNum)
 
@@ -210,9 +222,22 @@ func renderTableRow(item ListItem, selected bool, rowNum, rowWidth, idWidth, tim
 		catWidth, truncateStr(catStr, catWidth),
 		textWidth, text)
 
-	// Apply style based on selection
+	// Apply style based on match/selection state
+	// Priority: currentMatch > match > selected > default
 	var lineStyle lipgloss.Style
-	if selected {
+	if isCurrentMatch {
+		lineStyle = lipgloss.NewStyle().
+			Background(styles.Pink).
+			Foreground(styles.LightLavender).
+			Bold(true).
+			Width(fullWidth)
+	} else if isMatch {
+		lineStyle = lipgloss.NewStyle().
+			Background(styles.Amber).
+			Foreground(styles.LightLavender).
+			Bold(true).
+			Width(fullWidth)
+	} else if selected {
 		lineStyle = lipgloss.NewStyle().
 			Background(styles.BrightPurple).
 			Foreground(styles.LightLavender).
