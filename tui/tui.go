@@ -92,6 +92,8 @@ type Model struct {
 	editingNoteID int64
 	// editTackleFormResult holds the bound values for the edit tackle form
 	editTackleFormResult forms.EditTackleFormResult
+	// focus tracks which panel currently has input focus
+	focus FocusTarget
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -108,6 +110,7 @@ func NewModel(client *mpv.Client, db *sql.DB, videoPath string) *Model {
 
 // Init initializes the model. It returns an optional command to run.
 func (m *Model) Init() tea.Cmd {
+	m.focus = FocusNotes
 	// Start the ticker for polling mpv status
 	return tickCmd()
 }
