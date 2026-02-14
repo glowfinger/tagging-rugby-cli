@@ -110,11 +110,34 @@ func (m *Model) renderColumn3(width, height int) string {
 
 // renderColumn4 renders Column 4: Keybinding control groups (Playback, Navigation, Views).
 func (m *Model) renderColumn4(width, height int) string {
+	nameStyle := lipgloss.NewStyle().Foreground(styles.LightLavender)
+	shortcutStyle := lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true)
+
 	var lines []string
 
 	groups := components.GetControlGroups()
 	for i, group := range groups {
-		box := components.RenderControlBox(group, width)
+		// Find max control name width for alignment within this group
+		maxNameW := 0
+		for _, sg := range group.SubGroups {
+			for _, c := range sg {
+				if len(c.Name) > maxNameW {
+					maxNameW = len(c.Name)
+				}
+			}
+		}
+
+		// Flatten all sub-groups into contiguous rows (no dividers)
+		var contentLines []string
+		for _, sg := range group.SubGroups {
+			for _, c := range sg {
+				namePart := nameStyle.Render(fmt.Sprintf("%-*s", maxNameW, c.Name))
+				shortcutPart := shortcutStyle.Render("[ " + c.Shortcut + " ]")
+				contentLines = append(contentLines, " "+namePart+"  "+shortcutPart)
+			}
+		}
+
+		box := components.RenderInfoBox(group.Name, contentLines, width)
 		lines = append(lines, box)
 
 		// 1 blank line gap between bordered containers

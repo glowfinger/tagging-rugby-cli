@@ -1,125 +1,56 @@
 {
   "project": "tagging-rugby-cli",
-  "branchName": "ralph/tui-layout-update",
-  "description": "TUI Layout Update - Containerize all sections with RenderInfoBox, remove column dividers, simplify Playback card, add MPV video status, move Summary to column 1",
+  "branchName": "ralph/control-box-rounded",
+  "description": "Replace RenderControlBox tab-header style with RenderInfoBox rounded design for column 4 control groups, remove sub-group dividers, delete dead RenderControlBox function",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Replace Playback tab-header with RenderInfoBox style",
-      "description": "As a user, I want the Playback card to use the same clean single-line header style as Selected Tag so the UI looks consistent.",
+      "title": "Replace RenderControlBox with RenderInfoBox in renderColumn4",
+      "description": "As a user, I want the control groups in column 4 to use the same rounded border style as all other containers so the UI looks consistent.",
       "acceptanceCriteria": [
-        "RenderMiniPlayer in tui/components/controls.go renders using RenderInfoBox(\"Playback\", contentLines, width) instead of the 3-line tab header and internal dividers",
-        "The 3-line tab header (line1 ┌──┐, line2 ┌┤ Playback ├┐, line3 │└──┘└───┐) is completely removed",
-        "The 2 internal ├───┤ horizontal dividers between content rows are removed",
-        "Content lines are: play/pause + step size, time position, overlay status — all plain rows inside the InfoBox",
-        "Mute icon (🔇) still appears on the status line when muted",
-        "The card is still centered horizontally when termWidth > cardWidth (centering logic preserved)",
-        "The showWarning mini-player warning line still works below the card",
-        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
-      ],
-      "priority": 1,
-      "passes": true,
-      "notes": "Key file: tui/components/controls.go, function RenderMiniPlayer (line ~260). Currently builds a 3-line tab header and uses renderRow() helper + divider lines. Replace the entire header+body construction with: (1) build contentLines []string with the status/time/overlay lines using textStyle, (2) call RenderInfoBox(\"Playback\", contentLines, cardWidth), (3) keep the centering logic that pads each line when termWidth > cardWidth. The renderRow helper and divider variable can be removed. RenderInfoBox is defined in the same file (line ~84). The cardWidth calculation (widest content line + 4) should remain to determine the width passed to RenderInfoBox."
-    },
-    {
-      "id": "US-002",
-      "title": "Add Video Open/Closed line to Playback card",
-      "description": "As a user, I want to see whether the mpv video player is currently connected so I know if my video is loaded.",
-      "acceptanceCriteria": [
-        "A new VideoOpen bool field is added to StatusBarState in tui/components/statusbar.go",
-        "RenderMiniPlayer includes a 'Video: Open' or 'Video: Closed' content line after the overlay line",
-        "The VideoOpen field is set based on m.client.IsConnected() in updateStatusFromMpv() in tui/tui.go (line ~1546)",
-        "When client is nil or not connected, VideoOpen is false (Video: Closed)",
-        "The video line uses the same textStyle as other Playback content lines",
-        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
-      ],
-      "priority": 2,
-      "passes": true,
-      "notes": "The mpv connection is via m.client (*mpv.Client) which has IsConnected() method. In updateStatusFromMpv() (tui/tui.go line ~1546), there's already a guard: if m.client == nil || !m.client.IsConnected() { return }. Add m.statusBar.VideoOpen = true after the guard (reaching that point means connected). Also set m.statusBar.VideoOpen = false in the early return case (or before the guard). StatusBarState is defined in tui/components/statusbar.go. The video line in RenderMiniPlayer should be added to the contentLines slice after the overlay line."
-    },
-    {
-      "id": "US-003",
-      "title": "Move Summary from column 3 to column 1",
-      "description": "As a user, I want to see the tag summary counts in column 1 below Playback so all status info is in one place.",
-      "acceptanceCriteria": [
-        "renderColumn1 in tui/columns.go renders a Summary section between Playback and Selected Tag",
-        "Summary is wrapped in RenderInfoBox(\"Summary\", contentLines, width) using the same style as Selected Tag",
-        "Summary content shows: ' Notes:   N', ' Tackles: N', ' Total:   N' with LightLavender foreground",
-        "Count logic iterates m.notesList.Items counting ItemTypeNote vs ItemTypeTackle (components.ItemTypeNote, components.ItemTypeTackle)",
-        "The Summary section (header, 3 count lines, blank line after) is removed from StatsPanel in tui/components/statspanel.go",
-        "The 'Live Stats' title and blank line at the top of StatsPanel are also removed",
-        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
-      ],
-      "priority": 3,
-      "passes": true,
-      "notes": "In renderColumn1 (tui/columns.go line ~15), after the miniPlayer lines and before the selected tag detail, add the Summary box. Build contentLines with the 3 count lines using fmt.Sprintf and LightLavender style, then call components.RenderInfoBox(\"Summary\", contentLines, width). In StatsPanel (tui/components/statspanel.go), remove lines ~29-56 (the titleStyle 'Live Stats', blank line, summaryHeaderStyle 'Summary', 3 infoStyle count lines, and trailing blank line). The function should start directly with the Event Distribution section."
-    },
-    {
-      "id": "US-004",
-      "title": "Wrap Notes List in RenderInfoBox container",
-      "description": "As a user, I want the notes list to have a visible border and title so it's clearly delineated.",
-      "acceptanceCriteria": [
-        "renderColumn2 in tui/columns.go wraps NotesList output in RenderInfoBox(\"Notes\", notesLines, width)",
-        "The height passed to NotesList is reduced by 2 to account for InfoBox top+bottom border lines",
-        "NotesList output string is split into []string lines for RenderInfoBox contentLines parameter",
-        "Scrolling and auto-scroll to current timestamp still work correctly",
-        "Empty state ('No notes yet') renders inside the box",
+        "renderColumn4 in tui/columns.go builds content lines for each control group and passes them to components.RenderInfoBox(group.Name, contentLines, width)",
+        "renderColumn4 no longer calls components.RenderControlBox",
+        "Each control row is formatted as ' Name    [ Shortcut ]' with left-aligned name (LightLavender) and shortcut (Cyan bold [ Shortcut ])",
+        "Names are left-padded to the max name width within each group for alignment",
+        "No horizontal dividers between sub-groups — all controls listed as plain contiguous rows",
+        "The 1 blank line gap between control group boxes is preserved",
         "The outer layout.Container call remains to guarantee exact column dimensions",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
-      "priority": 4,
-      "passes": true,
-      "notes": "In renderColumn2 (tui/columns.go line ~71), change the flow: (1) compute innerHeight = height - 2 (for InfoBox borders), (2) call components.NotesList(m.notesList, width-2, innerHeight, m.statusBar.TimePos) — note width-2 since InfoBox adds 2 border chars, (3) split the result on newlines to get contentLines []string, (4) call components.RenderInfoBox(\"Notes\", contentLines, width), (5) wrap in layout.Container as before. The NotesList width should be width-2 since RenderInfoBox uses innerWidth = width-2 for content."
+      "priority": 1,
+      "passes": false,
+      "notes": "In renderColumn4 (tui/columns.go line ~112), replace the call to components.RenderControlBox(group, width) with inline row building. For each ControlGroup: (1) Find maxNameW by iterating all SubGroups' controls. (2) Flatten all SubGroups into a single list of rows (no dividers). (3) Format each row: namePart = nameStyle.Render(fmt.Sprintf(\"%-*s\", maxNameW, c.Name)), shortcutPart = shortcutStyle.Render(\"[ \" + c.Shortcut + \" ]\"), contentStr = \" \" + namePart + \"  \" + shortcutPart. The leading space provides padding inside the InfoBox. (4) Collect rows into contentLines []string. (5) Call components.RenderInfoBox(group.Name, contentLines, width). Styles needed: nameStyle = lipgloss.NewStyle().Foreground(styles.LightLavender), shortcutStyle = lipgloss.NewStyle().Foreground(styles.Cyan).Bold(true). These imports are already in tui/columns.go."
     },
     {
-      "id": "US-005",
-      "title": "Wrap Event Distribution and Tackle Stats in RenderInfoBox containers",
-      "description": "As a user, I want each stats section to have its own bordered container so column 3 matches the containerized style used everywhere else.",
+      "id": "US-002",
+      "title": "Delete RenderControlBox function",
+      "description": "As a developer, I want dead code removed so the codebase stays clean.",
       "acceptanceCriteria": [
-        "StatsPanel wraps the Event Distribution bar graph in RenderInfoBox(\"Event Distribution\", lines, width)",
-        "StatsPanel wraps the Tackle Stats table in RenderInfoBox(\"Tackle Stats\", lines, width)",
-        "The plain-text 'Event Distribution' and 'Tackle Stats' headers (summaryHeaderStyle) are removed since InfoBox titles replace them",
-        "Bar graph and tackle table content render correctly inside the boxes",
-        "Empty states ('No events yet', 'No tackle data') render inside their respective boxes",
-        "The two boxes are joined with a blank line between them",
+        "The RenderControlBox function is deleted from tui/components/controls.go (the function and its docstring/wireframe comment)",
+        "No remaining references to RenderControlBox exist in the codebase (verify with grep)",
+        "The 'ansi' import (charmbracelet/x/ansi) is removed from controls.go since RenderControlBox was its only user (line 229 was the only ansi.Truncate call)",
+        "All other imports in controls.go are preserved (fmt, strings, lipgloss, timeutil, styles are still used by other functions)",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
-      "priority": 5,
-      "passes": true,
-      "notes": "In StatsPanel (tui/components/statspanel.go), refactor to build two separate []string slices — one for event distribution content lines, one for tackle stats content lines. Remove the summaryHeaderStyle.Render() calls for both headers. Call RenderInfoBox(\"Event Distribution\", eventLines, width) and RenderInfoBox(\"Tackle Stats\", tackleLines, width). Join them with a blank line: eventBox + '\\n' + '' + '\\n' + tackleBox. RenderInfoBox is in the same package (controls.go). The bar graph lines (labelStyle + barStyle + countStyle formatting) become the eventLines slice. The tackle header row + TOTAL row + player rows become the tackleLines slice."
+      "priority": 2,
+      "passes": false,
+      "notes": "Delete the entire RenderControlBox function from tui/components/controls.go — this includes the docstring comment block (lines ~133-144 with wireframe) and the function body (lines ~145-246). After deletion, remove the ansi import (line 9: \"github.com/charmbracelet/x/ansi\") since ansi.Truncate on line 229 was the only usage. Keep all other imports: fmt (used by RenderVideoBox line ~277), strings (used throughout), lipgloss (used throughout), timeutil (used by RenderVideoBox), styles (used throughout). Run 'CGO_ENABLED=0 go vet ./...' to verify no unused imports remain."
     },
     {
-      "id": "US-006",
-      "title": "Remove column dividers from JoinColumns",
-      "description": "As a user, I want the columns to sit flush without vertical separators for a cleaner look.",
+      "id": "US-003",
+      "title": "Update TUI-ARCHITECTURE.md to reflect control box change",
+      "description": "As a developer, I want the architecture doc to accurately describe the control rendering.",
       "acceptanceCriteria": [
-        "JoinColumns in tui/layout/columns.go no longer inserts the purple │ border string between columns",
-        "Columns are concatenated directly with no separator character",
-        "ComputeColumnWidths sets borders = 0 in all code paths (currently set to 2 or 3)",
-        "Column 2 gains the extra 2-3 cells of width previously consumed by separator characters",
-        "Layout does not break at 1-column, 2-column, 3-column, or 4-column responsive breakpoints",
-        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
-      ],
-      "priority": 6,
-      "passes": true,
-      "notes": "Two files to change: (1) tui/layout/columns.go — In ComputeColumnWidths (line ~25), change all 'borders = 3', 'borders = 2', 'borders = 1' assignments to 'borders = 0'. In JoinColumns (line ~77), change strings.Join(parts, borderStr) to strings.Join(parts, \"\") and remove the borderStr variable and its lipgloss import. (2) Check if styles import can be removed from this file after removing borderStr. The usable width calculation already uses 'borders' so setting to 0 automatically gives col2 the extra space."
-    },
-    {
-      "id": "US-007",
-      "title": "Update TUI-ARCHITECTURE.md to reflect layout changes",
-      "description": "As a developer, I want the architecture doc to accurately describe the new layout so I can trust it as a reference.",
-      "acceptanceCriteria": [
-        "The Column Rendering table in TUI-ARCHITECTURE.md reflects that Column 1 now shows Playback + Summary + Selected Tag",
-        "The Column 3 description notes that Summary is no longer in StatsPanel",
-        "The JoinColumns description states columns are joined flush with no separators",
-        "The ComputeColumnWidths description notes borders = 0 (no separator overhead)",
-        "The RenderMiniPlayer description states it uses RenderInfoBox style instead of tab-header",
+        "The Directory Structure section (line ~27) for controls.go removes 'RenderControlBox()' from the description",
+        "The Controls section (line ~153) removes the RenderControlBox signature line",
+        "The Controls section adds a note that control groups are rendered via RenderInfoBox in renderColumn4",
+        "The ControlGroup struct description (line ~154) is preserved since it's still used",
         "No other sections are modified unnecessarily",
         "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
       ],
-      "priority": 7,
-      "passes": true,
-      "notes": "File: tui/TUI-ARCHITECTURE.md. Key sections to update: Column Rendering table (line ~64) — Col1 content becomes 'Playback status, summary counts, selected tag detail'; Col3 becomes 'Event distribution bar graph, tackle stats table'. JoinColumns section (line ~111) — remove mention of 'purple │ separators', say 'flush with no separators'. ComputeColumnWidths — mention borders are 0. Update the RenderMiniPlayer docblock-style description if present."
+      "priority": 3,
+      "passes": false,
+      "notes": "File: tui/TUI-ARCHITECTURE.md. Three spots to update: (1) Line ~27 directory structure: controls.go description currently says 'ControlGroup, GetControlGroups(), RenderControlBox()' — remove 'RenderControlBox()'. (2) Line ~153: remove the line '- **Signature:** `RenderControlBox(group ControlGroup, width int) string` — renders bordered box'. (3) Add a note near the Controls section that control groups are now rendered using RenderInfoBox in renderColumn4 (e.g., '- Control groups in column 4 are rendered by `renderColumn4` using `RenderInfoBox` for each group'). Keep the ControlGroup struct description on line ~154."
     }
   ]
 }
