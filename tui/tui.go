@@ -201,6 +201,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleCommandInput(msg)
 		}
 
+		// Tab / Shift+Tab for focus cycling (always available in normal mode)
+		switch msg.String() {
+		case "tab":
+			m.cycleFocus(true)
+			return m, nil
+		case "shift+tab":
+			m.cycleFocus(false)
+			return m, nil
+		}
+
 		// Normal mode key handling
 		switch msg.String() {
 		case "?":
