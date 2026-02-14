@@ -5,14 +5,14 @@
 ## Codebase Patterns
 - Use `CGO_ENABLED=0` for all Go build/vet commands (modernc.org/sqlite requirement)
 - Go binary at `/home/node/go/bin/go` — export PATH before commands
-- RenderInfoBox in tui/components/controls.go (line ~84) — reuse for all containers
-- RenderMiniPlayer in tui/components/controls.go (line ~260) — refactor to use RenderInfoBox
-- StatusBarState in tui/components/statusbar.go — add VideoOpen bool field
-- mpv connection state: m.client.IsConnected() in tui/tui.go
-- updateStatusFromMpv at tui/tui.go line ~1546 — where to set VideoOpen
-- StatsPanel in tui/components/statspanel.go — remove Summary, wrap sections in InfoBox
-- renderColumn1/2 in tui/columns.go — add Summary box, wrap NotesList
-- JoinColumns + ComputeColumnWidths in tui/layout/columns.go — remove borders
+- RenderInfoBox in tui/components/controls.go — the standard container for all UI sections
+- RenderMiniPlayer now uses RenderInfoBox internally (no more 3-line tab header)
+- When wrapping content in RenderInfoBox, reduce width by 2 and height by 2 for border overhead
+- StatusBarState includes VideoOpen field — set in updateStatusFromMpv based on m.client.IsConnected()
+- StatsPanel wraps Event Distribution and Tackle Stats each in their own RenderInfoBox
+- Summary counts are in renderColumn1 (not StatsPanel) — between Playback and Selected Tag
+- NotesList output is split on "\n" and wrapped in RenderInfoBox("Notes", ...) in renderColumn2
+- JoinColumns concatenates columns flush (no separators); ComputeColumnWidths uses borders=0
 
 ---
 
