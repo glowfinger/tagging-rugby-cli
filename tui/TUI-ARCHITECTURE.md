@@ -27,7 +27,7 @@ tui/
     noteslist.go      # ListItem, NotesListState, NotesList() — scrollable tag table
     searchinput.go    # SearchInputState, SearchInput() — search/command input with match indicator
     modeindicator.go  # ModeIndicator() — displays current focus and input mode
-    controls.go       # ControlGroup, GetControlGroups(), RenderControlBox(), RenderInfoBox()
+    controls.go       # ControlGroup, GetControlGroups(), ControlGroupLines(), RenderInfoBox(), RenderControlBox() (Deprecated)
     statspanel.go     # StatsPanel() — stats summary, event distribution, tackle stats table
     statsview.go      # StatsViewState, PlayerStats, StatsView() — full-screen stats overlay
     help.go           # HelpOverlay() — keybinding reference overlay
@@ -69,7 +69,7 @@ Each column is rendered independently by a method on `*Model`:
 | 1 | `renderColumn1(width, height)` | Video status, mode indicator, summary counts, selected tag detail |
 | 2 | `renderColumn2(width, height)` | Search input (3 lines) + scrollable notes/tackles table (wrapped in InfoBox) |
 | 3 | `renderColumn3(width, height)` | Event distribution bar graph, tackle stats table |
-| 4 | `renderColumn4(width, height)` | Keybinding control groups (Playback, Navigation, Views) |
+| 4 | `renderColumn4(width, height)` | Keybinding control groups via RenderInfoBox (Playback, Navigation, Views) |
 
 Each method wraps its output in `layout.Container{Width, Height}.Render(...)` to
 guarantee exact dimensions. The containerized columns are then joined by
@@ -171,8 +171,9 @@ Each component in `tui/components/` follows the pattern:
 - **Signature:** `GetControlGroups() []ControlGroup` — returns keybinding groups
 - **Signature:** `RenderInfoBox(title string, contentLines []string, width int, focused bool) string` — generic bordered box; when focused=true, border uses Pink instead of Purple
 - **Signature:** `RenderVideoBox(state StatusBarState, width int, showWarning bool, focused bool) string` — renders video status card using `RenderInfoBox` style; focused=true gives Pink border when Video panel has focus
-- **Signature:** `RenderControlBox(group ControlGroup, width int) string` — renders bordered box
-- `ControlGroup{Name, SubGroups [][]Control}` — sub-groups separated by dividers
+- **Signature:** `ControlGroupLines(group ControlGroup, innerWidth int) []string` — converts a ControlGroup into content lines for RenderInfoBox; sub-groups separated by blank lines
+- **Signature:** `RenderControlBox(group ControlGroup, width int) string` — (Deprecated) renders bordered box with square tab header; use RenderInfoBox with ControlGroupLines instead
+- `ControlGroup{Name, SubGroups [][]Control}` — sub-groups separated by blank lines (RenderInfoBox) or dividers (deprecated RenderControlBox)
 
 ### StatsPanel (`statspanel.go`)
 
