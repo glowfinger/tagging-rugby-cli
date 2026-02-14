@@ -19,6 +19,23 @@ func (m *Model) renderColumn1(width, height int) string {
 	videoBox := components.RenderVideoBox(m.statusBar, width, false)
 	lines = append(lines, strings.Split(videoBox, "\n")...)
 
+	// Mode indicator
+	focusName := "Notes"
+	switch m.focus {
+	case FocusVideo:
+		focusName = "Video"
+	case FocusSearch:
+		focusName = "Search"
+	}
+	mode := "Normal"
+	if m.searchInput.Mode == "command" {
+		mode = "Command"
+	} else if m.focus == FocusSearch {
+		mode = "Search"
+	}
+	modeBox := components.ModeIndicator(focusName, mode, width)
+	lines = append(lines, strings.Split(modeBox, "\n")...)
+
 	// Summary counts box
 	noteCount := 0
 	tackleCount := 0
