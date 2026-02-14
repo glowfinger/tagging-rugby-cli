@@ -24,7 +24,7 @@ tui/
     timeline.go       # Timeline() — progress bar with event markers
     commandinput.go   # CommandInputState, CommandInput() — : command mode
     noteslist.go      # ListItem, NotesListState, NotesList() — scrollable tag table
-    controls.go       # ControlGroup, GetControlGroups(), RenderControlBox()
+    controls.go       # ControlGroup, GetControlGroups(), RenderInfoBox()
     statspanel.go     # StatsPanel() — stats summary, event distribution, tackle stats table
     statsview.go      # StatsViewState, PlayerStats, StatsView() — full-screen stats overlay
     help.go           # HelpOverlay() — keybinding reference overlay
@@ -150,8 +150,7 @@ Each component in `tui/components/` follows the pattern:
 
 - **Signature:** `GetControlGroups() []ControlGroup` — returns keybinding groups
 - **Signature:** `RenderMiniPlayer(state StatusBarState, termWidth int, showWarning bool) string` — renders compact playback card using `RenderInfoBox` style
-- **Signature:** `RenderControlBox(group ControlGroup, width int) string` — renders bordered box
-- `ControlGroup{Name, SubGroups [][]Control}` — sub-groups separated by dividers
+- `ControlGroup{Name, SubGroups [][]Control}` — control groups in column 4 are rendered by `renderColumn4` using `RenderInfoBox` for each group
 
 ### StatsPanel (`statspanel.go`)
 
