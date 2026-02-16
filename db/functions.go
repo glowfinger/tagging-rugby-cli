@@ -51,21 +51,12 @@ func UpdateVideoStopTime(database *sql.DB, id int64, stopTime float64) error {
 }
 
 // InsertNote inserts a new note and returns its ID.
-func InsertNote(db *sql.DB, category string) (int64, error) {
-	result, err := db.Exec(InsertNoteSQL, category)
+func InsertNote(db *sql.DB, category string, videoID int64) (int64, error) {
+	result, err := db.Exec(InsertNoteSQL, category, videoID)
 	if err != nil {
 		return 0, fmt.Errorf("insert note: %w", err)
 	}
 	return result.LastInsertId()
-}
-
-// InsertNoteVideo inserts a note_videos row.
-func InsertNoteVideo(db *sql.DB, noteID int64, path string, size int64, duration float64, format string, stoppedAt float64) error {
-	_, err := db.Exec(InsertNoteVideoSQL, noteID, path, size, duration, format, stoppedAt)
-	if err != nil {
-		return fmt.Errorf("insert note video: %w", err)
-	}
-	return nil
 }
 
 // InsertNoteClip inserts a note_clips row.
@@ -123,9 +114,8 @@ func InsertNoteHighlight(db *sql.DB, noteID int64, highlightType string) error {
 }
 
 // InsertNoteWithChildren inserts a note and its related child records in a transaction.
-// It accepts the note category plus optional child records to insert.
+// It accepts the note category, video ID, plus optional child records to insert.
 type NoteChildren struct {
-	Videos     []NoteVideo
 	Clips      []NoteClip
 	Timings    []NoteTiming
 	Tackles    []NoteTackle
@@ -134,15 +124,15 @@ type NoteChildren struct {
 	Highlights []NoteHighlight
 }
 
-func InsertNoteWithChildren(database *sql.DB, category string, children NoteChildren) (int64, error) {
+func InsertNoteWithChildren(database *sql.DB, category string, videoID int64, children NoteChildren) (int64, error) {
 	tx, err := database.Begin()
 	if err != nil {
 		return 0, fmt.Errorf("begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	// Insert parent note
-	result, err := tx.Exec(InsertNoteSQL, category)
+	// Insert parent note with video_id
+	result, err := tx.Exec(InsertNoteSQL, category, videoID)
 	if err != nil {
 		return 0, fmt.Errorf("insert note: %w", err)
 	}
@@ -152,11 +142,6 @@ func InsertNoteWithChildren(database *sql.DB, category string, children NoteChil
 	}
 
 	// Insert child records
-	for _, v := range children.Videos {
-		if _, err := tx.Exec(InsertNoteVideoSQL, noteID, v.Path, v.Size, v.Duration, v.Format, v.StoppedAt); err != nil {
-			return 0, fmt.Errorf("insert note video: %w", err)
-		}
-	}
 	for _, c := range children.Clips {
 		if _, err := tx.Exec(InsertNoteClipSQL, noteID, c.Name, c.Duration, c.StartedAt, c.FinishedAt, c.ErrorAt, c.Error); err != nil {
 			return 0, fmt.Errorf("insert note clip: %w", err)
@@ -263,7 +248,7 @@ func UpdateNoteTiming(database *sql.DB, noteID int64, start, end float64) error 
 // SelectNoteByID returns a single note by ID.
 func SelectNoteByID(database *sql.DB, id int64) (*Note, error) {
 	var n Note
-	err := database.QueryRow(SelectNoteByIDSQL, id).Scan(&n.ID, &n.Category, &n.CreatedAt)
+	err := database.QueryRow(SelectNoteByIDSQL, id).Scan(&n.ID, &n.Category, &n.VideoID, &n.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -281,31 +266,12 @@ func SelectNotes(database *sql.DB) ([]Note, error) {
 	var notes []Note
 	for rows.Next() {
 		var n Note
-		if err := rows.Scan(&n.ID, &n.Category, &n.CreatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.Category, &n.VideoID, &n.CreatedAt); err != nil {
 			return nil, err
 		}
 		notes = append(notes, n)
 	}
 	return notes, rows.Err()
-}
-
-// SelectNoteVideosByNote returns all videos for a given note.
-func SelectNoteVideosByNote(database *sql.DB, noteID int64) ([]NoteVideo, error) {
-	rows, err := database.Query(SelectNoteVideosByNoteSQL, noteID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var videos []NoteVideo
-	for rows.Next() {
-		var v NoteVideo
-		if err := rows.Scan(&v.ID, &v.NoteID, &v.Path, &v.Size, &v.Duration, &v.Format, &v.StoppedAt); err != nil {
-			return nil, err
-		}
-		videos = append(videos, v)
-	}
-	return videos, rows.Err()
 }
 
 // SelectNoteClipsByNote returns all clips for a given note.

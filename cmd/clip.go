@@ -144,12 +144,9 @@ var clipEndCmd = &cobra.Command{
 			Timings: []db.NoteTiming{
 				{Start: startTimestamp, End: endTimestamp},
 			},
-			Videos: []db.NoteVideo{
-				{Path: videoPath, StoppedAt: startTimestamp},
-			},
 		}
 
-		noteID, err := db.InsertNoteWithChildren(database, "clip", children)
+		noteID, err := db.InsertNoteWithChildren(database, "clip", 0, children)
 		if err != nil {
 			return fmt.Errorf("failed to insert clip: %w", err)
 		}
@@ -368,12 +365,16 @@ var clipExportCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		// Get video path
-		videos, err := db.SelectNoteVideosByNote(database, noteID)
-		if err != nil || len(videos) == 0 {
-			return fmt.Errorf("no video found for note ID %d", noteID)
+		// Get video path via note's video_id
+		note, err := db.SelectNoteByID(database, noteID)
+		if err != nil {
+			return fmt.Errorf("no note found for ID %d: %w", noteID, err)
 		}
-		videoPath := videos[0].Path
+		video, err := db.SelectVideoByID(database, note.VideoID)
+		if err != nil {
+			return fmt.Errorf("no video found for note ID %d: %w", noteID, err)
+		}
+		videoPath := video.Path
 
 		// Get timing
 		timings, err := db.SelectNoteTimingByNote(database, noteID)

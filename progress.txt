@@ -2,54 +2,58 @@
 - Use `CGO_ENABLED=0` for all Go build/vet commands (required for modernc.org/sqlite)
 - Go binary is at `/home/node/go/bin/go` - use `export PATH="$PATH:/home/node/go/bin"` before Go commands
 - Database connection uses modernc.org/sqlite (pure Go implementation, no CGO)
-- Bubble Tea key strings: use "esc" (not "escape"), "enter", "tab", "backspace", "left", "right" for key handling
 - SQL queries live in `db/sql/*.sql` files, embedded via `go:embed` in `db/queries.go`
-- Three-column TUI layout uses padToWidth helper + manual row-by-row assembly (split lines, pad, join with border chars)
-- lipgloss.Width() accounts for ANSI escape sequences when measuring rendered string width
-- Column 1 renderColumn1() uses GetControlGroups() from controls.go — ControlGroup uses SubGroups [][]Control for divider placement
-- padToWidth() uses lipgloss.Width() to ANSI-aware pad AND truncate lines to exact column width
-- normalizeLines() ensures column line arrays are exactly the target height
-- Column 1 fixed width: `layout.Col1Width = 30` constant; ComputeColumnWidths always uses it
-- Use `ansi.Truncate()` from `charmbracelet/x/ansi` for ANSI+grapheme-aware truncation
-- Shared time formatting in `pkg/timeutil/timeutil.go` — `timeutil.FormatTime(seconds)` for H:MM:SS
-- Shared time parsing in `pkg/timeutil/timeutil.go` — `timeutil.ParseTimeToSeconds(str)` for HH:MM:SS, MM:SS, or raw seconds
-- Bordered control boxes: `components.RenderControlBox(group, width)` — tab header + box-drawing border + horizontal dividers between sub-groups
-- Mini player: `components.RenderMiniPlayer(state, fixedWidth, showWarning)` renders compact bordered card
-- RenderInfoBox(title, contentLines, width) — generic bordered info card, used for Selected Tag detail
-- Bordered containers on: notes list (col2), timeline, playback (mini player in col1), selected tag detail
-- Column separators removed — columns tile directly without border chars
-- mpv client has SetSpeed(float64) and GetSpeed() methods already implemented
-- huh form integration: store *huh.Form + result struct in Model, delegate Update/View, check State for completion
-- Edit tackle form: `forms.NewEditTackleForm(timestamp, endSeconds, result)` with `EditTackleFormResult`
-- Edit flow uses `editingNoteID` field (0=create, >0=edit) to distinguish save paths
 - db package cannot import tui/forms (circular dependency) — use db-package structs, let TUI map to form types
+- InsertNote and InsertNoteWithChildren now require videoID int64 parameter (replaces NoteChildren.Videos)
+- NoteVideo struct removed — use Video struct + note.VideoID instead
+- SelectNotes/SelectNoteByID now scan video_id field from notes table
 
 ---
 
-## 2026-02-12 - US-001
-- Added overlay indicator ("Overlay: on" / "Overlay: off") to RenderMiniPlayer in tui/components/controls.go
-- Updated column 1 plain-text playback card in tui/columns.go to always show overlay status (was conditional, now shows both on/off)
-- Overlay line appears after time line with divider in mini player card
-- Overlay width included in card auto-sizing calculation
-- Files changed: tui/components/controls.go, tui/columns.go
+## 2026-02-16 - US-001
+- Created `videos` table in create_tables.sql with columns: id, path, filename, extension, format, filesize, stop_time
+- Added `video_id INTEGER NOT NULL REFERENCES videos(id)` to notes table
+- Removed `note_videos` CREATE TABLE statement from create_tables.sql
+- Added `Video` struct to db/models.go with matching fields
+- Added `VideoID int64` field to `Note` struct
+- Kept `NoteVideo` struct as deprecated for build compatibility (callers still reference it)
+- Files changed: db/sql/create_tables.sql, db/models.go
 - **Learnings for future iterations:**
-  - RenderMiniPlayer signature is currently (state StatusBarState, termWidth int) — no fixed-width param yet
-  - Column 1 plain-text playback section in columns.go is separate from RenderMiniPlayer
-  - The mini player auto-sizes based on widest content line + 4 for borders
+  - Cannot remove NoteVideo struct until callers are updated (US-003/US-004) — keep it deprecated
+  - videos table must be created BEFORE notes table (notes references videos via FK)
 ---
 
-## 2026-02-12 - US-002
-- Removed the full-width status bar from the main View() layout in tui/tui.go
-- Form overlay views (confirm discard, note form, tackle form) now show RenderMiniPlayer at top instead of StatusBar
-- Error view now shows RenderMiniPlayer with showWarning=true instead of StatusBar
-- Added `showWarning` bool parameter to RenderMiniPlayer — warning line only rendered when true
-- Updated narrow terminal mini player call to pass showWarning=true
-- Changed colHeight from m.height - 5 to m.height - 4 to reclaim the freed status bar line
-- StatusBar function and StatusBarState struct remain unchanged (still available, still used as data container)
-- Help overlay and stats view remain unchanged (they already don't show the status bar)
-- Files changed: tui/tui.go, tui/components/controls.go
+## 2026-02-16 - US-002
+- Created 4 new SQL files: insert_video.sql, select_video_by_id.sql, select_video_by_path.sql, update_video_stop_time.sql
+- Added go:embed directives for all new SQL files in db/queries.go
+- Added 4 new Go functions: InsertVideo, SelectVideoByID, SelectVideoByPath, UpdateVideoStopTime in db/functions.go
+- Kept old insert_note_video.sql and select_note_videos_by_note.sql (marked deprecated) — still referenced by Go functions
+- Files changed: db/queries.go, db/functions.go, db/sql/insert_video.sql, db/sql/select_video_by_id.sql, db/sql/select_video_by_path.sql, db/sql/update_video_stop_time.sql
 - **Learnings for future iterations:**
-  - RenderMiniPlayer signature is now (state StatusBarState, termWidth int, showWarning bool)
-  - colHeight = m.height - 4 (timeline 2 lines + command input 1 line + 1 newline separator)
-  - StatusBar() function is NOT deleted — it remains in statusbar.go for potential future use
+  - Cannot remove old SQL files until the Go functions referencing them are also removed (US-003)
+  - Video CRUD functions follow same pattern as note child table functions (QueryRow for single, Exec for insert/update)
+  - UpdateVideoStopTime uses RowsAffected check + sql.ErrNoRows, matching UpdateNoteTiming pattern
+---
+
+## 2026-02-16 - US-003
+- Updated insert_note.sql to accept video_id: `INSERT INTO notes (category, video_id) VALUES (?, ?)`
+- Updated select_notes.sql and select_note_by_id.sql to include video_id in SELECT columns
+- Rewrote select_notes_with_video.sql to JOIN notes → videos via notes.video_id (no note_videos)
+- Updated InsertNote signature: now accepts `(db, category, videoID)` instead of `(db, category)`
+- Updated InsertNoteWithChildren signature: now accepts `(db, category, videoID, children)` — videoID is set on the note directly
+- Removed Videos field from NoteChildren struct
+- Removed InsertNoteVideo and SelectNoteVideosByNote functions from db/functions.go
+- Removed NoteVideo struct from db/models.go
+- Deleted insert_note_video.sql and select_note_videos_by_note.sql
+- Removed go:embed directives for deleted SQL files from db/queries.go
+- Updated all callers (cmd/clip.go, cmd/note.go, cmd/tackle.go, tui/tui.go) to use new signatures with videoID=0 placeholder
+- Replaced SelectNoteVideosByNote call in cmd/clip.go (export) with SelectNoteByID + SelectVideoByID
+- Removed unused variables (duration, videoPath) from callers that no longer create NoteVideo records
+- Files changed: db/functions.go, db/models.go, db/queries.go, db/sql/insert_note.sql, db/sql/select_notes.sql, db/sql/select_note_by_id.sql, db/sql/select_notes_with_video.sql, cmd/clip.go, cmd/note.go, cmd/tackle.go, tui/tui.go
+- Deleted: db/sql/insert_note_video.sql, db/sql/select_note_videos_by_note.sql
+- **Learnings for future iterations:**
+  - When removing a struct field used by callers, all callers must be updated in the same commit for build to pass
+  - Callers currently pass videoID=0 — US-004 must wire up real video lookup (InsertVideo/SelectVideoByPath) before runtime works
+  - Inline SQL queries in tui/tui.go and cmd/*.go still reference note_videos table — US-004 must update these
+  - cmd/clip.go export command now uses SelectNoteByID + SelectVideoByID chain instead of SelectNoteVideosByNote
 ---

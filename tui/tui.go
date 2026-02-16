@@ -636,16 +636,10 @@ func (m *Model) saveNoteFromForm() (tea.Model, tea.Cmd) {
 	result := m.noteFormResult
 	timestamp := m.noteFormTimestamp
 
-	// Get video duration for video child record
-	duration, _ := m.client.GetDuration()
-
 	// Build children
 	children := db.NoteChildren{
 		Timings: []db.NoteTiming{
 			{Start: timestamp, End: timestamp},
-		},
-		Videos: []db.NoteVideo{
-			{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
 		},
 		Details: []db.NoteDetail{
 			{Type: "text", Note: result.Text},
@@ -659,7 +653,7 @@ func (m *Model) saveNoteFromForm() (tea.Model, tea.Cmd) {
 	}
 
 	// Save note with children
-	noteID, err := db.InsertNoteWithChildren(m.db, category, children)
+	noteID, err := db.InsertNoteWithChildren(m.db, category, 0, children)
 	m.noteForm = nil
 
 	if err != nil {
@@ -857,16 +851,10 @@ func (m *Model) saveTackleFromForm() (tea.Model, tea.Cmd) {
 	var attempt int
 	fmt.Sscanf(result.Attempt, "%d", &attempt)
 
-	// Get video duration for video child record
-	duration, _ := m.client.GetDuration()
-
 	// Build children
 	children := db.NoteChildren{
 		Timings: []db.NoteTiming{
 			{Start: timestamp, End: timestamp},
-		},
-		Videos: []db.NoteVideo{
-			{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
 		},
 		Tackles: []db.NoteTackle{
 			{Player: result.Player, Attempt: attempt, Outcome: result.Outcome},
@@ -902,7 +890,7 @@ func (m *Model) saveTackleFromForm() (tea.Model, tea.Cmd) {
 	}
 
 	// Category is always "tackle" — auto-set, not a form field
-	noteID, err := db.InsertNoteWithChildren(m.db, "tackle", children)
+	noteID, err := db.InsertNoteWithChildren(m.db, "tackle", 0, children)
 	m.tackleForm = nil
 
 	if err != nil {
@@ -1330,14 +1318,9 @@ func (m *Model) addNote(text, category, _, _ string) (string, error) {
 		return "", fmt.Errorf("failed to get timestamp: %w", err)
 	}
 
-	duration, _ := m.client.GetDuration()
-
 	children := db.NoteChildren{
 		Timings: []db.NoteTiming{
 			{Start: timestamp, End: timestamp},
-		},
-		Videos: []db.NoteVideo{
-			{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
 		},
 	}
 
@@ -1351,7 +1334,7 @@ func (m *Model) addNote(text, category, _, _ string) (string, error) {
 		category = "note"
 	}
 
-	noteID, err := db.InsertNoteWithChildren(m.db, category, children)
+	noteID, err := db.InsertNoteWithChildren(m.db, category, 0, children)
 	if err != nil {
 		return "", fmt.Errorf("failed to insert note: %w", err)
 	}
@@ -1419,15 +1402,12 @@ func (m *Model) addClip(start, end float64, description string) (int64, error) {
 		Timings: []db.NoteTiming{
 			{Start: start, End: end},
 		},
-		Videos: []db.NoteVideo{
-			{Path: m.videoPath, StoppedAt: start},
-		},
 		Clips: []db.NoteClip{
 			{Name: description, Duration: clipDuration},
 		},
 	}
 
-	return db.InsertNoteWithChildren(m.db, "clip", children)
+	return db.InsertNoteWithChildren(m.db, "clip", 0, children)
 }
 
 // countClips counts clip notes for the current video.
@@ -1491,21 +1471,16 @@ func (m *Model) addTackle(player, _ string, attempt int, outcome string) (string
 		return "", fmt.Errorf("failed to get timestamp: %w", err)
 	}
 
-	duration, _ := m.client.GetDuration()
-
 	children := db.NoteChildren{
 		Timings: []db.NoteTiming{
 			{Start: timestamp, End: timestamp},
-		},
-		Videos: []db.NoteVideo{
-			{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
 		},
 		Tackles: []db.NoteTackle{
 			{Player: player, Attempt: attempt, Outcome: outcome},
 		},
 	}
 
-	noteID, err := db.InsertNoteWithChildren(m.db, "tackle", children)
+	noteID, err := db.InsertNoteWithChildren(m.db, "tackle", 0, children)
 	if err != nil {
 		return "", fmt.Errorf("failed to insert tackle: %w", err)
 	}

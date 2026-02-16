@@ -60,16 +60,6 @@ var tackleAddCmd = &cobra.Command{
 			return fmt.Errorf("failed to get current timestamp: %w", err)
 		}
 
-		// Get video path from mpv
-		videoPathRaw, err := client.GetProperty("path")
-		if err != nil {
-			return fmt.Errorf("failed to get video path: %w", err)
-		}
-		videoPath, ok := videoPathRaw.(string)
-		if !ok {
-			return fmt.Errorf("unexpected video path type: %T", videoPathRaw)
-		}
-
 		// Open database
 		database, err := db.Open()
 		if err != nil {
@@ -85,12 +75,9 @@ var tackleAddCmd = &cobra.Command{
 			Timings: []db.NoteTiming{
 				{Start: timestamp, End: timestamp},
 			},
-			Videos: []db.NoteVideo{
-				{Path: videoPath, StoppedAt: timestamp},
-			},
 		}
 
-		noteID, err := db.InsertNoteWithChildren(database, "tackle", children)
+		noteID, err := db.InsertNoteWithChildren(database, "tackle", 0, children)
 		if err != nil {
 			return fmt.Errorf("failed to insert tackle: %w", err)
 		}

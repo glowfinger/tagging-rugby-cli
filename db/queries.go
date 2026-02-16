@@ -39,10 +39,6 @@ var UpdateVideoStopTimeSQL string
 
 // Note child table insert queries
 
-// Deprecated: Will be removed in US-003 along with InsertNoteVideo function
-//go:embed sql/insert_note_video.sql
-var InsertNoteVideoSQL string
-
 //go:embed sql/insert_note_clip.sql
 var InsertNoteClipSQL string
 
@@ -62,10 +58,6 @@ var InsertNoteDetailSQL string
 var InsertNoteHighlightSQL string
 
 // Note child table select queries
-
-// Deprecated: Will be removed in US-003 along with SelectNoteVideosByNote function
-//go:embed sql/select_note_videos_by_note.sql
-var SelectNoteVideosByNoteSQL string
 
 //go:embed sql/select_note_clips_by_note.sql
 var SelectNoteClipsByNoteSQL string

@@ -40,19 +40,6 @@ var noteAddCmd = &cobra.Command{
 			return fmt.Errorf("failed to get current timestamp: %w", err)
 		}
 
-		// Get video path from mpv
-		videoPathRaw, err := client.GetProperty("path")
-		if err != nil {
-			return fmt.Errorf("failed to get video path: %w", err)
-		}
-		videoPath, ok := videoPathRaw.(string)
-		if !ok {
-			return fmt.Errorf("unexpected video path type: %T", videoPathRaw)
-		}
-
-		// Get video duration
-		duration, _ := client.GetDuration()
-
 		// Open database
 		database, err := db.Open()
 		if err != nil {
@@ -65,9 +52,6 @@ var noteAddCmd = &cobra.Command{
 			Timings: []db.NoteTiming{
 				{Start: timestamp, End: timestamp},
 			},
-			Videos: []db.NoteVideo{
-				{Path: videoPath, Duration: duration, StoppedAt: timestamp},
-			},
 		}
 
 		// Add detail if text was provided
@@ -78,7 +62,7 @@ var noteAddCmd = &cobra.Command{
 		}
 
 		// Insert note with children
-		noteID, err := db.InsertNoteWithChildren(database, category, children)
+		noteID, err := db.InsertNoteWithChildren(database, category, 0, children)
 		if err != nil {
 			return fmt.Errorf("failed to insert note: %w", err)
 		}

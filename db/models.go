@@ -21,18 +21,6 @@ type Note struct {
 	CreatedAt time.Time
 }
 
-// NoteVideo represents a row in the note_videos table.
-// Deprecated: Use Video struct instead. Will be removed when callers are updated.
-type NoteVideo struct {
-	ID        int64
-	NoteID    int64
-	Path      string
-	Size      int64
-	Duration  float64
-	Format    string
-	StoppedAt float64
-}
-
 // NoteClip represents a row in the note_clips table.
 type NoteClip struct {
 	ID         int64
