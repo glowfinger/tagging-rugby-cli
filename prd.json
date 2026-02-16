@@ -75,8 +75,8 @@
         "CGO_ENABLED=0 go build ./... passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "EnsureVideo helper added to db/functions.go for get-or-create video pattern"
     },
     {
       "id": "US-005",

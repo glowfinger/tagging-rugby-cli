@@ -7,6 +7,8 @@
 - InsertNote and InsertNoteWithChildren now require videoID int64 parameter (replaces NoteChildren.Videos)
 - NoteVideo struct removed — use Video struct + note.VideoID instead
 - SelectNotes/SelectNoteByID now scan video_id field from notes table
+- EnsureVideo(db, path) is the standard get-or-create pattern for video records
+- Inline SQL queries use `INNER JOIN videos v ON v.id = n.video_id WHERE v.path = ?` (not note_videos)
 
 ---
 
@@ -56,4 +58,20 @@
   - Callers currently pass videoID=0 — US-004 must wire up real video lookup (InsertVideo/SelectVideoByPath) before runtime works
   - Inline SQL queries in tui/tui.go and cmd/*.go still reference note_videos table — US-004 must update these
   - cmd/clip.go export command now uses SelectNoteByID + SelectVideoByID chain instead of SelectNoteVideosByNote
+---
+
+## 2026-02-16 - US-004
+- Added `EnsureVideo(db, path)` helper to db/functions.go — get-or-create pattern using SelectVideoByPath + InsertVideo
+- Added `videoID int64` field to TUI Model, set once in `Run()` via EnsureVideo
+- Updated all 8 inline SQL queries across 5 files to JOIN `videos v ON v.id = n.video_id` instead of `note_videos nv ON nv.note_id = n.id`
+- Replaced all 9 `InsertNoteWithChildren(..., 0, ...)` calls with real video IDs:
+  - TUI callers use `m.videoID` (set at startup)
+  - CLI callers (cmd/note.go, cmd/tackle.go, cmd/clip.go) call `db.EnsureVideo(database, videoPath)` before insert
+- Added video path retrieval from mpv in cmd/note.go noteAddCmd and cmd/tackle.go tackleAddCmd (previously missing)
+- Files changed: db/functions.go, tui/tui.go, cmd/root.go, cmd/note.go, cmd/clip.go, cmd/tackle.go
+- **Learnings for future iterations:**
+  - EnsureVideo is the canonical way to get a video ID from a path — use it in any new command that creates notes
+  - TUI stores videoID once at startup since the video path doesn't change during a session
+  - CLI commands must get video path from mpv via `client.GetProperty("path")` before calling EnsureVideo
+  - When renaming a function parameter (db → database), check for `:=` vs `=` on existing variables in the same scope
 ---
