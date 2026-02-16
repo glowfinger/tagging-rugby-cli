@@ -46,6 +46,8 @@ type Model struct {
 	db *sql.DB
 	// current video file path
 	videoPath string
+	// videoID is the database ID for the current video
+	videoID int64
 	// error message to display (if any)
 	err error
 	// quitting flag to signal shutdown
@@ -653,7 +655,7 @@ func (m *Model) saveNoteFromForm() (tea.Model, tea.Cmd) {
 	}
 
 	// Save note with children
-	noteID, err := db.InsertNoteWithChildren(m.db, category, 0, children)
+	noteID, err := db.InsertNoteWithChildren(m.db, category, m.videoID, children)
 	m.noteForm = nil
 
 	if err != nil {
@@ -890,7 +892,7 @@ func (m *Model) saveTackleFromForm() (tea.Model, tea.Cmd) {
 	}
 
 	// Category is always "tackle" — auto-set, not a form field
-	noteID, err := db.InsertNoteWithChildren(m.db, "tackle", 0, children)
+	noteID, err := db.InsertNoteWithChildren(m.db, "tackle", m.videoID, children)
 	m.tackleForm = nil
 
 	if err != nil {
@@ -1334,7 +1336,7 @@ func (m *Model) addNote(text, category, _, _ string) (string, error) {
 		category = "note"
 	}
 
-	noteID, err := db.InsertNoteWithChildren(m.db, category, 0, children)
+	noteID, err := db.InsertNoteWithChildren(m.db, category, m.videoID, children)
 	if err != nil {
 		return "", fmt.Errorf("failed to insert note: %w", err)
 	}
@@ -1407,13 +1409,13 @@ func (m *Model) addClip(start, end float64, description string) (int64, error) {
 		},
 	}
 
-	return db.InsertNoteWithChildren(m.db, "clip", 0, children)
+	return db.InsertNoteWithChildren(m.db, "clip", m.videoID, children)
 }
 
 // countClips counts clip notes for the current video.
 func (m *Model) countClips() (int, error) {
 	rows, err := m.db.Query(
-		"SELECT n.id FROM notes n INNER JOIN note_videos nv ON nv.note_id = n.id WHERE nv.path = ? AND n.category = 'clip'",
+		"SELECT n.id FROM notes n INNER JOIN videos v ON v.id = n.video_id WHERE v.path = ? AND n.category = 'clip'",
 		m.videoPath,
 	)
 	if err != nil {
@@ -1480,7 +1482,7 @@ func (m *Model) addTackle(player, _ string, attempt int, outcome string) (string
 		},
 	}
 
-	noteID, err := db.InsertNoteWithChildren(m.db, "tackle", 0, children)
+	noteID, err := db.InsertNoteWithChildren(m.db, "tackle", m.videoID, children)
 	if err != nil {
 		return "", fmt.Errorf("failed to insert tackle: %w", err)
 	}
@@ -1494,7 +1496,7 @@ func (m *Model) addTackle(player, _ string, attempt int, outcome string) (string
 // countTackles counts tackle notes for the current video.
 func (m *Model) countTackles() (int, error) {
 	rows, err := m.db.Query(
-		"SELECT n.id FROM notes n INNER JOIN note_videos nv ON nv.note_id = n.id WHERE nv.path = ? AND n.category = 'tackle'",
+		"SELECT n.id FROM notes n INNER JOIN videos v ON v.id = n.video_id WHERE v.path = ? AND n.category = 'tackle'",
 		m.videoPath,
 	)
 	if err != nil {
@@ -1881,17 +1883,23 @@ func truncateViewToWidth(view string, width int) string {
 
 // Run starts the Bubbletea program with the given model.
 // It returns an error if the program fails to start or run.
-func Run(client *mpv.Client, db *sql.DB, videoPath string) error {
-	model := NewModel(client, db, videoPath)
+func Run(client *mpv.Client, database *sql.DB, videoPath string) error {
+	model := NewModel(client, database, videoPath)
+	// Ensure video record exists and store its ID
+	videoID, err := db.EnsureVideo(database, videoPath)
+	if err != nil {
+		return fmt.Errorf("ensure video: %w", err)
+	}
+	model.videoID = videoID
 	// Load notes and tackles for the current video
 	model.loadNotesAndTackles()
 	p := tea.NewProgram(model, tea.WithAltScreen())
-	_, err := p.Run()
+	_, err = p.Run()
 	return err
 }
 
 // loadNotesAndTackles loads notes and tackles from the database for the current video.
-// Uses the normalized schema: queries notes joined with note_videos, note_timing, note_details, note_tackles, note_highlights.
+// Uses the normalized schema: queries notes joined with videos, note_timing, note_details, note_tackles, note_highlights.
 func (m *Model) loadNotesAndTackles() {
 	if m.db == nil {
 		return
@@ -1903,9 +1911,9 @@ func (m *Model) loadNotesAndTackles() {
 	rows, err := m.db.Query(`
 		SELECT n.id, n.category, COALESCE(nt.start, 0)
 		FROM notes n
-		INNER JOIN note_videos nv ON nv.note_id = n.id
+		INNER JOIN videos v ON v.id = n.video_id
 		LEFT JOIN note_timing nt ON nt.note_id = n.id
-		WHERE nv.path = ?
+		WHERE v.path = ?
 		ORDER BY nt.start ASC`, m.videoPath)
 	if err != nil {
 		return
@@ -2085,9 +2093,9 @@ SELECT
     SUM(CASE WHEN nh.type = 'star' THEN 1 ELSE 0 END) AS starred
 FROM note_tackles ntk
 INNER JOIN notes n ON n.id = ntk.note_id
-INNER JOIN note_videos nv ON nv.note_id = n.id
+INNER JOIN videos v ON v.id = n.video_id
 LEFT JOIN note_highlights nh ON nh.note_id = n.id AND nh.type = 'star'
-WHERE nv.path = ?
+WHERE v.path = ?
 GROUP BY ntk.player
 ORDER BY total DESC`
 

@@ -60,12 +60,28 @@ var tackleAddCmd = &cobra.Command{
 			return fmt.Errorf("failed to get current timestamp: %w", err)
 		}
 
+		// Get video path from mpv
+		videoPathRaw, err := client.GetProperty("path")
+		if err != nil {
+			return fmt.Errorf("failed to get video path: %w", err)
+		}
+		videoPath, ok := videoPathRaw.(string)
+		if !ok {
+			return fmt.Errorf("unexpected video path type: %T", videoPathRaw)
+		}
+
 		// Open database
 		database, err := db.Open()
 		if err != nil {
 			return fmt.Errorf("failed to open database: %w", err)
 		}
 		defer database.Close()
+
+		// Ensure video record exists
+		videoID, err := db.EnsureVideo(database, videoPath)
+		if err != nil {
+			return fmt.Errorf("failed to ensure video: %w", err)
+		}
 
 		// Insert note with tackle and timing child rows
 		children := db.NoteChildren{
@@ -77,7 +93,7 @@ var tackleAddCmd = &cobra.Command{
 			},
 		}
 
-		noteID, err := db.InsertNoteWithChildren(database, "tackle", 0, children)
+		noteID, err := db.InsertNoteWithChildren(database, "tackle", videoID, children)
 		if err != nil {
 			return fmt.Errorf("failed to insert tackle: %w", err)
 		}
@@ -121,13 +137,13 @@ var tackleListCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		// Build dynamic query with filters - join notes with note_tackles, note_timing, and note_videos
+		// Build dynamic query with filters - join notes with note_tackles, note_timing, and videos
 		query := `SELECT n.id, COALESCE(nt_time.start, 0), ntk.player, ntk.attempt, ntk.outcome
 			 FROM notes n
 			 INNER JOIN note_tackles ntk ON ntk.note_id = n.id
-			 INNER JOIN note_videos nv ON nv.note_id = n.id
+			 INNER JOIN videos v ON v.id = n.video_id
 			 LEFT JOIN note_timing nt_time ON nt_time.note_id = n.id
-			 WHERE nv.path = ?`
+			 WHERE v.path = ?`
 		queryArgs := []interface{}{videoPath}
 
 		if playerFilter != "" {

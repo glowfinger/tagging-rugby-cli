@@ -133,6 +133,12 @@ var clipEndCmd = &cobra.Command{
 		}
 		defer database.Close()
 
+		// Ensure video record exists
+		videoID, err := db.EnsureVideo(database, videoPath)
+		if err != nil {
+			return fmt.Errorf("failed to ensure video: %w", err)
+		}
+
 		duration := endTimestamp - startTimestamp
 		now := time.Now()
 
@@ -146,7 +152,7 @@ var clipEndCmd = &cobra.Command{
 			},
 		}
 
-		noteID, err := db.InsertNoteWithChildren(database, "clip", 0, children)
+		noteID, err := db.InsertNoteWithChildren(database, "clip", videoID, children)
 		if err != nil {
 			return fmt.Errorf("failed to insert clip: %w", err)
 		}
@@ -190,9 +196,9 @@ var clipListCmd = &cobra.Command{
 			`SELECT n.id, nc.name, nc.duration, COALESCE(nt.start, 0), COALESCE(nt.end, 0)
 			 FROM notes n
 			 INNER JOIN note_clips nc ON nc.note_id = n.id
-			 INNER JOIN note_videos nv ON nv.note_id = n.id
+			 INNER JOIN videos v ON v.id = n.video_id
 			 LEFT JOIN note_timing nt ON nt.note_id = n.id
-			 WHERE nv.path = ?
+			 WHERE v.path = ?
 			 ORDER BY nt.start ASC`, videoPath)
 		if err != nil {
 			return fmt.Errorf("failed to query clips: %w", err)

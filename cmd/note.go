@@ -40,12 +40,28 @@ var noteAddCmd = &cobra.Command{
 			return fmt.Errorf("failed to get current timestamp: %w", err)
 		}
 
+		// Get video path from mpv
+		videoPathRaw, err := client.GetProperty("path")
+		if err != nil {
+			return fmt.Errorf("failed to get video path: %w", err)
+		}
+		videoPath, ok := videoPathRaw.(string)
+		if !ok {
+			return fmt.Errorf("unexpected video path type: %T", videoPathRaw)
+		}
+
 		// Open database
 		database, err := db.Open()
 		if err != nil {
 			return fmt.Errorf("failed to open database: %w", err)
 		}
 		defer database.Close()
+
+		// Ensure video record exists
+		videoID, err := db.EnsureVideo(database, videoPath)
+		if err != nil {
+			return fmt.Errorf("failed to ensure video: %w", err)
+		}
 
 		// Build children
 		children := db.NoteChildren{
@@ -62,7 +78,7 @@ var noteAddCmd = &cobra.Command{
 		}
 
 		// Insert note with children
-		noteID, err := db.InsertNoteWithChildren(database, category, 0, children)
+		noteID, err := db.InsertNoteWithChildren(database, category, videoID, children)
 		if err != nil {
 			return fmt.Errorf("failed to insert note: %w", err)
 		}
@@ -105,9 +121,9 @@ var noteListCmd = &cobra.Command{
 		rows, err := database.Query(
 			`SELECT n.id, n.category, COALESCE(nt.start, 0) as start_time
 			 FROM notes n
-			 INNER JOIN note_videos nv ON nv.note_id = n.id
+			 INNER JOIN videos v ON v.id = n.video_id
 			 LEFT JOIN note_timing nt ON nt.note_id = n.id
-			 WHERE nv.path = ?
+			 WHERE v.path = ?
 			 ORDER BY start_time ASC`, videoPath)
 		if err != nil {
 			return fmt.Errorf("failed to query notes: %w", err)

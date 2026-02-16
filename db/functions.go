@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"path/filepath"
 )
 
 // InsertVideo inserts a new video and returns its ID.
@@ -48,6 +49,21 @@ func UpdateVideoStopTime(database *sql.DB, id int64, stopTime float64) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+// EnsureVideo looks up a video by path, creating a minimal record if not found.
+// Returns the video's ID.
+func EnsureVideo(database *sql.DB, path string) (int64, error) {
+	v, err := SelectVideoByPath(database, path)
+	if err == nil {
+		return v.ID, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, fmt.Errorf("select video by path: %w", err)
+	}
+	filename := filepath.Base(path)
+	extension := filepath.Ext(path)
+	return InsertVideo(database, path, filename, extension, "", 0, 0)
 }
 
 // InsertNote inserts a new note and returns its ID.
