@@ -5,6 +5,51 @@ import (
 	"fmt"
 )
 
+// InsertVideo inserts a new video and returns its ID.
+func InsertVideo(db *sql.DB, path, filename, extension, format string, filesize int64, stopTime float64) (int64, error) {
+	result, err := db.Exec(InsertVideoSQL, path, filename, extension, format, filesize, stopTime)
+	if err != nil {
+		return 0, fmt.Errorf("insert video: %w", err)
+	}
+	return result.LastInsertId()
+}
+
+// SelectVideoByID returns a single video by ID.
+func SelectVideoByID(database *sql.DB, id int64) (*Video, error) {
+	var v Video
+	err := database.QueryRow(SelectVideoByIDSQL, id).Scan(&v.ID, &v.Path, &v.Filename, &v.Extension, &v.Format, &v.Filesize, &v.StopTime)
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+// SelectVideoByPath returns a single video by path.
+func SelectVideoByPath(database *sql.DB, path string) (*Video, error) {
+	var v Video
+	err := database.QueryRow(SelectVideoByPathSQL, path).Scan(&v.ID, &v.Path, &v.Filename, &v.Extension, &v.Format, &v.Filesize, &v.StopTime)
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+// UpdateVideoStopTime updates the stop_time for a video.
+func UpdateVideoStopTime(database *sql.DB, id int64, stopTime float64) error {
+	result, err := database.Exec(UpdateVideoStopTimeSQL, stopTime, id)
+	if err != nil {
+		return fmt.Errorf("update video stop time: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check rows affected: %w", err)
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 // InsertNote inserts a new note and returns its ID.
 func InsertNote(db *sql.DB, category string) (int64, error) {
 	result, err := db.Exec(InsertNoteSQL, category)

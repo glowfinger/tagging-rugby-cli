@@ -23,8 +23,23 @@ var SelectNoteByIDSQL string
 //go:embed sql/delete_note.sql
 var DeleteNoteSQL string
 
+// Video queries
+
+//go:embed sql/insert_video.sql
+var InsertVideoSQL string
+
+//go:embed sql/select_video_by_id.sql
+var SelectVideoByIDSQL string
+
+//go:embed sql/select_video_by_path.sql
+var SelectVideoByPathSQL string
+
+//go:embed sql/update_video_stop_time.sql
+var UpdateVideoStopTimeSQL string
+
 // Note child table insert queries
 
+// Deprecated: Will be removed in US-003 along with InsertNoteVideo function
 //go:embed sql/insert_note_video.sql
 var InsertNoteVideoSQL string
 
@@ -48,6 +63,7 @@ var InsertNoteHighlightSQL string
 
 // Note child table select queries
 
+// Deprecated: Will be removed in US-003 along with SelectNoteVideosByNote function
 //go:embed sql/select_note_videos_by_note.sql
 var SelectNoteVideosByNoteSQL string
 
