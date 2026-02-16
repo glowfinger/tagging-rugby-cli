@@ -1,17 +1,18 @@
+CREATE TABLE IF NOT EXISTS videos (
+    id INTEGER PRIMARY KEY,
+    path TEXT,
+    filename TEXT,
+    extension TEXT,
+    format TEXT,
+    filesize INTEGER,
+    stop_time REAL
+);
+
 CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY,
     category TEXT,
+    video_id INTEGER NOT NULL REFERENCES videos(id),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS note_videos (
-    id INTEGER PRIMARY KEY,
-    note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-    path TEXT,
-    size INTEGER,
-    duration REAL,
-    format TEXT,
-    stopped_at REAL
 );
 
 CREATE TABLE IF NOT EXISTS note_clips (

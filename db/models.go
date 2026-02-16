@@ -2,14 +2,27 @@ package db
 
 import "time"
 
+// Video represents a row in the videos table.
+type Video struct {
+	ID        int64
+	Path      string
+	Filename  string
+	Extension string
+	Format    string
+	Filesize  int64
+	StopTime  float64
+}
+
 // Note represents a row in the notes table.
 type Note struct {
 	ID        int64
 	Category  string
+	VideoID   int64
 	CreatedAt time.Time
 }
 
 // NoteVideo represents a row in the note_videos table.
+// Deprecated: Use Video struct instead. Will be removed when callers are updated.
 type NoteVideo struct {
 	ID        int64
 	NoteID    int64
