@@ -42,24 +42,12 @@ func Open() (*sql.DB, error) {
 	}
 
 	// Run migrations
-	if err := migrate(db); err != nil {
+	if err := runMigrations(db); err != nil {
 		db.Close()
 		return nil, err
 	}
 
 	return db, nil
-}
-
-// migrate runs all database migrations.
-// Migrations are idempotent (safe to run multiple times).
-func migrate(db *sql.DB) error {
-	// Create all tables
-	_, err := db.Exec(CreateTablesSQL)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // getDBPath returns the path to the database file.
