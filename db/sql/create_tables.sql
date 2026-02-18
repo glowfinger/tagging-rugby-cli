@@ -1,6 +1,17 @@
+CREATE TABLE IF NOT EXISTS videos (
+    id INTEGER PRIMARY KEY,
+    path TEXT,
+    filename TEXT,
+    extension TEXT,
+    format TEXT,
+    filesize INTEGER,
+    stop_time REAL
+);
+
 CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY,
     category TEXT,
+    video_id INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
