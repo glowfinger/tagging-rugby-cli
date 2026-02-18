@@ -23,7 +23,50 @@
 - Edit tackle form: `forms.NewEditTackleForm(timestamp, endSeconds, result)` with `EditTackleFormResult`
 - Edit flow uses `editingNoteID` field (0=create, >0=edit) to distinguish save paths
 - db package cannot import tui/forms (circular dependency) — use db-package structs, let TUI map to form types
+- `all:` prefix on go:embed is needed to include hidden files like .gitkeep in empty migration dirs
+- Migration runner: create_tables.sql runs first (IF NOT EXISTS), then versioned NNN_name.sql migrations
+- SQLite DDL (CREATE TABLE, ALTER TABLE) may auto-commit — be careful with transaction boundaries in migrations
+- create_tables.sql should include the latest schema (videos table, video_id on notes) so fresh DBs are up-to-date and migrations are no-ops
+- SQLite filename extraction: `SUBSTR(path, LENGTH(path) - LENGTH(REPLACE(path, '/', '')) + 1)` gets text after last '/'
+- Use `WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='X')` to guard against missing tables in migrations
+- `DROP TABLE IF EXISTS` is safe in SQLite and doesn't need sqlite_master guard
 
+---
+
+## 2026-02-18 - US-003
+- Created migration 002_migrate_note_videos.sql: migrates note_videos data to videos table and drops note_videos
+- Step 1: INSERT unique videos from note_videos deduplicated by path, deriving filename/extension via SQLite string functions
+- Step 2: UPDATE notes.video_id to matching videos.id based on note_videos path join
+- Step 3: DROP TABLE IF EXISTS note_videos
+- All steps guarded with `WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='note_videos')` for fresh DB safety
+- Files changed: db/sql/migrations/002_migrate_note_videos.sql (new)
+- **Learnings for future iterations:**
+  - SQLite has no procedural IF blocks — use `WHERE EXISTS (SELECT ... FROM sqlite_master)` to conditionally execute DML
+  - Filename from path: `SUBSTR(path, LENGTH(path) - LENGTH(REPLACE(path, '/', '')) + 1)` counts separator occurrences
+  - Extension from path: same pattern with '.' instead of '/'
+  - Deduplication via self-join: `INNER JOIN (SELECT path, MIN(id) FROM ... GROUP BY path) dedup ON id = dedup.min_id`
+  - `DROP TABLE IF EXISTS` is natively supported and doesn't need a sqlite_master guard
+---
+
+## 2026-02-18 - US-002
+- Created migration 001_create_videos_table.sql: creates videos table IF NOT EXISTS and adds video_id column to notes
+- Updated create_tables.sql to include videos table and video_id on notes for fresh databases
+- Migration runner handles duplicate column errors gracefully (idempotent on fresh DBs)
+- Files changed: db/sql/create_tables.sql, db/sql/migrations/001_create_videos_table.sql (new)
+- **Learnings for future iterations:**
+  - create_tables.sql must stay in sync with migration state — add new tables/columns here too for fresh DB support
+  - ALTER TABLE ADD COLUMN duplicate errors are caught by migration runner (strings.Contains "duplicate column")
+  - Migration 001 is safe for both fresh DBs (no-op) and existing DBs (adds missing schema)
+---
+
+## 2026-02-16 - US-001
+- Implemented migration runner infrastructure
+- Files changed: db/db.go (replaced migrate() call with runMigrations()), db/migrations.go (new), db/sql/migrations/.gitkeep (new)
+- **Learnings for future iterations:**
+  - `go:embed` with glob pattern (`*.sql`) fails if no files match — use `all:sql/migrations` directory embed instead
+  - `all:` prefix is required to embed hidden files (like .gitkeep) in a directory
+  - runMigrations runs create_tables.sql first (IF NOT EXISTS), then versioned migrations — safe for both fresh and existing DBs
+  - Migration files parsed as NNN_name.sql — version extracted from prefix before first underscore
 ---
 
 ## 2026-02-12 - US-001
