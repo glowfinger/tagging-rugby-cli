@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -60,13 +62,20 @@ var noteAddCmd = &cobra.Command{
 		}
 		defer database.Close()
 
+		// Get video file metadata
+		var videoSize int64
+		if info, err := os.Stat(videoPath); err == nil {
+			videoSize = info.Size()
+		}
+		videoFormat := strings.TrimPrefix(filepath.Ext(videoPath), ".")
+
 		// Build children
 		children := db.NoteChildren{
 			Timings: []db.NoteTiming{
 				{Start: timestamp, End: timestamp},
 			},
 			Videos: []db.NoteVideo{
-				{Path: videoPath, Duration: duration, StoppedAt: timestamp},
+				{Path: videoPath, Duration: duration, StoppedAt: timestamp, Size: videoSize, Format: videoFormat},
 			},
 		}
 
@@ -121,9 +130,9 @@ var noteListCmd = &cobra.Command{
 		rows, err := database.Query(
 			`SELECT n.id, n.category, COALESCE(nt.start, 0) as start_time
 			 FROM notes n
-			 INNER JOIN note_videos nv ON nv.note_id = n.id
+			 INNER JOIN videos v ON v.id = n.video_id
 			 LEFT JOIN note_timing nt ON nt.note_id = n.id
-			 WHERE nv.path = ?
+			 WHERE v.path = ?
 			 ORDER BY start_time ASC`, videoPath)
 		if err != nil {
 			return fmt.Errorf("failed to query notes: %w", err)

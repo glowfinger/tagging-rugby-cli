@@ -2,12 +2,11 @@ SELECT
     n.id,
     n.category,
     n.created_at,
-    nv.path,
-    nv.size,
-    nv.duration,
-    nv.format,
-    nv.stopped_at
+    v.path,
+    v.filesize,
+    v.format,
+    v.stop_time
 FROM notes n
-INNER JOIN note_videos nv ON nv.note_id = n.id
-WHERE nv.path = ?
+INNER JOIN videos v ON v.id = n.video_id
+WHERE v.path = ?
 ORDER BY n.created_at DESC;

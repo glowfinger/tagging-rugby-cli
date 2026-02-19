@@ -3,24 +3,37 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"path/filepath"
+	"strings"
 )
 
-// InsertNote inserts a new note and returns its ID.
-func InsertNote(db *sql.DB, category string) (int64, error) {
-	result, err := db.Exec(InsertNoteSQL, category)
+// InsertNote inserts a new note with the given video_id and returns its ID.
+func InsertNote(db *sql.DB, category string, videoID int64) (int64, error) {
+	result, err := db.Exec(InsertNoteSQL, category, videoID)
 	if err != nil {
 		return 0, fmt.Errorf("insert note: %w", err)
 	}
 	return result.LastInsertId()
 }
 
-// InsertNoteVideo inserts a note_videos row.
-func InsertNoteVideo(db *sql.DB, noteID int64, path string, size int64, duration float64, format string, stoppedAt float64) error {
-	_, err := db.Exec(InsertNoteVideoSQL, noteID, path, size, duration, format, stoppedAt)
-	if err != nil {
-		return fmt.Errorf("insert note video: %w", err)
+// getOrCreateVideo looks up a video by path within a transaction; inserts it if not found.
+// Returns the video ID.
+func getOrCreateVideo(tx *sql.Tx, v NoteVideo) (int64, error) {
+	var videoID int64
+	err := tx.QueryRow(SelectVideoByPathSQL, v.Path).Scan(&videoID)
+	if err == nil {
+		return videoID, nil
 	}
-	return nil
+	if err != sql.ErrNoRows {
+		return 0, fmt.Errorf("query video by path: %w", err)
+	}
+	base := filepath.Base(v.Path)
+	ext := strings.TrimPrefix(filepath.Ext(v.Path), ".")
+	result, err := tx.Exec(InsertVideoSQL, v.Path, base, ext, v.Format, v.Size, v.StoppedAt)
+	if err != nil {
+		return 0, fmt.Errorf("insert video: %w", err)
+	}
+	return result.LastInsertId()
 }
 
 // InsertNoteClip inserts a note_clips row.
@@ -96,21 +109,25 @@ func InsertNoteWithChildren(database *sql.DB, category string, children NoteChil
 	}
 	defer tx.Rollback()
 
-	// Insert parent note
-	result, err := tx.Exec(InsertNoteSQL, category)
+	// Get or create the video record and resolve its ID.
+	var videoID int64
+	if len(children.Videos) > 0 {
+		id, err := getOrCreateVideo(tx, children.Videos[0])
+		if err != nil {
+			tx.Rollback()
+			return 0, err
+		}
+		videoID = id
+	}
+
+	// Insert parent note with video_id.
+	result, err := tx.Exec(InsertNoteSQL, category, videoID)
 	if err != nil {
 		return 0, fmt.Errorf("insert note: %w", err)
 	}
 	noteID, err := result.LastInsertId()
 	if err != nil {
 		return 0, fmt.Errorf("get note id: %w", err)
-	}
-
-	// Insert child records
-	for _, v := range children.Videos {
-		if _, err := tx.Exec(InsertNoteVideoSQL, noteID, v.Path, v.Size, v.Duration, v.Format, v.StoppedAt); err != nil {
-			return 0, fmt.Errorf("insert note video: %w", err)
-		}
 	}
 	for _, c := range children.Clips {
 		if _, err := tx.Exec(InsertNoteClipSQL, noteID, c.Name, c.Duration, c.StartedAt, c.FinishedAt, c.ErrorAt, c.Error); err != nil {

@@ -1,0 +1,103 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/video-table",
+  "description": "Create a dedicated videos table, add video_id FK to notes, remove note_videos junction table, and migrate existing data",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create videos table and update notes schema",
+      "description": "As a developer, I need a videos table so video metadata is stored once per unique video file, and notes reference videos via a foreign key.",
+      "acceptanceCriteria": [
+        "New videos table in create_tables.sql with columns: id (INTEGER PRIMARY KEY), path (TEXT), filename (TEXT), extension (TEXT), format (TEXT), filesize (INTEGER), stop_time (REAL)",
+        "notes table gains video_id column (INTEGER NOT NULL) with REFERENCES videos(id)",
+        "note_videos table CREATE statement is removed from create_tables.sql",
+        "New Video struct in db/models.go: ID int64, Path string, Filename string, Extension string, Format string, Filesize int64, StopTime float64",
+        "NoteVideo struct removed from db/models.go",
+        "Note struct gains VideoID int64 field",
+        "CGO_ENABLED=0 go vet ./... passes",
+        "CGO_ENABLED=0 go build ./... passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "NoteVideo struct kept as deprecated for build compatibility; will be removed in US-003/US-004"
+    },
+    {
+      "id": "US-002",
+      "title": "Add Video CRUD SQL queries and Go functions",
+      "description": "As a developer, I need insert/select/update functions for the videos table so the app can manage video records.",
+      "acceptanceCriteria": [
+        "New SQL file insert_video.sql: INSERT INTO videos (path, filename, extension, format, filesize, stop_time) VALUES (?, ?, ?, ?, ?, ?)",
+        "New SQL file select_video_by_id.sql: SELECT all columns FROM videos WHERE id = ?",
+        "New SQL file select_video_by_path.sql: SELECT all columns FROM videos WHERE path = ?",
+        "New SQL file update_video_stop_time.sql: UPDATE videos SET stop_time = ? WHERE id = ?",
+        "go:embed directives added for all new SQL files in the queries embed file",
+        "New Go function InsertVideo(db, path, filename, extension, format, filesize, stopTime) (int64, error)",
+        "New Go function SelectVideoByID(db, id) (*Video, error)",
+        "New Go function SelectVideoByPath(db, path) (*Video, error)",
+        "New Go function UpdateVideoStopTime(db, id, stopTime) error",
+        "Old SQL files removed: insert_note_video.sql, select_note_videos_by_note.sql",
+        "Old go:embed directives for removed SQL files deleted",
+        "CGO_ENABLED=0 go vet ./... passes",
+        "CGO_ENABLED=0 go build ./... passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Old insert_note_video.sql and select_note_videos_by_note.sql kept as deprecated (still referenced by Go functions); will be removed in US-003"
+    },
+    {
+      "id": "US-003",
+      "title": "Update note insert/select functions for video_id",
+      "description": "As a developer, I need note functions to use video_id instead of the note_videos junction table.",
+      "acceptanceCriteria": [
+        "InsertNote updated to accept videoID int64 parameter — insert_note.sql updated to include video_id column",
+        "NoteChildren struct no longer has Videos []NoteVideo field",
+        "InsertNoteWithChildren no longer inserts into note_videos — video_id is set via InsertNote",
+        "SelectNotes and SelectNoteByID updated to scan VideoID field from notes table",
+        "select_notes_with_video.sql rewritten to JOIN notes directly to videos via notes.video_id (no note_videos)",
+        "SelectNoteVideosByNote function and InsertNoteVideo function removed from functions.go",
+        "CGO_ENABLED=0 go vet ./... passes",
+        "CGO_ENABLED=0 go build ./... passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Callers pass videoID=0 placeholder; US-004 will wire up real video lookup"
+    },
+    {
+      "id": "US-004",
+      "title": "Update TUI and CLI callers to use new video functions",
+      "description": "As a developer, I need all TUI and CLI code that previously used NoteVideo/note_videos to use the new Video struct and video_id on notes.",
+      "acceptanceCriteria": [
+        "All references to NoteVideo struct replaced with Video struct",
+        "All calls to InsertNoteVideo replaced with InsertVideo + passing video_id to InsertNote",
+        "All calls to SelectNoteVideosByNote replaced with SelectVideoByID using note's VideoID",
+        "NoteChildren.Videos field usage removed from all TUI and CLI code",
+        "CGO_ENABLED=0 go vet ./... passes",
+        "CGO_ENABLED=0 go build ./... passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "EnsureVideo helper added to db/functions.go for get-or-create video pattern"
+    },
+    {
+      "id": "US-005",
+      "title": "Write data migration from note_videos to videos table",
+      "description": "As a developer, I need a migration that moves existing note_videos data into the new videos table so existing databases continue to work.",
+      "acceptanceCriteria": [
+        "Migration detects if note_videos table still exists and runs only if needed (idempotent)",
+        "Unique videos extracted from note_videos deduplicated by path",
+        "filename derived from path (e.g. /foo/bar/game.mp4 → game.mp4)",
+        "extension derived from path (e.g. /foo/bar/game.mp4 → .mp4)",
+        "note_videos.size maps to videos.filesize, note_videos.stopped_at maps to videos.stop_time",
+        "note_videos.duration is dropped (not migrated)",
+        "Each note's video_id set to the corresponding videos.id based on matching path",
+        "note_videos table dropped after migration completes",
+        "Migration runs automatically during DB initialization in db/db.go",
+        "CGO_ENABLED=0 go vet ./... passes",
+        "CGO_ENABLED=0 go build ./... passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"text/tabwriter"
 	"time"
@@ -136,6 +137,13 @@ var clipEndCmd = &cobra.Command{
 		duration := endTimestamp - startTimestamp
 		now := time.Now()
 
+		// Get video file metadata
+		var videoSize int64
+		if info, err := os.Stat(videoPath); err == nil {
+			videoSize = info.Size()
+		}
+		videoFormat := strings.TrimPrefix(filepath.Ext(videoPath), ".")
+
 		// Insert note with clip and timing child rows
 		children := db.NoteChildren{
 			Clips: []db.NoteClip{
@@ -145,7 +153,7 @@ var clipEndCmd = &cobra.Command{
 				{Start: startTimestamp, End: endTimestamp},
 			},
 			Videos: []db.NoteVideo{
-				{Path: videoPath, StoppedAt: startTimestamp},
+				{Path: videoPath, StoppedAt: startTimestamp, Size: videoSize, Format: videoFormat},
 			},
 		}
 
@@ -193,9 +201,9 @@ var clipListCmd = &cobra.Command{
 			`SELECT n.id, nc.name, nc.duration, COALESCE(nt.start, 0), COALESCE(nt.end, 0)
 			 FROM notes n
 			 INNER JOIN note_clips nc ON nc.note_id = n.id
-			 INNER JOIN note_videos nv ON nv.note_id = n.id
+			 INNER JOIN videos v ON v.id = n.video_id
 			 LEFT JOIN note_timing nt ON nt.note_id = n.id
-			 WHERE nv.path = ?
+			 WHERE v.path = ?
 			 ORDER BY nt.start ASC`, videoPath)
 		if err != nil {
 			return fmt.Errorf("failed to query clips: %w", err)

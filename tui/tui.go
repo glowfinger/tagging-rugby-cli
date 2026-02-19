@@ -3,6 +3,8 @@ package tui
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -100,6 +102,21 @@ type Model struct {
 	numberBuffer string
 	// lastKeyG tracks if the last key pressed was 'g' for gg command
 	lastKeyG bool
+}
+
+// newNoteVideo builds a NoteVideo with filesize and format populated from the filesystem.
+// If the file cannot be stat'd (e.g. remote path), filesize is 0 and format falls back to extension parsing.
+func newNoteVideo(path string, duration, stoppedAt float64) db.NoteVideo {
+	v := db.NoteVideo{
+		Path:      path,
+		Duration:  duration,
+		StoppedAt: stoppedAt,
+		Format:    strings.TrimPrefix(filepath.Ext(path), "."),
+	}
+	if info, err := os.Stat(path); err == nil {
+		v.Size = info.Size()
+	}
+	return v
 }
 
 // NewModel creates a new TUI model with the given mpv client, database connection, and video path.
@@ -645,7 +662,7 @@ func (m *Model) saveNoteFromForm() (tea.Model, tea.Cmd) {
 			{Start: timestamp, End: timestamp},
 		},
 		Videos: []db.NoteVideo{
-			{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
+			newNoteVideo(m.videoPath, duration, timestamp),
 		},
 		Details: []db.NoteDetail{
 			{Type: "text", Note: result.Text},
@@ -866,7 +883,7 @@ func (m *Model) saveTackleFromForm() (tea.Model, tea.Cmd) {
 			{Start: timestamp, End: timestamp},
 		},
 		Videos: []db.NoteVideo{
-			{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
+			newNoteVideo(m.videoPath, duration, timestamp),
 		},
 		Tackles: []db.NoteTackle{
 			{Player: result.Player, Attempt: attempt, Outcome: result.Outcome},
@@ -1337,7 +1354,7 @@ func (m *Model) addNote(text, category, _, _ string) (string, error) {
 			{Start: timestamp, End: timestamp},
 		},
 		Videos: []db.NoteVideo{
-			{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
+			newNoteVideo(m.videoPath, duration, timestamp),
 		},
 	}
 
@@ -1420,7 +1437,7 @@ func (m *Model) addClip(start, end float64, description string) (int64, error) {
 			{Start: start, End: end},
 		},
 		Videos: []db.NoteVideo{
-			{Path: m.videoPath, StoppedAt: start},
+			newNoteVideo(m.videoPath, 0, start),
 		},
 		Clips: []db.NoteClip{
 			{Name: description, Duration: clipDuration},
@@ -1433,7 +1450,7 @@ func (m *Model) addClip(start, end float64, description string) (int64, error) {
 // countClips counts clip notes for the current video.
 func (m *Model) countClips() (int, error) {
 	rows, err := m.db.Query(
-		"SELECT n.id FROM notes n INNER JOIN note_videos nv ON nv.note_id = n.id WHERE nv.path = ? AND n.category = 'clip'",
+		"SELECT n.id FROM notes n INNER JOIN videos v ON v.id = n.video_id WHERE v.path = ? AND n.category = 'clip'",
 		m.videoPath,
 	)
 	if err != nil {
@@ -1498,7 +1515,7 @@ func (m *Model) addTackle(player, _ string, attempt int, outcome string) (string
 			{Start: timestamp, End: timestamp},
 		},
 		Videos: []db.NoteVideo{
-			{Path: m.videoPath, Duration: duration, StoppedAt: timestamp},
+			newNoteVideo(m.videoPath, duration, timestamp),
 		},
 		Tackles: []db.NoteTackle{
 			{Player: player, Attempt: attempt, Outcome: outcome},
@@ -1519,7 +1536,7 @@ func (m *Model) addTackle(player, _ string, attempt int, outcome string) (string
 // countTackles counts tackle notes for the current video.
 func (m *Model) countTackles() (int, error) {
 	rows, err := m.db.Query(
-		"SELECT n.id FROM notes n INNER JOIN note_videos nv ON nv.note_id = n.id WHERE nv.path = ? AND n.category = 'tackle'",
+		"SELECT n.id FROM notes n INNER JOIN videos v ON v.id = n.video_id WHERE v.path = ? AND n.category = 'tackle'",
 		m.videoPath,
 	)
 	if err != nil {
@@ -1928,9 +1945,9 @@ func (m *Model) loadNotesAndTackles() {
 	rows, err := m.db.Query(`
 		SELECT n.id, n.category, COALESCE(nt.start, 0)
 		FROM notes n
-		INNER JOIN note_videos nv ON nv.note_id = n.id
+		INNER JOIN videos v ON v.id = n.video_id
 		LEFT JOIN note_timing nt ON nt.note_id = n.id
-		WHERE nv.path = ?
+		WHERE v.path = ?
 		ORDER BY nt.start ASC`, m.videoPath)
 	if err != nil {
 		return
@@ -2110,9 +2127,9 @@ SELECT
     SUM(CASE WHEN nh.type = 'star' THEN 1 ELSE 0 END) AS starred
 FROM note_tackles ntk
 INNER JOIN notes n ON n.id = ntk.note_id
-INNER JOIN note_videos nv ON nv.note_id = n.id
+INNER JOIN videos v ON v.id = n.video_id
 LEFT JOIN note_highlights nh ON nh.note_id = n.id AND nh.type = 'star'
-WHERE nv.path = ?
+WHERE v.path = ?
 GROUP BY ntk.player
 ORDER BY total DESC`
 
