@@ -251,6 +251,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			m.quitting = true
+			if timePos, tpErr := m.client.GetTimePos(); tpErr == nil && m.videoID > 0 {
+				_ = db.UpdateVideoTimingStopped(m.db, m.videoID, timePos)
+			}
 			return m, tea.Quit
 		case "?":
 			if m.focus != FocusSearch {
@@ -2064,6 +2067,9 @@ func (m *Model) handleStatsViewInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "ctrl+c":
 		m.quitting = true
+		if timePos, tpErr := m.client.GetTimePos(); tpErr == nil && m.videoID > 0 {
+			_ = db.UpdateVideoTimingStopped(m.db, m.videoID, timePos)
+		}
 		return m, tea.Quit
 	case "?":
 		// Show help overlay
