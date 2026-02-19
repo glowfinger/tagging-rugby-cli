@@ -29,7 +29,7 @@ func getOrCreateVideo(tx *sql.Tx, v NoteVideo) (int64, error) {
 	}
 	base := filepath.Base(v.Path)
 	ext := strings.TrimPrefix(filepath.Ext(v.Path), ".")
-	result, err := tx.Exec(InsertVideoSQL, v.Path, base, ext, v.Format, v.Size, v.StoppedAt)
+	result, err := tx.Exec(InsertVideoSQL, v.Path, base, ext, v.Format, v.Size)
 	if err != nil {
 		return 0, fmt.Errorf("insert video: %w", err)
 	}
@@ -272,7 +272,7 @@ func SelectNoteVideosByNote(database *sql.DB, noteID int64) ([]NoteVideo, error)
 	var videos []NoteVideo
 	for rows.Next() {
 		var v NoteVideo
-		if err := rows.Scan(&v.ID, &v.NoteID, &v.Path, &v.Size, &v.Duration, &v.Format, &v.StoppedAt); err != nil {
+		if err := rows.Scan(&v.ID, &v.NoteID, &v.Path, &v.Size, &v.Duration, &v.Format); err != nil {
 			return nil, err
 		}
 		videos = append(videos, v)

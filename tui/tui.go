@@ -106,12 +106,11 @@ type Model struct {
 
 // newNoteVideo builds a NoteVideo with filesize and format populated from the filesystem.
 // If the file cannot be stat'd (e.g. remote path), filesize is 0 and format falls back to extension parsing.
-func newNoteVideo(path string, duration, stoppedAt float64) db.NoteVideo {
+func newNoteVideo(path string, duration float64) db.NoteVideo {
 	v := db.NoteVideo{
-		Path:      path,
-		Duration:  duration,
-		StoppedAt: stoppedAt,
-		Format:    strings.TrimPrefix(filepath.Ext(path), "."),
+		Path:     path,
+		Duration: duration,
+		Format:   strings.TrimPrefix(filepath.Ext(path), "."),
 	}
 	if info, err := os.Stat(path); err == nil {
 		v.Size = info.Size()
@@ -662,7 +661,7 @@ func (m *Model) saveNoteFromForm() (tea.Model, tea.Cmd) {
 			{Start: timestamp, End: timestamp},
 		},
 		Videos: []db.NoteVideo{
-			newNoteVideo(m.videoPath, duration, timestamp),
+			newNoteVideo(m.videoPath, duration),
 		},
 		Details: []db.NoteDetail{
 			{Type: "text", Note: result.Text},
@@ -883,7 +882,7 @@ func (m *Model) saveTackleFromForm() (tea.Model, tea.Cmd) {
 			{Start: timestamp, End: timestamp},
 		},
 		Videos: []db.NoteVideo{
-			newNoteVideo(m.videoPath, duration, timestamp),
+			newNoteVideo(m.videoPath, duration),
 		},
 		Tackles: []db.NoteTackle{
 			{Player: result.Player, Attempt: attempt, Outcome: result.Outcome},
@@ -1354,7 +1353,7 @@ func (m *Model) addNote(text, category, _, _ string) (string, error) {
 			{Start: timestamp, End: timestamp},
 		},
 		Videos: []db.NoteVideo{
-			newNoteVideo(m.videoPath, duration, timestamp),
+			newNoteVideo(m.videoPath, duration),
 		},
 	}
 
@@ -1437,7 +1436,7 @@ func (m *Model) addClip(start, end float64, description string) (int64, error) {
 			{Start: start, End: end},
 		},
 		Videos: []db.NoteVideo{
-			newNoteVideo(m.videoPath, 0, start),
+			newNoteVideo(m.videoPath, 0),
 		},
 		Clips: []db.NoteClip{
 			{Name: description, Duration: clipDuration},
@@ -1515,7 +1514,7 @@ func (m *Model) addTackle(player, _ string, attempt int, outcome string) (string
 			{Start: timestamp, End: timestamp},
 		},
 		Videos: []db.NoteVideo{
-			newNoteVideo(m.videoPath, duration, timestamp),
+			newNoteVideo(m.videoPath, duration),
 		},
 		Tackles: []db.NoteTackle{
 			{Player: player, Attempt: attempt, Outcome: outcome},

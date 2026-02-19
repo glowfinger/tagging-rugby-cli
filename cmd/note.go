@@ -75,7 +75,7 @@ var noteAddCmd = &cobra.Command{
 				{Start: timestamp, End: timestamp},
 			},
 			Videos: []db.NoteVideo{
-				{Path: videoPath, Duration: duration, StoppedAt: timestamp, Size: videoSize, Format: videoFormat},
+				{Path: videoPath, Duration: duration, Size: videoSize, Format: videoFormat},
 			},
 		}
 

@@ -153,7 +153,7 @@ var clipEndCmd = &cobra.Command{
 				{Start: startTimestamp, End: endTimestamp},
 			},
 			Videos: []db.NoteVideo{
-				{Path: videoPath, StoppedAt: startTimestamp, Size: videoSize, Format: videoFormat},
+				{Path: videoPath, Size: videoSize, Format: videoFormat},
 			},
 		}
 

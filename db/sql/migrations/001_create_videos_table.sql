@@ -7,9 +7,17 @@ CREATE TABLE IF NOT EXISTS videos (
     filename TEXT,
     extension TEXT,
     format TEXT,
-    filesize INTEGER,
-    stop_time REAL
+    filesize INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS video_timings (
+    id INTEGER PRIMARY KEY,
+    video_id INTEGER NOT NULL REFERENCES videos(id),
+    stopped REAL,
+    length REAL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_video_timings_video_id ON video_timings(video_id);
 
 CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY,
