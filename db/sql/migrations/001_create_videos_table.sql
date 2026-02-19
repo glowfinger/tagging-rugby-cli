@@ -29,12 +29,16 @@ CREATE TABLE IF NOT EXISTS notes (
 CREATE TABLE IF NOT EXISTS note_clips (
     id INTEGER PRIMARY KEY,
     note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-    name TEXT,
-    duration REAL,
+    folder TEXT,
+    filename TEXT,
+    extension TEXT,
+    format TEXT,
+    filesize INTEGER,
+    status TEXT,
     started_at DATETIME,
     finished_at DATETIME,
     error_at DATETIME,
-    error TEXT
+    log TEXT
 );
 
 CREATE TABLE IF NOT EXISTS note_timing (
