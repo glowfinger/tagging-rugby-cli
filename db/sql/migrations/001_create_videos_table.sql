@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS note_highlights (
     type TEXT
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_note_clips_note_id ON note_clips(note_id);
 CREATE INDEX IF NOT EXISTS idx_notes_category ON notes(category);
 CREATE INDEX IF NOT EXISTS idx_note_details_type ON note_details(type);
 CREATE INDEX IF NOT EXISTS idx_note_highlights_type ON note_highlights(type);

@@ -90,6 +90,15 @@ func getOrCreateVideo(tx *sql.Tx, v NoteVideo) (int64, error) {
 	return result.LastInsertId()
 }
 
+// UpsertNoteClipPending inserts or resets a note_clips row to pending status so the background worker can pick it up.
+func UpsertNoteClipPending(db *sql.DB, noteID int64, folder, filename string) error {
+	_, err := db.Exec(UpsertNoteClipPendingSQL, noteID, folder, filename)
+	if err != nil {
+		return fmt.Errorf("upsert note clip pending: %w", err)
+	}
+	return nil
+}
+
 // InsertNoteClip inserts a note_clips row.
 func InsertNoteClip(db *sql.DB, noteID int64, folder, filename, extension, format string, filesize int64, status string, startedAt, finishedAt, errorAt interface{}, log string) error {
 	_, err := db.Exec(InsertNoteClipSQL, noteID, folder, filename, extension, format, filesize, status, startedAt, finishedAt, errorAt, log)
