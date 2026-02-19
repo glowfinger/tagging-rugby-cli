@@ -137,8 +137,25 @@ var openCmd = &cobra.Command{
 			}
 			defer database.Close()
 
+			// Register the video in the database and get its ID
+			videoID, err := db.EnsureVideo(database, absPath, info.Size(), "")
+			if err != nil {
+				videoID = 0
+			}
+
+			// Ensure a video_timings row exists and resume from last stopped position
+			if videoID > 0 {
+				timing, timingErr := db.EnsureVideoTiming(database, videoID, duration)
+				if timingErr == nil && timing.Stopped != nil && *timing.Stopped > 0 {
+					if seekErr := client.Seek(*timing.Stopped); seekErr == nil {
+						client.Pause()
+						fmt.Printf("Resuming from %s\n", timeutil.FormatTime(*timing.Stopped))
+					}
+				}
+			}
+
 			// Run TUI (blocks until quit)
-			if err := tui.Run(client, database, absPath); err != nil {
+			if err := tui.Run(client, database, absPath, videoID); err != nil {
 				if process.Process != nil {
 					process.Process.Kill()
 				}

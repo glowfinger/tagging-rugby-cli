@@ -7,6 +7,60 @@ import (
 	"strings"
 )
 
+// EnsureVideoTiming selects the video_timing row for the given videoID; inserts one (with stopped=NULL) if not found.
+// If length > 0, it is always written to the row (whether new or existing) so the duration stays current.
+func EnsureVideoTiming(db *sql.DB, videoID int64, length float64) (*VideoTiming, error) {
+	var vt VideoTiming
+	err := db.QueryRow(SelectVideoTimingByVideoSQL, videoID).Scan(&vt.ID, &vt.VideoID, &vt.Stopped, &vt.Length)
+	if err == nil {
+		if length > 0 && vt.Length != length {
+			db.Exec(UpdateVideoTimingLengthSQL, length, videoID)
+			vt.Length = length
+		}
+		return &vt, nil
+	}
+	if err != sql.ErrNoRows {
+		return nil, fmt.Errorf("select video timing: %w", err)
+	}
+	result, err := db.Exec(InsertVideoTimingSQL, videoID, nil, length)
+	if err != nil {
+		return nil, fmt.Errorf("insert video timing: %w", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("get video timing id: %w", err)
+	}
+	return &VideoTiming{ID: id, VideoID: videoID, Stopped: nil, Length: length}, nil
+}
+
+// UpdateVideoTimingStopped upserts a video_timings row setting stopped to the given value.
+func UpdateVideoTimingStopped(db *sql.DB, videoID int64, stopped float64) error {
+	_, err := db.Exec(UpsertVideoTimingStoppedSQL, videoID, stopped)
+	if err != nil {
+		return fmt.Errorf("upsert video timing stopped: %w", err)
+	}
+	return nil
+}
+
+// EnsureVideo returns the existing video ID for the given path, or inserts a new row and returns its ID.
+func EnsureVideo(db *sql.DB, path string, filesize int64, format string) (int64, error) {
+	var videoID int64
+	err := db.QueryRow(SelectVideoByPathSQL, path).Scan(&videoID)
+	if err == nil {
+		return videoID, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, fmt.Errorf("select video by path: %w", err)
+	}
+	base := filepath.Base(path)
+	ext := strings.TrimPrefix(filepath.Ext(path), ".")
+	result, err := db.Exec(InsertVideoSQL, path, base, ext, format, filesize)
+	if err != nil {
+		return 0, fmt.Errorf("insert video: %w", err)
+	}
+	return result.LastInsertId()
+}
+
 // InsertNote inserts a new note with the given video_id and returns its ID.
 func InsertNote(db *sql.DB, category string, videoID int64) (int64, error) {
 	result, err := db.Exec(InsertNoteSQL, category, videoID)
@@ -29,7 +83,7 @@ func getOrCreateVideo(tx *sql.Tx, v NoteVideo) (int64, error) {
 	}
 	base := filepath.Base(v.Path)
 	ext := strings.TrimPrefix(filepath.Ext(v.Path), ".")
-	result, err := tx.Exec(InsertVideoSQL, v.Path, base, ext, v.Format, v.Size, v.StoppedAt)
+	result, err := tx.Exec(InsertVideoSQL, v.Path, base, ext, v.Format, v.Size)
 	if err != nil {
 		return 0, fmt.Errorf("insert video: %w", err)
 	}
@@ -272,7 +326,7 @@ func SelectNoteVideosByNote(database *sql.DB, noteID int64) ([]NoteVideo, error)
 	var videos []NoteVideo
 	for rows.Next() {
 		var v NoteVideo
-		if err := rows.Scan(&v.ID, &v.NoteID, &v.Path, &v.Size, &v.Duration, &v.Format, &v.StoppedAt); err != nil {
+		if err := rows.Scan(&v.ID, &v.NoteID, &v.Path, &v.Size, &v.Duration, &v.Format); err != nil {
 			return nil, err
 		}
 		videos = append(videos, v)

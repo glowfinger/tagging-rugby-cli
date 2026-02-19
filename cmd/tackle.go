@@ -95,7 +95,7 @@ var tackleAddCmd = &cobra.Command{
 				{Start: timestamp, End: timestamp},
 			},
 			Videos: []db.NoteVideo{
-				{Path: videoPath, StoppedAt: timestamp, Size: videoSize, Format: videoFormat},
+				{Path: videoPath, Size: videoSize, Format: videoFormat},
 			},
 		}
 

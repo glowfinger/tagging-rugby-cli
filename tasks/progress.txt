@@ -1,41 +1,32 @@
 # Ralph Progress Log
-# Branch: ralph/rounded-control-boxes
-# Started: 2026-02-14
+# Branch: ralph/video-session-resume
+# Started: 2026-02-19
 
 ## Codebase Patterns
-- Use `CGO_ENABLED=0` for all Go build/vet commands (modernc.org/sqlite requirement)
+- Use `CGO_ENABLED=0` for all Go build/vet/run commands (modernc.org/sqlite requirement)
 - Go binary at `/home/node/go/bin/go` — export PATH before commands
-- ALWAYS use Container component — every renderColumn function MUST wrap output in layout.Container{Width, Height}.Render(content)
-- InfoBox inner width = width - 4 (2 border + 2 padding)
-- PadToWidth is the single source of truth for exact column line width
-- Use ansi.Truncate() from charmbracelet/x/ansi for ANSI+grapheme-aware truncation
-- RenderInfoBox has 4 params: (title, contentLines, width, focused) — focused=true uses Pink border
-- RenderControlBox uses square tab-style header (┌┤├┐) — being deprecated in favor of RenderInfoBox
+- DB SQL files live in db/sql/*.sql and are embedded via //go:embed in db/queries.go (not sql.go)
+- SQL constants follow pattern: var InsertVideoTimingSQL = ... (exported, from embed)
+- db/models.go holds all structs; db/functions.go holds all DB helper functions
+- getOrCreateVideo is private (lowercase), used only inside InsertNoteWithChildren transaction
+- EnsureVideo is public — calls SelectVideoByPathSQL then InsertVideoSQL; in db/functions.go
+- tui.Run signature: func Run(client *mpv.Client, db *sql.DB, videoPath string, videoID int64) error
+- NewModel signature: func NewModel(client *mpv.Client, db *sql.DB, videoPath string, videoID int64) *Model
+- Model.videoID stores the DB video ID; used in all video timing update calls
+- StoppedAt was removed from NoteVideo struct and related SQL — tracking moved to video_timings table
+- cmd/clip.go, cmd/note.go, cmd/tackle.go also had StoppedAt in NoteVideo literals — needed cleanup
+- Seek+Pause pattern for resume: client.Seek(*timing.Stopped) then client.Pause() before TUI launch
 
 ---
 
-## 2026-02-14 - US-001
-- Implemented ControlGroupLines helper in tui/components/controls.go
-- Updated renderColumn4 in tui/columns.go to use RenderInfoBox with ControlGroupLines instead of RenderControlBox
-- Files changed: tui/components/controls.go, tui/columns.go
+## 2026-02-19 - US-001 through US-007
+- Implemented all 7 user stories for video session resume feature
+- Files changed: db/sql/migrations/001_create_videos_table.sql, db/sql/insert_video.sql, db/sql/select_note_videos_by_note.sql, db/models.go, db/functions.go, db/queries.go, db/sql/insert_video_timing.sql, db/sql/select_video_timing_by_video.sql, db/sql/upsert_video_timing_stopped.sql, tui/tui.go, cmd/root.go, cmd/clip.go, cmd/note.go, cmd/tackle.go
 - **Learnings for future iterations:**
-  - ControlGroupLines is exported (capital C) since it's called from columns.go in the tui package
-  - Inner width for RenderInfoBox content = width - 4 (2 border + 2 padding)
-  - Blank lines between sub-groups are just empty strings in the []string slice
----
-
-## 2026-02-14 - US-002
-- Added Deprecated doc comment to RenderControlBox pointing to RenderInfoBox + ControlGroupLines
-- Verified no call sites remain (only definition and comment)
-- Files changed: tui/components/controls.go
-- **Learnings for future iterations:**
-  - After removing call sites, grep to confirm zero remaining usages before marking deprecated
----
-
-## 2026-02-14 - US-003
-- Updated TUI-ARCHITECTURE.md: directory structure, column rendering table, controls section
-- Files changed: tui/TUI-ARCHITECTURE.md
-- **Learnings for future iterations:**
-  - Architecture doc has 3 locations to update for component changes: directory structure, column table, component signatures section
+  - embed file is db/queries.go (not db/sql.go as progress.txt initially said)
+  - StoppedAt removal cascaded to cmd/ files not just tui/ — always grep entire repo for field names before removing
+  - EnsureVideoTiming uses INSERT ... ON CONFLICT pattern for upsert (SQLite UPSERT requires UNIQUE index)
+  - videoID=0 is used as "not registered" sentinel — guard all DB calls with `m.videoID > 0`
+  - Two ctrl+c handlers exist: one in global key handler, one in stats view handler — both needed quit-save logic
 ---
 

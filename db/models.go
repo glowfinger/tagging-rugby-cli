@@ -11,13 +11,12 @@ type Note struct {
 
 // NoteVideo represents a row in the note_videos table.
 type NoteVideo struct {
-	ID        int64
-	NoteID    int64
-	Path      string
-	Size      int64
-	Duration  float64
-	Format    string
-	StoppedAt float64
+	ID       int64
+	NoteID   int64
+	Path     string
+	Size     int64
+	Duration float64
+	Format   string
 }
 
 // NoteClip represents a row in the note_clips table.
@@ -70,4 +69,12 @@ type NoteHighlight struct {
 	ID     int64
 	NoteID int64
 	Type   string
+}
+
+// VideoTiming represents a row in the video_timings table.
+type VideoTiming struct {
+	ID      int64
+	VideoID int64
+	Stopped *float64
+	Length  float64
 }

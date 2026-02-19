@@ -102,16 +102,17 @@ type Model struct {
 	numberBuffer string
 	// lastKeyG tracks if the last key pressed was 'g' for gg command
 	lastKeyG bool
+	// videoID is the database ID of the current video (0 if not registered)
+	videoID int64
 }
 
 // newNoteVideo builds a NoteVideo with filesize and format populated from the filesystem.
 // If the file cannot be stat'd (e.g. remote path), filesize is 0 and format falls back to extension parsing.
-func newNoteVideo(path string, duration, stoppedAt float64) db.NoteVideo {
+func newNoteVideo(path string, duration float64) db.NoteVideo {
 	v := db.NoteVideo{
-		Path:      path,
-		Duration:  duration,
-		StoppedAt: stoppedAt,
-		Format:    strings.TrimPrefix(filepath.Ext(path), "."),
+		Path:     path,
+		Duration: duration,
+		Format:   strings.TrimPrefix(filepath.Ext(path), "."),
 	}
 	if info, err := os.Stat(path); err == nil {
 		v.Size = info.Size()
@@ -119,12 +120,13 @@ func newNoteVideo(path string, duration, stoppedAt float64) db.NoteVideo {
 	return v
 }
 
-// NewModel creates a new TUI model with the given mpv client, database connection, and video path.
-func NewModel(client *mpv.Client, db *sql.DB, videoPath string) *Model {
+// NewModel creates a new TUI model with the given mpv client, database connection, video path, and video ID.
+func NewModel(client *mpv.Client, db *sql.DB, videoPath string, videoID int64) *Model {
 	return &Model{
 		client:    client,
 		db:        db,
 		videoPath: videoPath,
+		videoID:   videoID,
 		statusBar: components.StatusBarState{
 			StepSize: defaultStepSize,
 		},
@@ -249,6 +251,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			m.quitting = true
+			if timePos, tpErr := m.client.GetTimePos(); tpErr == nil && m.videoID > 0 {
+				_ = db.UpdateVideoTimingStopped(m.db, m.videoID, timePos)
+			}
 			return m, tea.Quit
 		case "?":
 			if m.focus != FocusSearch {
@@ -382,7 +387,11 @@ func (m *Model) handleVideoKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case " ":
 		if m.client != nil && m.client.IsConnected() {
-			_ = m.client.TogglePause()
+			if err := m.client.TogglePause(); err == nil {
+				if timePos, tpErr := m.client.GetTimePos(); tpErr == nil && m.videoID > 0 {
+					_ = db.UpdateVideoTimingStopped(m.db, m.videoID, timePos)
+				}
+			}
 		}
 		return m, nil
 	case "m", "M":
@@ -616,6 +625,9 @@ func (m *Model) openNoteInput() (tea.Model, tea.Cmd) {
 			return clearResultMsg{}
 		})
 	}
+	if m.videoID > 0 {
+		_ = db.UpdateVideoTimingStopped(m.db, m.videoID, timestamp)
+	}
 
 	// Initialize huh note form
 	m.noteFormResult = forms.NoteFormResult{}
@@ -662,7 +674,7 @@ func (m *Model) saveNoteFromForm() (tea.Model, tea.Cmd) {
 			{Start: timestamp, End: timestamp},
 		},
 		Videos: []db.NoteVideo{
-			newNoteVideo(m.videoPath, duration, timestamp),
+			newNoteVideo(m.videoPath, duration),
 		},
 		Details: []db.NoteDetail{
 			{Type: "text", Note: result.Text},
@@ -710,6 +722,9 @@ func (m *Model) openTackleInput() (tea.Model, tea.Cmd) {
 		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
 			return clearResultMsg{}
 		})
+	}
+	if m.videoID > 0 {
+		_ = db.UpdateVideoTimingStopped(m.db, m.videoID, timestamp)
 	}
 
 	// Initialize huh tackle form
@@ -883,7 +898,7 @@ func (m *Model) saveTackleFromForm() (tea.Model, tea.Cmd) {
 			{Start: timestamp, End: timestamp},
 		},
 		Videos: []db.NoteVideo{
-			newNoteVideo(m.videoPath, duration, timestamp),
+			newNoteVideo(m.videoPath, duration),
 		},
 		Tackles: []db.NoteTackle{
 			{Player: result.Player, Attempt: attempt, Outcome: result.Outcome},
@@ -1068,6 +1083,9 @@ func (m *Model) executeCommand(cmdStr string) (string, error) {
 		if err := m.client.Pause(); err != nil {
 			return "", err
 		}
+		if timePos, tpErr := m.client.GetTimePos(); tpErr == nil && m.videoID > 0 {
+			_ = db.UpdateVideoTimingStopped(m.db, m.videoID, timePos)
+		}
 		return "Paused", nil
 	case "play":
 		if err := m.client.Play(); err != nil {
@@ -1179,6 +1197,9 @@ func (m *Model) executeClipCommand(args []string) (string, error) {
 		timestamp, err := m.client.GetTimePos()
 		if err != nil {
 			return "", err
+		}
+		if m.videoID > 0 {
+			_ = db.UpdateVideoTimingStopped(m.db, m.videoID, timestamp)
 		}
 		m.clipStartTimestamp = timestamp
 		m.clipStartSet = true
@@ -1354,7 +1375,7 @@ func (m *Model) addNote(text, category, _, _ string) (string, error) {
 			{Start: timestamp, End: timestamp},
 		},
 		Videos: []db.NoteVideo{
-			newNoteVideo(m.videoPath, duration, timestamp),
+			newNoteVideo(m.videoPath, duration),
 		},
 	}
 
@@ -1437,7 +1458,7 @@ func (m *Model) addClip(start, end float64, description string) (int64, error) {
 			{Start: start, End: end},
 		},
 		Videos: []db.NoteVideo{
-			newNoteVideo(m.videoPath, 0, start),
+			newNoteVideo(m.videoPath, 0),
 		},
 		Clips: []db.NoteClip{
 			{Name: description, Duration: clipDuration},
@@ -1515,7 +1536,7 @@ func (m *Model) addTackle(player, _ string, attempt int, outcome string) (string
 			{Start: timestamp, End: timestamp},
 		},
 		Videos: []db.NoteVideo{
-			newNoteVideo(m.videoPath, duration, timestamp),
+			newNoteVideo(m.videoPath, duration),
 		},
 		Tackles: []db.NoteTackle{
 			{Player: player, Attempt: attempt, Outcome: outcome},
@@ -1923,8 +1944,8 @@ func truncateViewToWidth(view string, width int) string {
 
 // Run starts the Bubbletea program with the given model.
 // It returns an error if the program fails to start or run.
-func Run(client *mpv.Client, db *sql.DB, videoPath string) error {
-	model := NewModel(client, db, videoPath)
+func Run(client *mpv.Client, db *sql.DB, videoPath string, videoID int64) error {
+	model := NewModel(client, db, videoPath, videoID)
 	// Load notes and tackles for the current video
 	model.loadNotesAndTackles()
 	p := tea.NewProgram(model, tea.WithAltScreen())
@@ -2046,6 +2067,9 @@ func (m *Model) handleStatsViewInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "ctrl+c":
 		m.quitting = true
+		if timePos, tpErr := m.client.GetTimePos(); tpErr == nil && m.videoID > 0 {
+			_ = db.UpdateVideoTimingStopped(m.db, m.videoID, timePos)
+		}
 		return m, tea.Quit
 	case "?":
 		// Show help overlay

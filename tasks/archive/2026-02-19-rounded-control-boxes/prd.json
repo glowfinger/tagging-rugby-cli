@@ -1,0 +1,52 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/rounded-control-boxes",
+  "description": "Rounded Control Boxes - Migrate column 4 control boxes from square RenderControlBox to rounded RenderInfoBox style",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Render control groups using RenderInfoBox",
+      "description": "As a developer, I want column 4's control groups to render with the same rounded border style as every other container so the UI is visually consistent.",
+      "acceptanceCriteria": [
+        "Add a private helper function controlGroupLines(group ControlGroup, innerWidth int) []string in tui/components/controls.go that converts a ControlGroup into content lines for RenderInfoBox",
+        "Each control renders as a styled line: nameStyle (LightLavender) for left-aligned name, shortcutStyle (Cyan bold) for [ Shortcut ] bracket — same styles as existing RenderControlBox",
+        "Sub-groups within a ControlGroup are separated by a blank line (empty string in the []string slice) instead of horizontal dividers",
+        "renderColumn4 in tui/columns.go calls RenderInfoBox(group.Name, controlGroupLines(group, width-4), width, false) for each group instead of RenderControlBox",
+        "Each control group (Playback, Navigation, Views) renders with rounded corners and inline header (e.g., ╭─ Playback ─────╮)",
+        "1 blank line gap between each bordered control box (same as current spacing)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "File: tui/components/controls.go for the new controlGroupLines helper. File: tui/columns.go line ~145 for the renderColumn4 call site. The helper builds []string content lines: for each sub-group, iterate controls and format ' Name  [ Shortcut ]' with padding. Between sub-groups, append an empty string for a blank line separator. RenderInfoBox innerWidth = width - 4 (2 border + 2 padding), so pass width-4 to the helper for alignment calculations. Use fmt.Sprintf(\"%-*s\", maxNameW, c.Name) for name alignment like the existing code does."
+    },
+    {
+      "id": "US-002",
+      "title": "Mark RenderControlBox as deprecated",
+      "description": "As a developer, I want RenderControlBox marked deprecated so it's clear the rounded style should be used for new code.",
+      "acceptanceCriteria": [
+        "RenderControlBox in tui/components/controls.go has a // Deprecated: Use RenderInfoBox with controlGroupLines instead. doc comment",
+        "No call sites remain that use RenderControlBox (grep confirms zero matches in .go files excluding the definition and comments)",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "File: tui/components/controls.go line ~148 (RenderControlBox function). Replace the existing doc comment block with a Deprecated comment. After US-001 removes the call site in columns.go, verify with: grep -rn 'RenderControlBox' --include='*.go' — should only show the function definition and its deprecated comment."
+    },
+    {
+      "id": "US-003",
+      "title": "Update TUI-ARCHITECTURE.md",
+      "description": "As a developer, I want the architecture doc to reflect that column 4 now uses RenderInfoBox so documentation stays accurate.",
+      "acceptanceCriteria": [
+        "Column Rendering table row for column 4 updated: content description mentions RenderInfoBox instead of RenderControlBox",
+        "Controls section (~line 169) updated: RenderControlBox signature line has (Deprecated) annotation",
+        "Controls section: add controlGroupLines signature documentation",
+        "Directory Structure: controls.go description updated to mention controlGroupLines and note RenderControlBox deprecation",
+        "Typecheck passes (CGO_ENABLED=0 go vet ./...)"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "File: tui/TUI-ARCHITECTURE.md. Key locations: line 30 (directory structure controls.go entry), line 72 (column 4 row in table), line 174 (RenderControlBox signature). Update each to reflect the new rendering approach and deprecation."
+    }
+  ]
+}
