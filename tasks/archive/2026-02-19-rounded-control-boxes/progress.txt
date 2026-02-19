@@ -1,0 +1,41 @@
+# Ralph Progress Log
+# Branch: ralph/rounded-control-boxes
+# Started: 2026-02-14
+
+## Codebase Patterns
+- Use `CGO_ENABLED=0` for all Go build/vet commands (modernc.org/sqlite requirement)
+- Go binary at `/home/node/go/bin/go` — export PATH before commands
+- ALWAYS use Container component — every renderColumn function MUST wrap output in layout.Container{Width, Height}.Render(content)
+- InfoBox inner width = width - 4 (2 border + 2 padding)
+- PadToWidth is the single source of truth for exact column line width
+- Use ansi.Truncate() from charmbracelet/x/ansi for ANSI+grapheme-aware truncation
+- RenderInfoBox has 4 params: (title, contentLines, width, focused) — focused=true uses Pink border
+- RenderControlBox uses square tab-style header (┌┤├┐) — being deprecated in favor of RenderInfoBox
+
+---
+
+## 2026-02-14 - US-001
+- Implemented ControlGroupLines helper in tui/components/controls.go
+- Updated renderColumn4 in tui/columns.go to use RenderInfoBox with ControlGroupLines instead of RenderControlBox
+- Files changed: tui/components/controls.go, tui/columns.go
+- **Learnings for future iterations:**
+  - ControlGroupLines is exported (capital C) since it's called from columns.go in the tui package
+  - Inner width for RenderInfoBox content = width - 4 (2 border + 2 padding)
+  - Blank lines between sub-groups are just empty strings in the []string slice
+---
+
+## 2026-02-14 - US-002
+- Added Deprecated doc comment to RenderControlBox pointing to RenderInfoBox + ControlGroupLines
+- Verified no call sites remain (only definition and comment)
+- Files changed: tui/components/controls.go
+- **Learnings for future iterations:**
+  - After removing call sites, grep to confirm zero remaining usages before marking deprecated
+---
+
+## 2026-02-14 - US-003
+- Updated TUI-ARCHITECTURE.md: directory structure, column rendering table, controls section
+- Files changed: tui/TUI-ARCHITECTURE.md
+- **Learnings for future iterations:**
+  - Architecture doc has 3 locations to update for component changes: directory structure, column table, component signatures section
+---
+

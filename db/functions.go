@@ -8,10 +8,15 @@ import (
 )
 
 // EnsureVideoTiming selects the video_timing row for the given videoID; inserts one (with stopped=NULL) if not found.
+// If length > 0, it is always written to the row (whether new or existing) so the duration stays current.
 func EnsureVideoTiming(db *sql.DB, videoID int64, length float64) (*VideoTiming, error) {
 	var vt VideoTiming
 	err := db.QueryRow(SelectVideoTimingByVideoSQL, videoID).Scan(&vt.ID, &vt.VideoID, &vt.Stopped, &vt.Length)
 	if err == nil {
+		if length > 0 && vt.Length != length {
+			db.Exec(UpdateVideoTimingLengthSQL, length, videoID)
+			vt.Length = length
+		}
 		return &vt, nil
 	}
 	if err != sql.ErrNoRows {

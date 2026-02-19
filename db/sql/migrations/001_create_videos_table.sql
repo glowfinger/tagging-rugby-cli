@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS videos (
 
 CREATE TABLE IF NOT EXISTS video_timings (
     id INTEGER PRIMARY KEY,
-    video_id INTEGER NOT NULL REFERENCES videos(id),
+    video_id INTEGER NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
     stopped REAL,
     length REAL
 );

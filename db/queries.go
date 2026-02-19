@@ -42,6 +42,9 @@ var SelectVideoTimingByVideoSQL string
 //go:embed sql/upsert_video_timing_stopped.sql
 var UpsertVideoTimingStoppedSQL string
 
+//go:embed sql/update_video_timing_length.sql
+var UpdateVideoTimingLengthSQL string
+
 // Note child table insert queries
 
 //go:embed sql/insert_note_clip.sql
