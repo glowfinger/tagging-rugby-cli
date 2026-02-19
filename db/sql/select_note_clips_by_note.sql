@@ -1,1 +1,1 @@
-SELECT id, note_id, name, duration, started_at, finished_at, error_at, error FROM note_clips WHERE note_id = ?;
+SELECT id, note_id, folder, filename, extension, format, filesize, status, started_at, finished_at, error_at, log FROM note_clips WHERE note_id = ?;
