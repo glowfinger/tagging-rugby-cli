@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/user/tagging-rugby-cli/clip"
 	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/mpv"
 	"github.com/user/tagging-rugby-cli/pkg/timeutil"
@@ -38,6 +39,9 @@ type tickMsg time.Time
 
 // clearResultMsg is sent to clear the command result message.
 type clearResultMsg struct{}
+
+// clearStatusMsg is sent to clear the status message after a timeout.
+type clearStatusMsg struct{}
 
 // Model is the Bubbletea model for the TUI application.
 // It implements the tea.Model interface with Init, Update, and View methods.
@@ -104,6 +108,8 @@ type Model struct {
 	lastKeyG bool
 	// videoID is the database ID of the current video (0 if not registered)
 	videoID int64
+	// statusMsg is a transient message shown in the TUI footer for a few seconds
+	statusMsg string
 }
 
 // newNoteVideo builds a NoteVideo with filesize and format populated from the filesystem.
@@ -155,14 +161,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if _, isKey := msg.(tea.KeyMsg); !isKey {
 			if _, isTick := msg.(tickMsg); !isTick {
 				if _, isClear := msg.(clearResultMsg); !isClear {
-					if _, isResize := msg.(tea.WindowSizeMsg); !isResize {
-						if m.confirmDiscardForm != nil {
-							return m.handleConfirmDiscardUpdate(msg)
+					if _, isStatusClear := msg.(clearStatusMsg); !isStatusClear {
+						if _, isResize := msg.(tea.WindowSizeMsg); !isResize {
+							if m.confirmDiscardForm != nil {
+								return m.handleConfirmDiscardUpdate(msg)
+							}
+							if m.noteForm != nil {
+								return m.handleNoteFormUpdate(msg)
+							}
+							return m.handleTackleFormUpdate(msg)
 						}
-						if m.noteForm != nil {
-							return m.handleNoteFormUpdate(msg)
-						}
-						return m.handleTackleFormUpdate(msg)
 					}
 				}
 			}
@@ -190,6 +198,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case clearResultMsg:
 		// Clear the command result message
 		m.commandInput.ClearResult()
+		return m, nil
+
+	case clearStatusMsg:
+		m.statusMsg = ""
 		return m, nil
 
 	case tea.KeyMsg:
@@ -518,6 +530,10 @@ func (m *Model) handleNotesKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.commandInput.CursorPos = 0
 		m.commandInput.ClearResult()
 		return m, nil
+	case "ctrl+r":
+		m.numberBuffer = ""
+		m.lastKeyG = false
+		return m.startRegenerateClip()
 	case "esc":
 		m.numberBuffer = ""
 		m.lastKeyG = false
@@ -1826,6 +1842,52 @@ func (m *Model) updateStatusFromMpv() {
 }
 
 
+// startRegenerateClip queues a clip regeneration for the selected note.
+func (m *Model) startRegenerateClip() (tea.Model, tea.Cmd) {
+	item := m.notesList.GetSelectedItem()
+	if item == nil {
+		return m, nil
+	}
+
+	// Look up video path
+	videos, err := db.SelectNoteVideosByNote(m.db, item.ID)
+	if err != nil || len(videos) == 0 {
+		return m, nil
+	}
+	videoPath := videos[0].Path
+
+	// Load timing and tackle data
+	timings, err := db.SelectNoteTimingByNote(m.db, item.ID)
+	if err != nil || len(timings) == 0 {
+		return m, nil
+	}
+	tackles, err := db.SelectNoteTacklesByNote(m.db, item.ID)
+	if err != nil || len(tackles) == 0 {
+		return m, nil
+	}
+
+	// Compute paths
+	note, err := db.SelectNoteByID(m.db, item.ID)
+	if err != nil {
+		return m, nil
+	}
+	t := tackles[0]
+	folder, filename := clip.ClipPaths(videoPath, note.Category, t.Player, t.Attempt, t.Outcome, timings[0].Start)
+
+	// Delete existing clip file if it exists
+	_ = os.Remove(filepath.Join(folder, filename))
+
+	// Queue for regeneration
+	if err := db.UpsertNoteClipPending(m.db, item.ID, folder, filename); err != nil {
+		return m, nil
+	}
+
+	m.statusMsg = "Clip queued for regeneration"
+	return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+		return clearStatusMsg{}
+	})
+}
+
 // View renders the current state of the model as a string.
 func (m *Model) View() string {
 	if m.quitting {
@@ -1920,10 +1982,15 @@ func (m *Model) View() string {
 	// Render timeline progress bar below columns (full width)
 	timeline := components.Timeline(m.statusBar.TimePos, m.statusBar.Duration, m.notesList.Items, m.width)
 
-	// Render command input at bottom (full width)
-	commandInput := components.CommandInput(m.commandInput, m.width)
+	// Render command input or status message at bottom (full width)
+	var footer string
+	if m.statusMsg != "" {
+		footer = m.statusMsg
+	} else {
+		footer = components.CommandInput(m.commandInput, m.width)
+	}
 
-	return columnsView + "\n" + timeline + "\n" + commandInput
+	return columnsView + "\n" + timeline + "\n" + footer
 }
 
 
