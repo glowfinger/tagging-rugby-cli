@@ -1,24 +1,17 @@
 {
   "project": "tagging-rugby-cli",
-  "branchName": "ralph/db-migrations",
-  "description": "Add versioned migration system with schema_migrations table, migrate note_videos data to videos table",
+  "branchName": "ralph/remove-migration-002",
+  "description": "Remove migration 002, canonicalise migration 001 with FK constraint, delete orphaned insert_note_video.sql",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Create migration runner infrastructure",
-      "description": "As a developer, I need a migration runner so that schema changes are applied automatically and tracked by version.",
+      "title": "Remove migration 002 file",
+      "description": "As a developer, I want migration 002 deleted so the migration system contains only a single authoritative schema file.",
       "acceptanceCriteria": [
-        "schema_migrations table created automatically with column: version INTEGER PRIMARY KEY",
-        "Migration SQL files live in db/sql/migrations/ as NNN_name.sql (zero-padded 3-digit version)",
-        "All migration SQL files embedded via go:embed in db/queries.go or a new db/migrations.go file",
-        "New function runMigrations(db) in db/db.go replaces the current migrate() function",
-        "runMigrations reads schema_migrations to find applied versions, executes unapplied migrations in order",
-        "Each migration runs in a transaction — on failure, that migration is rolled back and error returned",
-        "After successful execution, the migration version is inserted into schema_migrations",
-        "Open() calls runMigrations instead of migrate",
-        "create_tables.sql still runs with IF NOT EXISTS for fresh databases before migrations",
-        "CGO_ENABLED=0 go vet ./... passes",
-        "CGO_ENABLED=0 go build ./... passes"
+        "db/sql/migrations/002_migrate_note_videos.sql is deleted",
+        "Grep confirms no file references 002_migrate_note_videos",
+        "CGO_ENABLED=0 go build ./... passes",
+        "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 1,
       "passes": true,
@@ -26,16 +19,16 @@
     },
     {
       "id": "US-002",
-      "title": "Migration 001 — Create videos table and add video_id to notes",
-      "description": "As a developer, I need the first migration to create the videos table and add video_id to the notes table for existing databases.",
+      "title": "Canonicalise migration 001 — remove ALTER TABLE, add FK constraint",
+      "description": "As a developer, I want migration 001 to be a clean canonical schema with no backward-compat hacks and with notes.video_id correctly referencing videos(id).",
       "acceptanceCriteria": [
-        "File: db/sql/migrations/001_create_videos_table.sql",
-        "Creates videos table IF NOT EXISTS with columns: id, path, filename, extension, format, filesize, stop_time",
-        "Adds video_id column to notes table if it doesn't already exist (ALTER TABLE notes ADD COLUMN video_id INTEGER DEFAULT 0)",
-        "On a fresh database where tables already have video_id, migration is a safe no-op",
-        "On an existing database without video_id, the column is added with default 0",
-        "CGO_ENABLED=0 go vet ./... passes",
-        "CGO_ENABLED=0 go build ./... passes"
+        "Remove the backward-compat block from 001_create_videos_table.sql (lines 72-75): the comment and ALTER TABLE notes ADD COLUMN video_id INTEGER DEFAULT 0",
+        "Update or remove the comment on line 3 that references note_videos and migration 002",
+        "notes.video_id column declaration reads: video_id INTEGER DEFAULT 0 REFERENCES videos(id)",
+        "No ALTER TABLE statements remain in 001_create_videos_table.sql",
+        "All CREATE TABLE IF NOT EXISTS statements and indexes are otherwise unchanged",
+        "CGO_ENABLED=0 go build ./... passes",
+        "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 2,
       "passes": true,
@@ -43,20 +36,13 @@
     },
     {
       "id": "US-003",
-      "title": "Migration 002 — Migrate note_videos data and drop table",
-      "description": "As a developer, I need the second migration to move note_videos data into videos, set video_id on notes, and drop note_videos.",
+      "title": "Delete orphaned insert_note_video.sql",
+      "description": "As a developer, I want the dead insert_note_video.sql file removed because it inserts into the defunct note_videos table and is not embedded or used anywhere in Go code.",
       "acceptanceCriteria": [
-        "File: db/sql/migrations/002_migrate_note_videos.sql",
-        "Guards against note_videos not existing (fresh DB) — checks sqlite_master before proceeding",
-        "Inserts unique videos from note_videos into videos deduplicated by path",
-        "filename derived from path using SQLite string functions (SUBSTR + INSTR or equivalent)",
-        "extension derived from path using SQLite string functions",
-        "note_videos.size maps to videos.filesize, note_videos.stopped_at maps to videos.stop_time",
-        "note_videos.duration is not migrated",
-        "Updates notes.video_id to corresponding videos.id based on matching path from note_videos",
-        "Drops note_videos table after data migration completes",
-        "CGO_ENABLED=0 go vet ./... passes",
-        "CGO_ENABLED=0 go build ./... passes"
+        "db/sql/insert_note_video.sql is deleted",
+        "Grep confirms no Go file embeds or references insert_note_video.sql",
+        "CGO_ENABLED=0 go build ./... passes",
+        "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 3,
       "passes": true,
