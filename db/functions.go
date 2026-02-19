@@ -3,8 +3,11 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
+
+	"github.com/user/tagging-rugby-cli/clip"
 )
 
 // EnsureVideoTiming selects the video_timing row for the given videoID; inserts one (with stopped=NULL) if not found.
@@ -172,6 +175,28 @@ func InsertNoteHighlight(db *sql.DB, noteID int64, highlightType string) error {
 	return nil
 }
 
+// QueueClipIfNeeded checks if the note has all required data (category, timing, tackle) and queues a clip
+// generation job by upserting a pending note_clips row. Silently returns nil if any data is missing.
+func QueueClipIfNeeded(database *sql.DB, noteID int64, videoPath string) error {
+	note, err := SelectNoteByID(database, noteID)
+	if err != nil {
+		return nil
+	}
+
+	timings, err := SelectNoteTimingByNote(database, noteID)
+	if err != nil || len(timings) == 0 {
+		return nil
+	}
+
+	tackles, err := SelectNoteTacklesByNote(database, noteID)
+	if err != nil || len(tackles) == 0 {
+		return nil
+	}
+
+	folder, filename := clip.ClipPaths(videoPath, note.Category, tackles[0].Player, tackles[0].Attempt, tackles[0].Outcome, timings[0].Start)
+	return UpsertNoteClipPending(database, noteID, folder, filename)
+}
+
 // InsertNoteWithChildren inserts a note and its related child records in a transaction.
 // It accepts the note category plus optional child records to insert.
 type NoteChildren struct {
@@ -245,6 +270,13 @@ func InsertNoteWithChildren(database *sql.DB, category string, children NoteChil
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("commit transaction: %w", err)
 	}
+
+	if len(children.Videos) > 0 {
+		if err := QueueClipIfNeeded(database, noteID, children.Videos[0].Path); err != nil {
+			log.Printf("queue clip after insert: %v", err)
+		}
+	}
+
 	return noteID, nil
 }
 
@@ -295,6 +327,14 @@ func UpdateNoteWithChildren(database *sql.DB, noteID int64, children NoteChildre
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit transaction: %w", err)
 	}
+
+	videos, err := SelectNoteVideosByNote(database, noteID)
+	if err == nil && len(videos) > 0 {
+		if err := QueueClipIfNeeded(database, noteID, videos[0].Path); err != nil {
+			log.Printf("queue clip after update: %v", err)
+		}
+	}
+
 	return nil
 }
 
