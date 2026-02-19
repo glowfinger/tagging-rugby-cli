@@ -1,1 +1,1 @@
-INSERT INTO notes (category) VALUES (?);
+INSERT INTO notes (category, video_id) VALUES (?, ?);

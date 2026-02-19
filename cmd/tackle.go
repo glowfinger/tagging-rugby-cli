@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -77,6 +79,13 @@ var tackleAddCmd = &cobra.Command{
 		}
 		defer database.Close()
 
+		// Get video file metadata
+		var videoSize int64
+		if info, err := os.Stat(videoPath); err == nil {
+			videoSize = info.Size()
+		}
+		videoFormat := strings.TrimPrefix(filepath.Ext(videoPath), ".")
+
 		// Insert note with tackle and timing child rows
 		children := db.NoteChildren{
 			Tackles: []db.NoteTackle{
@@ -86,7 +95,7 @@ var tackleAddCmd = &cobra.Command{
 				{Start: timestamp, End: timestamp},
 			},
 			Videos: []db.NoteVideo{
-				{Path: videoPath, StoppedAt: timestamp},
+				{Path: videoPath, StoppedAt: timestamp, Size: videoSize, Format: videoFormat},
 			},
 		}
 
@@ -134,13 +143,13 @@ var tackleListCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		// Build dynamic query with filters - join notes with note_tackles, note_timing, and note_videos
+		// Build dynamic query with filters - join notes with note_tackles, note_timing, and videos
 		query := `SELECT n.id, COALESCE(nt_time.start, 0), ntk.player, ntk.attempt, ntk.outcome
 			 FROM notes n
 			 INNER JOIN note_tackles ntk ON ntk.note_id = n.id
-			 INNER JOIN note_videos nv ON nv.note_id = n.id
+			 INNER JOIN videos v ON v.id = n.video_id
 			 LEFT JOIN note_timing nt_time ON nt_time.note_id = n.id
-			 WHERE nv.path = ?`
+			 WHERE v.path = ?`
 		queryArgs := []interface{}{videoPath}
 
 		if playerFilter != "" {

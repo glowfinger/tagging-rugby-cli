@@ -6,8 +6,8 @@ import (
 
 // Schema and migrations
 
-//go:embed sql/create_tables.sql
-var CreateTablesSQL string
+//go:embed sql/bootstrap.sql
+var BootstrapSQL string
 
 // Notes queries
 
@@ -23,10 +23,15 @@ var SelectNoteByIDSQL string
 //go:embed sql/delete_note.sql
 var DeleteNoteSQL string
 
-// Note child table insert queries
+// Video queries
 
-//go:embed sql/insert_note_video.sql
-var InsertNoteVideoSQL string
+//go:embed sql/insert_video.sql
+var InsertVideoSQL string
+
+//go:embed sql/select_video_by_path.sql
+var SelectVideoByPathSQL string
+
+// Note child table insert queries
 
 //go:embed sql/insert_note_clip.sql
 var InsertNoteClipSQL string

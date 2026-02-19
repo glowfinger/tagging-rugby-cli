@@ -1,18 +1,22 @@
 {
   "project": "tagging-rugby-cli",
-  "branchName": "ralph/remove-status-bar",
-  "description": "Remove the full-width status bar from the top of the TUI, move overlay indicator to mini player card, reclaim vertical space",
+  "branchName": "ralph/db-migrations",
+  "description": "Add versioned migration system with schema_migrations table, migrate note_videos data to videos table",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Add overlay indicator to mini player card",
-      "description": "As a user, I want to see the overlay status in the playback card so that information isn't lost when the status bar is removed.",
+      "title": "Create migration runner infrastructure",
+      "description": "As a developer, I need a migration runner so that schema changes are applied automatically and tracked by version.",
       "acceptanceCriteria": [
-        "Mini player card shows 'Overlay: on' when state.OverlayEnabled is true",
-        "Mini player card shows 'Overlay: off' when state.OverlayEnabled is false",
-        "The overlay line appears after the mute line (or after time if not muted), before the warning line",
-        "Overlay indicator always shows (both on and off states), unlike the mute indicator which is conditional",
-        "Both the fixed-width (column 1) and auto-sized (standalone narrow terminal) mini player variants show the overlay indicator",
+        "schema_migrations table created automatically with column: version INTEGER PRIMARY KEY",
+        "Migration SQL files live in db/sql/migrations/ as NNN_name.sql (zero-padded 3-digit version)",
+        "All migration SQL files embedded via go:embed in db/queries.go or a new db/migrations.go file",
+        "New function runMigrations(db) in db/db.go replaces the current migrate() function",
+        "runMigrations reads schema_migrations to find applied versions, executes unapplied migrations in order",
+        "Each migration runs in a transaction — on failure, that migration is rolled back and error returned",
+        "After successful execution, the migration version is inserted into schema_migrations",
+        "Open() calls runMigrations instead of migrate",
+        "create_tables.sql still runs with IF NOT EXISTS for fresh databases before migrations",
         "CGO_ENABLED=0 go vet ./... passes",
         "CGO_ENABLED=0 go build ./... passes"
       ],
@@ -22,21 +26,39 @@
     },
     {
       "id": "US-002",
-      "title": "Remove status bar from main layout and form/error views",
-      "description": "As a user, I want the status bar removed from the top of the screen so the UI is cleaner and I get more vertical space for content.",
+      "title": "Migration 001 — Create videos table and add video_id to notes",
+      "description": "As a developer, I need the first migration to create the videos table and add video_id to the notes table for existing databases.",
       "acceptanceCriteria": [
-        "The statusBar local variable and components.StatusBar() call are removed from View() in tui/tui.go",
-        "Main layout assembly changes from statusBar + newline + columnsView + newline + timeline + newline + commandInput to columnsView + newline + timeline + newline + commandInput",
-        "Form overlay views (confirm, note form, tackle form) show components.RenderMiniPlayer(m.statusBar, 0, false) at the top instead of the status bar",
-        "Error view shows components.RenderMiniPlayer(m.statusBar, 0, true) at the top instead of the status bar",
-        "colHeight calculation changes from m.height - 9 to m.height - 8 to reclaim the freed line",
-        "The StatusBar function in tui/components/statusbar.go is NOT deleted — it remains available",
-        "The StatusBarState struct remains unchanged — still used as the data container for playback state",
-        "Help overlay and stats view remain unchanged (they already don't show the status bar)",
+        "File: db/sql/migrations/001_create_videos_table.sql",
+        "Creates videos table IF NOT EXISTS with columns: id, path, filename, extension, format, filesize, stop_time",
+        "Adds video_id column to notes table if it doesn't already exist (ALTER TABLE notes ADD COLUMN video_id INTEGER DEFAULT 0)",
+        "On a fresh database where tables already have video_id, migration is a safe no-op",
+        "On an existing database without video_id, the column is added with default 0",
         "CGO_ENABLED=0 go vet ./... passes",
         "CGO_ENABLED=0 go build ./... passes"
       ],
       "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Migration 002 — Migrate note_videos data and drop table",
+      "description": "As a developer, I need the second migration to move note_videos data into videos, set video_id on notes, and drop note_videos.",
+      "acceptanceCriteria": [
+        "File: db/sql/migrations/002_migrate_note_videos.sql",
+        "Guards against note_videos not existing (fresh DB) — checks sqlite_master before proceeding",
+        "Inserts unique videos from note_videos into videos deduplicated by path",
+        "filename derived from path using SQLite string functions (SUBSTR + INSTR or equivalent)",
+        "extension derived from path using SQLite string functions",
+        "note_videos.size maps to videos.filesize, note_videos.stopped_at maps to videos.stop_time",
+        "note_videos.duration is not migrated",
+        "Updates notes.video_id to corresponding videos.id based on matching path from note_videos",
+        "Drops note_videos table after data migration completes",
+        "CGO_ENABLED=0 go vet ./... passes",
+        "CGO_ENABLED=0 go build ./... passes"
+      ],
+      "priority": 3,
       "passes": true,
       "notes": ""
     }

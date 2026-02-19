@@ -103,8 +103,8 @@ var openCmd = &cobra.Command{
 		if database != nil {
 			row := database.QueryRow(
 				`SELECT COUNT(DISTINCT n.id) FROM notes n
-				 INNER JOIN note_videos nv ON nv.note_id = n.id
-				 WHERE nv.path = ?`, absPath)
+				 INNER JOIN videos v ON v.id = n.video_id
+				 WHERE v.path = ?`, absPath)
 			row.Scan(&noteCount)
 		}
 
