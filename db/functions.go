@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/user/tagging-rugby-cli/clip"
 )
 
 // EnsureVideoTiming selects the video_timing row for the given videoID; inserts one (with stopped=NULL) if not found.
@@ -223,6 +221,7 @@ func InsertNoteHighlight(db *sql.DB, noteID int64, highlightType string) error {
 
 // QueueClipIfNeeded checks if the note has all required data (category, timing, tackle) and queues a clip
 // generation job by upserting a pending note_clips row. Silently returns nil if any data is missing.
+// Note: path computation is inlined here (same logic as clip.ClipPaths) to avoid an import cycle between db and clip.
 func QueueClipIfNeeded(database *sql.DB, noteID int64, videoPath string) error {
 	note, err := SelectNoteByID(database, noteID)
 	if err != nil {
@@ -239,7 +238,17 @@ func QueueClipIfNeeded(database *sql.DB, noteID int64, videoPath string) error {
 		return nil
 	}
 
-	folder, filename := clip.ClipPaths(videoPath, note.Category, tackles[0].Player, tackles[0].Attempt, tackles[0].Outcome, timings[0].Start)
+	t := tackles[0]
+	categorySlug := strings.ToLower(strings.ReplaceAll(note.Category, " ", "_"))
+	playerSlug := strings.ToLower(strings.ReplaceAll(t.Player, " ", "_"))
+	outcomeSlug := strings.ToLower(strings.ReplaceAll(t.Outcome, " ", "_"))
+	folder := filepath.Join(filepath.Dir(videoPath), "clips", categorySlug, playerSlug)
+	totalSecs := int(timings[0].Start)
+	hours := totalSecs / 3600
+	minutes := (totalSecs % 3600) / 60
+	seconds := totalSecs % 60
+	filename := fmt.Sprintf("%02d%02d%02d-%s-%s-%s-%d.mp4", hours, minutes, seconds, playerSlug, categorySlug, outcomeSlug, t.Attempt)
+
 	return UpsertNoteClipPending(database, noteID, folder, filename)
 }
 
