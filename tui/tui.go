@@ -622,6 +622,9 @@ func (m *Model) openNoteInput() (tea.Model, tea.Cmd) {
 			return clearResultMsg{}
 		})
 	}
+	if m.videoID > 0 {
+		_ = db.UpdateVideoTimingStopped(m.db, m.videoID, timestamp)
+	}
 
 	// Initialize huh note form
 	m.noteFormResult = forms.NoteFormResult{}
@@ -716,6 +719,9 @@ func (m *Model) openTackleInput() (tea.Model, tea.Cmd) {
 		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
 			return clearResultMsg{}
 		})
+	}
+	if m.videoID > 0 {
+		_ = db.UpdateVideoTimingStopped(m.db, m.videoID, timestamp)
 	}
 
 	// Initialize huh tackle form
@@ -1188,6 +1194,9 @@ func (m *Model) executeClipCommand(args []string) (string, error) {
 		timestamp, err := m.client.GetTimePos()
 		if err != nil {
 			return "", err
+		}
+		if m.videoID > 0 {
+			_ = db.UpdateVideoTimingStopped(m.db, m.videoID, timestamp)
 		}
 		m.clipStartTimestamp = timestamp
 		m.clipStartSet = true
