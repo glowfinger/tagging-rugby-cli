@@ -1,16 +1,17 @@
 {
   "project": "tagging-rugby-cli",
-  "branchName": "ralph/remove-migration-002",
-  "description": "Remove migration 002, canonicalise migration 001 with FK constraint, delete orphaned insert_note_video.sql",
+  "branchName": "ralph/note-clip-schema",
+  "description": "Redesign note_clips table to store clip file metadata (folder, filename, extension, format, filesize) and lifecycle (status, log), replacing the old name/duration/error columns",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Remove migration 002 file",
-      "description": "As a developer, I want migration 002 deleted so the migration system contains only a single authoritative schema file.",
+      "title": "Update migration to new note_clips schema",
+      "description": "As a developer, I need the canonical schema in 001_create_videos_table.sql to reflect the new note_clips columns so that fresh database initialisation produces the correct table.",
       "acceptanceCriteria": [
-        "db/sql/migrations/002_migrate_note_videos.sql is deleted",
-        "Grep confirms no file references 002_migrate_note_videos",
-        "CGO_ENABLED=0 go build ./... passes",
+        "note_clips definition in db/sql/migrations/001_create_videos_table.sql has exactly these columns: id, note_id, folder, filename, extension, format, filesize, status, started_at, finished_at, error_at, log",
+        "Old columns name, duration, error are removed from the note_clips CREATE TABLE statement",
+        "note_id still carries NOT NULL REFERENCES notes(id) ON DELETE CASCADE",
+        "All other tables in the file are unchanged",
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 1,
@@ -19,15 +20,11 @@
     },
     {
       "id": "US-002",
-      "title": "Canonicalise migration 001 — remove ALTER TABLE, add FK constraint",
-      "description": "As a developer, I want migration 001 to be a clean canonical schema with no backward-compat hacks and with notes.video_id correctly referencing videos(id).",
+      "title": "Update NoteClip Go struct",
+      "description": "As a developer, I need the NoteClip struct in db/models.go to reflect the new columns so that Go code that reads or writes clips compiles and is type-safe.",
       "acceptanceCriteria": [
-        "Remove the backward-compat block from 001_create_videos_table.sql (lines 72-75): the comment and ALTER TABLE notes ADD COLUMN video_id INTEGER DEFAULT 0",
-        "Update or remove the comment on line 3 that references note_videos and migration 002",
-        "notes.video_id column declaration reads: video_id INTEGER DEFAULT 0 REFERENCES videos(id)",
-        "No ALTER TABLE statements remain in 001_create_videos_table.sql",
-        "All CREATE TABLE IF NOT EXISTS statements and indexes are otherwise unchanged",
-        "CGO_ENABLED=0 go build ./... passes",
+        "NoteClip struct has fields: ID int64, NoteID int64, Folder string, Filename string, Extension string, Format string, Filesize int64, Status string, StartedAt *time.Time, FinishedAt *time.Time, ErrorAt *time.Time, Log string",
+        "Fields Name string, Duration float64, Error string are removed from NoteClip",
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 2,
@@ -36,15 +33,46 @@
     },
     {
       "id": "US-003",
-      "title": "Delete orphaned insert_note_video.sql",
-      "description": "As a developer, I want the dead insert_note_video.sql file removed because it inserts into the defunct note_videos table and is not embedded or used anywhere in Go code.",
+      "title": "Update insert_note_clip.sql and select_note_clips_by_note.sql",
+      "description": "As a developer, I need the existing SQL files for inserting and selecting note clips to use the new column set so that db functions produce correct SQL at runtime.",
       "acceptanceCriteria": [
-        "db/sql/insert_note_video.sql is deleted",
-        "Grep confirms no Go file embeds or references insert_note_video.sql",
-        "CGO_ENABLED=0 go build ./... passes",
+        "db/sql/insert_note_clip.sql inserts columns: note_id, folder, filename, extension, format, filesize, status, started_at, finished_at, error_at, log (11 placeholders)",
+        "db/sql/select_note_clips_by_note.sql selects id, note_id, folder, filename, extension, format, filesize, status, started_at, finished_at, error_at, log WHERE note_id = ?",
+        "Old columns name, duration, error are absent from both files",
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Add update_note_clip.sql, select_note_clip_by_id.sql and embed vars",
+      "description": "As a developer, I need SQL files to update a clip's status/timestamps/log and to fetch a single clip by ID, plus their embed constants in db/queries.go, so that the export process can track clip lifecycle.",
+      "acceptanceCriteria": [
+        "db/sql/update_note_clip.sql contains: UPDATE note_clips SET status=?, started_at=?, finished_at=?, error_at=?, log=? WHERE id=?",
+        "db/sql/select_note_clip_by_id.sql selects all 12 columns WHERE id=?",
+        "db/queries.go embeds update_note_clip.sql as UpdateNoteClipSQL",
+        "db/queries.go embeds select_note_clip_by_id.sql as SelectNoteClipByIDSQL",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Update db/functions.go for new note_clips schema",
+      "description": "As a developer, I need all db functions that touch note_clips to be updated to compile against the new struct and SQL, and two new helpers (UpdateNoteClip, SelectNoteClipByID) must be added for the export pipeline.",
+      "acceptanceCriteria": [
+        "InsertNoteClip signature is: func InsertNoteClip(db *sql.DB, noteID int64, folder, filename, extension, format string, filesize int64, status string, startedAt, finishedAt, errorAt interface{}, log string) error",
+        "The clip loop in InsertNoteWithChildren passes c.Folder, c.Filename, c.Extension, c.Format, c.Filesize, c.Status, c.StartedAt, c.FinishedAt, c.ErrorAt, c.Log to InsertNoteClipSQL (correct order, 11 args after noteID)",
+        "SelectNoteClipsByNote scans into: c.ID, c.NoteID, c.Folder, c.Filename, c.Extension, c.Format, c.Filesize, c.Status, c.StartedAt, c.FinishedAt, c.ErrorAt, c.Log (no Name, Duration, Error)",
+        "New function SelectNoteClipByID(db *sql.DB, id int64) (*NoteClip, error) executes SelectNoteClipByIDSQL and scans all 12 fields",
+        "New function UpdateNoteClip(db *sql.DB, id int64, status string, startedAt, finishedAt, errorAt interface{}, log string) error executes UpdateNoteClipSQL",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 5,
       "passes": true,
       "notes": ""
     }
