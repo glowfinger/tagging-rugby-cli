@@ -125,6 +125,9 @@ var MarkClipCompleteSQL string
 //go:embed sql/mark_clip_error.sql
 var MarkClipErrorSQL string
 
+//go:embed sql/select_next_pending_clip.sql
+var SelectNextPendingClipSQL string
+
 // Joined queries for TUI views
 
 //go:embed sql/select_notes_with_timing.sql

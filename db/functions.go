@@ -94,6 +94,24 @@ func getOrCreateVideo(tx *sql.Tx, v NoteVideo) (int64, error) {
 	return result.LastInsertId()
 }
 
+// SelectNextPendingClip returns the next pending clip with all data needed to run ffmpeg.
+// Returns nil, nil when no pending clip is found.
+func SelectNextPendingClip(database *sql.DB) (*PendingClip, error) {
+	var c PendingClip
+	err := database.QueryRow(SelectNextPendingClipSQL).Scan(
+		&c.ClipID, &c.NoteID, &c.Folder, &c.Filename,
+		&c.VideoPath, &c.Category, &c.Player, &c.Attempt, &c.Outcome,
+		&c.Start, &c.End,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("select next pending clip: %w", err)
+	}
+	return &c, nil
+}
+
 // MarkClipProcessing updates a note_clips row to processing status with the given start time.
 func MarkClipProcessing(db *sql.DB, clipID int64, startedAt time.Time) error {
 	_, err := db.Exec(MarkClipProcessingSQL, startedAt, clipID)
