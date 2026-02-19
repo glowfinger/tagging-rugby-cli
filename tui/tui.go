@@ -384,7 +384,11 @@ func (m *Model) handleVideoKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case " ":
 		if m.client != nil && m.client.IsConnected() {
-			_ = m.client.TogglePause()
+			if err := m.client.TogglePause(); err == nil {
+				if timePos, tpErr := m.client.GetTimePos(); tpErr == nil && m.videoID > 0 {
+					_ = db.UpdateVideoTimingStopped(m.db, m.videoID, timePos)
+				}
+			}
 		}
 		return m, nil
 	case "m", "M":
@@ -1069,6 +1073,9 @@ func (m *Model) executeCommand(cmdStr string) (string, error) {
 	case "pause", "p":
 		if err := m.client.Pause(); err != nil {
 			return "", err
+		}
+		if timePos, tpErr := m.client.GetTimePos(); tpErr == nil && m.videoID > 0 {
+			_ = db.UpdateVideoTimingStopped(m.db, m.videoID, timePos)
 		}
 		return "Paused", nil
 	case "play":
