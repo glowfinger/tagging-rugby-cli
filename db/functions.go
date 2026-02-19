@@ -7,6 +7,36 @@ import (
 	"strings"
 )
 
+// EnsureVideoTiming selects the video_timing row for the given videoID; inserts one (with stopped=NULL) if not found.
+func EnsureVideoTiming(db *sql.DB, videoID int64, length float64) (*VideoTiming, error) {
+	var vt VideoTiming
+	err := db.QueryRow(SelectVideoTimingByVideoSQL, videoID).Scan(&vt.ID, &vt.VideoID, &vt.Stopped, &vt.Length)
+	if err == nil {
+		return &vt, nil
+	}
+	if err != sql.ErrNoRows {
+		return nil, fmt.Errorf("select video timing: %w", err)
+	}
+	result, err := db.Exec(InsertVideoTimingSQL, videoID, nil, length)
+	if err != nil {
+		return nil, fmt.Errorf("insert video timing: %w", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("get video timing id: %w", err)
+	}
+	return &VideoTiming{ID: id, VideoID: videoID, Stopped: nil, Length: length}, nil
+}
+
+// UpdateVideoTimingStopped upserts a video_timings row setting stopped to the given value.
+func UpdateVideoTimingStopped(db *sql.DB, videoID int64, stopped float64) error {
+	_, err := db.Exec(UpsertVideoTimingStoppedSQL, videoID, stopped)
+	if err != nil {
+		return fmt.Errorf("upsert video timing stopped: %w", err)
+	}
+	return nil
+}
+
 // InsertNote inserts a new note with the given video_id and returns its ID.
 func InsertNote(db *sql.DB, category string, videoID int64) (int64, error) {
 	result, err := db.Exec(InsertNoteSQL, category, videoID)

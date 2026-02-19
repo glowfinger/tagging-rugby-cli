@@ -70,3 +70,11 @@ type NoteHighlight struct {
 	NoteID int64
 	Type   string
 }
+
+// VideoTiming represents a row in the video_timings table.
+type VideoTiming struct {
+	ID      int64
+	VideoID int64
+	Stopped *float64
+	Length  float64
+}

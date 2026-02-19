@@ -31,6 +31,17 @@ var InsertVideoSQL string
 //go:embed sql/select_video_by_path.sql
 var SelectVideoByPathSQL string
 
+// VideoTiming queries
+
+//go:embed sql/insert_video_timing.sql
+var InsertVideoTimingSQL string
+
+//go:embed sql/select_video_timing_by_video.sql
+var SelectVideoTimingByVideoSQL string
+
+//go:embed sql/upsert_video_timing_stopped.sql
+var UpsertVideoTimingStoppedSQL string
+
 // Note child table insert queries
 
 //go:embed sql/insert_note_clip.sql
