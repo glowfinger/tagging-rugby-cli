@@ -91,10 +91,29 @@ func getOrCreateVideo(tx *sql.Tx, v NoteVideo) (int64, error) {
 }
 
 // InsertNoteClip inserts a note_clips row.
-func InsertNoteClip(db *sql.DB, noteID int64, name string, duration float64, startedAt, finishedAt, errorAt interface{}, clipError string) error {
-	_, err := db.Exec(InsertNoteClipSQL, noteID, name, duration, startedAt, finishedAt, errorAt, clipError)
+func InsertNoteClip(db *sql.DB, noteID int64, folder, filename, extension, format string, filesize int64, status string, startedAt, finishedAt, errorAt interface{}, log string) error {
+	_, err := db.Exec(InsertNoteClipSQL, noteID, folder, filename, extension, format, filesize, status, startedAt, finishedAt, errorAt, log)
 	if err != nil {
 		return fmt.Errorf("insert note clip: %w", err)
+	}
+	return nil
+}
+
+// SelectNoteClipByID returns a single note_clips row by ID.
+func SelectNoteClipByID(database *sql.DB, id int64) (*NoteClip, error) {
+	var c NoteClip
+	err := database.QueryRow(SelectNoteClipByIDSQL, id).Scan(&c.ID, &c.NoteID, &c.Folder, &c.Filename, &c.Extension, &c.Format, &c.Filesize, &c.Status, &c.StartedAt, &c.FinishedAt, &c.ErrorAt, &c.Log)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// UpdateNoteClip updates the lifecycle fields of a note_clips row.
+func UpdateNoteClip(database *sql.DB, id int64, status string, startedAt, finishedAt, errorAt interface{}, log string) error {
+	_, err := database.Exec(UpdateNoteClipSQL, status, startedAt, finishedAt, errorAt, log, id)
+	if err != nil {
+		return fmt.Errorf("update note clip: %w", err)
 	}
 	return nil
 }
