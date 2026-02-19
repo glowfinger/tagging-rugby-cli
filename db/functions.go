@@ -37,6 +37,25 @@ func UpdateVideoTimingStopped(db *sql.DB, videoID int64, stopped float64) error 
 	return nil
 }
 
+// EnsureVideo returns the existing video ID for the given path, or inserts a new row and returns its ID.
+func EnsureVideo(db *sql.DB, path string, filesize int64, format string) (int64, error) {
+	var videoID int64
+	err := db.QueryRow(SelectVideoByPathSQL, path).Scan(&videoID)
+	if err == nil {
+		return videoID, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, fmt.Errorf("select video by path: %w", err)
+	}
+	base := filepath.Base(path)
+	ext := strings.TrimPrefix(filepath.Ext(path), ".")
+	result, err := db.Exec(InsertVideoSQL, path, base, ext, format, filesize)
+	if err != nil {
+		return 0, fmt.Errorf("insert video: %w", err)
+	}
+	return result.LastInsertId()
+}
+
 // InsertNote inserts a new note with the given video_id and returns its ID.
 func InsertNote(db *sql.DB, category string, videoID int64) (int64, error) {
 	result, err := db.Exec(InsertNoteSQL, category, videoID)

@@ -137,8 +137,19 @@ var openCmd = &cobra.Command{
 			}
 			defer database.Close()
 
+			// Register the video in the database and get its ID
+			videoID, err := db.EnsureVideo(database, absPath, info.Size(), "")
+			if err != nil {
+				videoID = 0
+			}
+
+			// Ensure a video_timings row exists for this video
+			if videoID > 0 {
+				db.EnsureVideoTiming(database, videoID, duration)
+			}
+
 			// Run TUI (blocks until quit)
-			if err := tui.Run(client, database, absPath); err != nil {
+			if err := tui.Run(client, database, absPath, videoID); err != nil {
 				if process.Process != nil {
 					process.Process.Kill()
 				}

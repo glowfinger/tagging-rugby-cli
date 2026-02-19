@@ -102,6 +102,8 @@ type Model struct {
 	numberBuffer string
 	// lastKeyG tracks if the last key pressed was 'g' for gg command
 	lastKeyG bool
+	// videoID is the database ID of the current video (0 if not registered)
+	videoID int64
 }
 
 // newNoteVideo builds a NoteVideo with filesize and format populated from the filesystem.
@@ -118,12 +120,13 @@ func newNoteVideo(path string, duration float64) db.NoteVideo {
 	return v
 }
 
-// NewModel creates a new TUI model with the given mpv client, database connection, and video path.
-func NewModel(client *mpv.Client, db *sql.DB, videoPath string) *Model {
+// NewModel creates a new TUI model with the given mpv client, database connection, video path, and video ID.
+func NewModel(client *mpv.Client, db *sql.DB, videoPath string, videoID int64) *Model {
 	return &Model{
 		client:    client,
 		db:        db,
 		videoPath: videoPath,
+		videoID:   videoID,
 		statusBar: components.StatusBarState{
 			StepSize: defaultStepSize,
 		},
@@ -1922,8 +1925,8 @@ func truncateViewToWidth(view string, width int) string {
 
 // Run starts the Bubbletea program with the given model.
 // It returns an error if the program fails to start or run.
-func Run(client *mpv.Client, db *sql.DB, videoPath string) error {
-	model := NewModel(client, db, videoPath)
+func Run(client *mpv.Client, db *sql.DB, videoPath string, videoID int64) error {
+	model := NewModel(client, db, videoPath, videoID)
 	// Load notes and tackles for the current video
 	model.loadNotesAndTackles()
 	p := tea.NewProgram(model, tea.WithAltScreen())
