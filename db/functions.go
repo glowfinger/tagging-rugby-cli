@@ -91,10 +91,29 @@ func getOrCreateVideo(tx *sql.Tx, v NoteVideo) (int64, error) {
 }
 
 // InsertNoteClip inserts a note_clips row.
-func InsertNoteClip(db *sql.DB, noteID int64, name string, duration float64, startedAt, finishedAt, errorAt interface{}, clipError string) error {
-	_, err := db.Exec(InsertNoteClipSQL, noteID, name, duration, startedAt, finishedAt, errorAt, clipError)
+func InsertNoteClip(db *sql.DB, noteID int64, folder, filename, extension, format string, filesize int64, status string, startedAt, finishedAt, errorAt interface{}, log string) error {
+	_, err := db.Exec(InsertNoteClipSQL, noteID, folder, filename, extension, format, filesize, status, startedAt, finishedAt, errorAt, log)
 	if err != nil {
 		return fmt.Errorf("insert note clip: %w", err)
+	}
+	return nil
+}
+
+// SelectNoteClipByID returns a single note_clips row by ID.
+func SelectNoteClipByID(database *sql.DB, id int64) (*NoteClip, error) {
+	var c NoteClip
+	err := database.QueryRow(SelectNoteClipByIDSQL, id).Scan(&c.ID, &c.NoteID, &c.Folder, &c.Filename, &c.Extension, &c.Format, &c.Filesize, &c.Status, &c.StartedAt, &c.FinishedAt, &c.ErrorAt, &c.Log)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// UpdateNoteClip updates the lifecycle fields of a note_clips row.
+func UpdateNoteClip(database *sql.DB, id int64, status string, startedAt, finishedAt, errorAt interface{}, log string) error {
+	_, err := database.Exec(UpdateNoteClipSQL, status, startedAt, finishedAt, errorAt, log, id)
+	if err != nil {
+		return fmt.Errorf("update note clip: %w", err)
 	}
 	return nil
 }
@@ -184,7 +203,7 @@ func InsertNoteWithChildren(database *sql.DB, category string, children NoteChil
 		return 0, fmt.Errorf("get note id: %w", err)
 	}
 	for _, c := range children.Clips {
-		if _, err := tx.Exec(InsertNoteClipSQL, noteID, c.Name, c.Duration, c.StartedAt, c.FinishedAt, c.ErrorAt, c.Error); err != nil {
+		if _, err := tx.Exec(InsertNoteClipSQL, noteID, c.Folder, c.Filename, c.Extension, c.Format, c.Filesize, c.Status, c.StartedAt, c.FinishedAt, c.ErrorAt, c.Log); err != nil {
 			return 0, fmt.Errorf("insert note clip: %w", err)
 		}
 	}
@@ -345,7 +364,7 @@ func SelectNoteClipsByNote(database *sql.DB, noteID int64) ([]NoteClip, error) {
 	var clips []NoteClip
 	for rows.Next() {
 		var c NoteClip
-		if err := rows.Scan(&c.ID, &c.NoteID, &c.Name, &c.Duration, &c.StartedAt, &c.FinishedAt, &c.ErrorAt, &c.Error); err != nil {
+		if err := rows.Scan(&c.ID, &c.NoteID, &c.Folder, &c.Filename, &c.Extension, &c.Format, &c.Filesize, &c.Status, &c.StartedAt, &c.FinishedAt, &c.ErrorAt, &c.Log); err != nil {
 			return nil, err
 		}
 		clips = append(clips, c)

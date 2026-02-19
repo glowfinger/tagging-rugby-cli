@@ -1,0 +1,20 @@
+## Codebase Patterns
+- Use `CGO_ENABLED=0` for all Go build/vet commands (required for modernc.org/sqlite)
+- Go binary is at `/home/node/go/bin/go` - use `export PATH="$PATH:/home/node/go/bin"` before Go commands
+- Database migrations live in db/sql/migrations/ as NNN_name.sql, embedded via db/migrations.go
+- SQL queries live in db/sql/*.sql files, embedded via go:embed in db/queries.go
+- Migration runner: bootstrap.sql runs first (schema_migrations table), then versioned NNN_name.sql migrations in order
+
+---
+
+## 2026-02-19 - US-001, US-002, US-003
+- US-001: Deleted db/sql/migrations/002_migrate_note_videos.sql
+- US-002: Updated db/sql/migrations/001_create_videos_table.sql — removed ALTER TABLE backward-compat block, updated header comment, added REFERENCES videos(id) FK to notes.video_id
+- US-003: Deleted db/sql/insert_note_video.sql (orphaned, referenced only note_videos table)
+- Files changed: db/sql/migrations/002_migrate_note_videos.sql (deleted), db/sql/migrations/001_create_videos_table.sql (edited), db/sql/insert_note_video.sql (deleted)
+- **Learnings for future iterations:**
+  - The migration runner in db/migrations.go uses `-- requires-table:` directives to conditionally skip migration bodies — migration 002 used this to skip if note_videos didn't exist
+  - SQL files in db/sql/*.sql are embedded via go:embed in db/queries.go — deleting unused SQL files is safe if no Go code references them
+  - Migration 001 is now the single authoritative schema; notes.video_id has a proper FK to videos(id)
+---
+

@@ -23,12 +23,16 @@ type NoteVideo struct {
 type NoteClip struct {
 	ID         int64
 	NoteID     int64
-	Name       string
-	Duration   float64
+	Folder     string
+	Filename   string
+	Extension  string
+	Format     string
+	Filesize   int64
+	Status     string
 	StartedAt  *time.Time
 	FinishedAt *time.Time
 	ErrorAt    *time.Time
-	Error      string
+	Log        string
 }
 
 // NoteTiming represents a row in the note_timing table.

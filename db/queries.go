@@ -73,6 +73,9 @@ var SelectNoteVideosByNoteSQL string
 //go:embed sql/select_note_clips_by_note.sql
 var SelectNoteClipsByNoteSQL string
 
+//go:embed sql/select_note_clip_by_id.sql
+var SelectNoteClipByIDSQL string
+
 //go:embed sql/select_note_timing_by_note.sql
 var SelectNoteTimingByNoteSQL string
 
@@ -106,6 +109,9 @@ var DeleteNoteTacklesSQL string
 
 //go:embed sql/update_note_timing.sql
 var UpdateNoteTimingSQL string
+
+//go:embed sql/update_note_clip.sql
+var UpdateNoteClipSQL string
 
 // Joined queries for TUI views
 
