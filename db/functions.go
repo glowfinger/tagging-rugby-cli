@@ -184,7 +184,7 @@ func InsertNoteWithChildren(database *sql.DB, category string, children NoteChil
 		return 0, fmt.Errorf("get note id: %w", err)
 	}
 	for _, c := range children.Clips {
-		if _, err := tx.Exec(InsertNoteClipSQL, noteID, c.Name, c.Duration, c.StartedAt, c.FinishedAt, c.ErrorAt, c.Error); err != nil {
+		if _, err := tx.Exec(InsertNoteClipSQL, noteID, c.Folder, c.Filename, c.Extension, c.Format, c.Filesize, c.Status, c.StartedAt, c.FinishedAt, c.ErrorAt, c.Log); err != nil {
 			return 0, fmt.Errorf("insert note clip: %w", err)
 		}
 	}
@@ -345,7 +345,7 @@ func SelectNoteClipsByNote(database *sql.DB, noteID int64) ([]NoteClip, error) {
 	var clips []NoteClip
 	for rows.Next() {
 		var c NoteClip
-		if err := rows.Scan(&c.ID, &c.NoteID, &c.Name, &c.Duration, &c.StartedAt, &c.FinishedAt, &c.ErrorAt, &c.Error); err != nil {
+		if err := rows.Scan(&c.ID, &c.NoteID, &c.Folder, &c.Filename, &c.Extension, &c.Format, &c.Filesize, &c.Status, &c.StartedAt, &c.FinishedAt, &c.ErrorAt, &c.Log); err != nil {
 			return nil, err
 		}
 		clips = append(clips, c)

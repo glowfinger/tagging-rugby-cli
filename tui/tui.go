@@ -1451,8 +1451,6 @@ func (m *Model) gotoNote(noteID int64) (string, error) {
 
 // addClip adds a clip to the database.
 func (m *Model) addClip(start, end float64, description string) (int64, error) {
-	clipDuration := end - start
-
 	children := db.NoteChildren{
 		Timings: []db.NoteTiming{
 			{Start: start, End: end},
@@ -1461,7 +1459,7 @@ func (m *Model) addClip(start, end float64, description string) (int64, error) {
 			newNoteVideo(m.videoPath, 0),
 		},
 		Clips: []db.NoteClip{
-			{Name: description, Duration: clipDuration},
+			{Folder: "", Filename: description, Extension: "", Format: "", Filesize: 0, Status: "pending", Log: ""},
 		},
 	}
 

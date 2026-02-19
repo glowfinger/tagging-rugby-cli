@@ -147,7 +147,7 @@ var clipEndCmd = &cobra.Command{
 		// Insert note with clip and timing child rows
 		children := db.NoteChildren{
 			Clips: []db.NoteClip{
-				{Name: clipName, Duration: duration, StartedAt: &now, FinishedAt: &now},
+				{Folder: "", Filename: clipName, Extension: "", Format: "", Filesize: 0, Status: "pending", StartedAt: &now, FinishedAt: &now, Log: ""},
 			},
 			Timings: []db.NoteTiming{
 				{Start: startTimestamp, End: endTimestamp},
@@ -290,8 +290,8 @@ var clipPlayCmd = &cobra.Command{
 			return fmt.Errorf("failed to query clip: %w", err)
 		}
 		clipName := "(no name)"
-		if len(clips) > 0 && clips[0].Name != "" {
-			clipName = clips[0].Name
+		if len(clips) > 0 && clips[0].Filename != "" {
+			clipName = clips[0].Filename
 		}
 
 		// Connect to mpv
