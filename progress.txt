@@ -1,98 +1,20 @@
 ## Codebase Patterns
 - Use `CGO_ENABLED=0` for all Go build/vet commands (required for modernc.org/sqlite)
 - Go binary is at `/home/node/go/bin/go` - use `export PATH="$PATH:/home/node/go/bin"` before Go commands
-- Database connection uses modernc.org/sqlite (pure Go implementation, no CGO)
-- Bubble Tea key strings: use "esc" (not "escape"), "enter", "tab", "backspace", "left", "right" for key handling
-- SQL queries live in `db/sql/*.sql` files, embedded via `go:embed` in `db/queries.go`
-- Three-column TUI layout uses padToWidth helper + manual row-by-row assembly (split lines, pad, join with border chars)
-- lipgloss.Width() accounts for ANSI escape sequences when measuring rendered string width
-- Column 1 renderColumn1() uses GetControlGroups() from controls.go — ControlGroup uses SubGroups [][]Control for divider placement
-- padToWidth() uses lipgloss.Width() to ANSI-aware pad AND truncate lines to exact column width
-- normalizeLines() ensures column line arrays are exactly the target height
-- Column 1 fixed width: `layout.Col1Width = 30` constant; ComputeColumnWidths always uses it
-- Use `ansi.Truncate()` from `charmbracelet/x/ansi` for ANSI+grapheme-aware truncation
-- Shared time formatting in `pkg/timeutil/timeutil.go` — `timeutil.FormatTime(seconds)` for H:MM:SS
-- Shared time parsing in `pkg/timeutil/timeutil.go` — `timeutil.ParseTimeToSeconds(str)` for HH:MM:SS, MM:SS, or raw seconds
-- Bordered control boxes: `components.RenderControlBox(group, width)` — tab header + box-drawing border + horizontal dividers between sub-groups
-- Mini player: `components.RenderMiniPlayer(state, fixedWidth, showWarning)` renders compact bordered card
-- RenderInfoBox(title, contentLines, width) — generic bordered info card, used for Selected Tag detail
-- Bordered containers on: notes list (col2), timeline, playback (mini player in col1), selected tag detail
-- Column separators removed — columns tile directly without border chars
-- mpv client has SetSpeed(float64) and GetSpeed() methods already implemented
-- huh form integration: store *huh.Form + result struct in Model, delegate Update/View, check State for completion
-- Edit tackle form: `forms.NewEditTackleForm(timestamp, endSeconds, result)` with `EditTackleFormResult`
-- Edit flow uses `editingNoteID` field (0=create, >0=edit) to distinguish save paths
-- db package cannot import tui/forms (circular dependency) — use db-package structs, let TUI map to form types
-- `all:` prefix on go:embed is needed to include hidden files like .gitkeep in empty migration dirs
-- Migration runner: create_tables.sql runs first (IF NOT EXISTS), then versioned NNN_name.sql migrations
-- SQLite DDL (CREATE TABLE, ALTER TABLE) may auto-commit — be careful with transaction boundaries in migrations
-- create_tables.sql should include the latest schema (videos table, video_id on notes) so fresh DBs are up-to-date and migrations are no-ops
-- SQLite filename extraction: `SUBSTR(path, LENGTH(path) - LENGTH(REPLACE(path, '/', '')) + 1)` gets text after last '/'
-- Use `WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='X')` to guard against missing tables in migrations
-- `DROP TABLE IF EXISTS` is safe in SQLite and doesn't need sqlite_master guard
+- Database migrations live in db/sql/migrations/ as NNN_name.sql, embedded via db/migrations.go
+- SQL queries live in db/sql/*.sql files, embedded via go:embed in db/queries.go
+- Migration runner: bootstrap.sql runs first (schema_migrations table), then versioned NNN_name.sql migrations in order
 
 ---
 
-## 2026-02-18 - US-003
-- Created migration 002_migrate_note_videos.sql: migrates note_videos data to videos table and drops note_videos
-- Step 1: INSERT unique videos from note_videos deduplicated by path, deriving filename/extension via SQLite string functions
-- Step 2: UPDATE notes.video_id to matching videos.id based on note_videos path join
-- Step 3: DROP TABLE IF EXISTS note_videos
-- All steps guarded with `WHERE EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='note_videos')` for fresh DB safety
-- Files changed: db/sql/migrations/002_migrate_note_videos.sql (new)
+## 2026-02-19 - US-001, US-002, US-003
+- US-001: Deleted db/sql/migrations/002_migrate_note_videos.sql
+- US-002: Updated db/sql/migrations/001_create_videos_table.sql — removed ALTER TABLE backward-compat block, updated header comment, added REFERENCES videos(id) FK to notes.video_id
+- US-003: Deleted db/sql/insert_note_video.sql (orphaned, referenced only note_videos table)
+- Files changed: db/sql/migrations/002_migrate_note_videos.sql (deleted), db/sql/migrations/001_create_videos_table.sql (edited), db/sql/insert_note_video.sql (deleted)
 - **Learnings for future iterations:**
-  - SQLite has no procedural IF blocks — use `WHERE EXISTS (SELECT ... FROM sqlite_master)` to conditionally execute DML
-  - Filename from path: `SUBSTR(path, LENGTH(path) - LENGTH(REPLACE(path, '/', '')) + 1)` counts separator occurrences
-  - Extension from path: same pattern with '.' instead of '/'
-  - Deduplication via self-join: `INNER JOIN (SELECT path, MIN(id) FROM ... GROUP BY path) dedup ON id = dedup.min_id`
-  - `DROP TABLE IF EXISTS` is natively supported and doesn't need a sqlite_master guard
+  - The migration runner in db/migrations.go uses `-- requires-table:` directives to conditionally skip migration bodies — migration 002 used this to skip if note_videos didn't exist
+  - SQL files in db/sql/*.sql are embedded via go:embed in db/queries.go — deleting unused SQL files is safe if no Go code references them
+  - Migration 001 is now the single authoritative schema; notes.video_id has a proper FK to videos(id)
 ---
 
-## 2026-02-18 - US-002
-- Created migration 001_create_videos_table.sql: creates videos table IF NOT EXISTS and adds video_id column to notes
-- Updated create_tables.sql to include videos table and video_id on notes for fresh databases
-- Migration runner handles duplicate column errors gracefully (idempotent on fresh DBs)
-- Files changed: db/sql/create_tables.sql, db/sql/migrations/001_create_videos_table.sql (new)
-- **Learnings for future iterations:**
-  - create_tables.sql must stay in sync with migration state — add new tables/columns here too for fresh DB support
-  - ALTER TABLE ADD COLUMN duplicate errors are caught by migration runner (strings.Contains "duplicate column")
-  - Migration 001 is safe for both fresh DBs (no-op) and existing DBs (adds missing schema)
----
-
-## 2026-02-16 - US-001
-- Implemented migration runner infrastructure
-- Files changed: db/db.go (replaced migrate() call with runMigrations()), db/migrations.go (new), db/sql/migrations/.gitkeep (new)
-- **Learnings for future iterations:**
-  - `go:embed` with glob pattern (`*.sql`) fails if no files match — use `all:sql/migrations` directory embed instead
-  - `all:` prefix is required to embed hidden files (like .gitkeep) in a directory
-  - runMigrations runs create_tables.sql first (IF NOT EXISTS), then versioned migrations — safe for both fresh and existing DBs
-  - Migration files parsed as NNN_name.sql — version extracted from prefix before first underscore
----
-
-## 2026-02-12 - US-001
-- Added overlay indicator ("Overlay: on" / "Overlay: off") to RenderMiniPlayer in tui/components/controls.go
-- Updated column 1 plain-text playback card in tui/columns.go to always show overlay status (was conditional, now shows both on/off)
-- Overlay line appears after time line with divider in mini player card
-- Overlay width included in card auto-sizing calculation
-- Files changed: tui/components/controls.go, tui/columns.go
-- **Learnings for future iterations:**
-  - RenderMiniPlayer signature is currently (state StatusBarState, termWidth int) — no fixed-width param yet
-  - Column 1 plain-text playback section in columns.go is separate from RenderMiniPlayer
-  - The mini player auto-sizes based on widest content line + 4 for borders
----
-
-## 2026-02-12 - US-002
-- Removed the full-width status bar from the main View() layout in tui/tui.go
-- Form overlay views (confirm discard, note form, tackle form) now show RenderMiniPlayer at top instead of StatusBar
-- Error view now shows RenderMiniPlayer with showWarning=true instead of StatusBar
-- Added `showWarning` bool parameter to RenderMiniPlayer — warning line only rendered when true
-- Updated narrow terminal mini player call to pass showWarning=true
-- Changed colHeight from m.height - 5 to m.height - 4 to reclaim the freed status bar line
-- StatusBar function and StatusBarState struct remain unchanged (still available, still used as data container)
-- Help overlay and stats view remain unchanged (they already don't show the status bar)
-- Files changed: tui/tui.go, tui/components/controls.go
-- **Learnings for future iterations:**
-  - RenderMiniPlayer signature is now (state StatusBarState, termWidth int, showWarning bool)
-  - colHeight = m.height - 4 (timeline 2 lines + command input 1 line + 1 newline separator)
-  - StatusBar() function is NOT deleted — it remains in statusbar.go for potential future use
----
