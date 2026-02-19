@@ -116,6 +116,15 @@ var UpdateNoteClipSQL string
 //go:embed sql/upsert_note_clip_pending.sql
 var UpsertNoteClipPendingSQL string
 
+//go:embed sql/mark_clip_processing.sql
+var MarkClipProcessingSQL string
+
+//go:embed sql/mark_clip_complete.sql
+var MarkClipCompleteSQL string
+
+//go:embed sql/mark_clip_error.sql
+var MarkClipErrorSQL string
+
 // Joined queries for TUI views
 
 //go:embed sql/select_notes_with_timing.sql

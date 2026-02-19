@@ -6,6 +6,7 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/user/tagging-rugby-cli/clip"
 )
@@ -91,6 +92,33 @@ func getOrCreateVideo(tx *sql.Tx, v NoteVideo) (int64, error) {
 		return 0, fmt.Errorf("insert video: %w", err)
 	}
 	return result.LastInsertId()
+}
+
+// MarkClipProcessing updates a note_clips row to processing status with the given start time.
+func MarkClipProcessing(db *sql.DB, clipID int64, startedAt time.Time) error {
+	_, err := db.Exec(MarkClipProcessingSQL, startedAt, clipID)
+	if err != nil {
+		return fmt.Errorf("mark clip processing: %w", err)
+	}
+	return nil
+}
+
+// MarkClipComplete updates a note_clips row to complete status with the given finish time and filesize.
+func MarkClipComplete(db *sql.DB, clipID int64, finishedAt time.Time, filesize int64) error {
+	_, err := db.Exec(MarkClipCompleteSQL, finishedAt, filesize, clipID)
+	if err != nil {
+		return fmt.Errorf("mark clip complete: %w", err)
+	}
+	return nil
+}
+
+// MarkClipError updates a note_clips row to error status with the given error time and log message.
+func MarkClipError(db *sql.DB, clipID int64, errorAt time.Time, logMsg string) error {
+	_, err := db.Exec(MarkClipErrorSQL, errorAt, logMsg, clipID)
+	if err != nil {
+		return fmt.Errorf("mark clip error: %w", err)
+	}
+	return nil
 }
 
 // UpsertNoteClipPending inserts or resets a note_clips row to pending status so the background worker can pick it up.
