@@ -143,9 +143,15 @@ var openCmd = &cobra.Command{
 				videoID = 0
 			}
 
-			// Ensure a video_timings row exists for this video
+			// Ensure a video_timings row exists and resume from last stopped position
 			if videoID > 0 {
-				db.EnsureVideoTiming(database, videoID, duration)
+				timing, timingErr := db.EnsureVideoTiming(database, videoID, duration)
+				if timingErr == nil && timing.Stopped != nil && *timing.Stopped > 0 {
+					if seekErr := client.Seek(*timing.Stopped); seekErr == nil {
+						client.Pause()
+						fmt.Printf("Resuming from %s\n", timeutil.FormatTime(*timing.Stopped))
+					}
+				}
 			}
 
 			// Run TUI (blocks until quit)
