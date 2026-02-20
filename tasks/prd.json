@@ -1,23 +1,17 @@
 {
   "project": "tagging-rugby-cli",
-  "branchName": "ralph/video-session-resume",
-  "description": "Video Session Resume - Track per-video playback position in a dedicated video_timings table and resume from the last stopped position on reopen",
+  "branchName": "ralph/tackle-clip-generation",
+  "description": "Tackle Clip Generation - Automatically generate ffmpeg video clips with text overlays when tackle notes are created or updated, tracked via a background worker",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Update migration schema: remove stop_time, add video_timings table",
-      "description": "As a developer, I need the database schema updated so that video timing state is stored in a dedicated 1-to-1 table rather than a column on videos.",
+      "title": "Add UpsertNoteClipPending DB function and SQL",
+      "description": "As a developer, I need a DB function that inserts or resets a note_clips row to pending status so the background worker can pick it up.",
       "acceptanceCriteria": [
-        "Remove `stop_time REAL` column from the `videos` table definition in db/sql/migrations/001_create_videos_table.sql",
-        "Add `video_timings` table to db/sql/migrations/001_create_videos_table.sql with columns: `id INTEGER PRIMARY KEY`, `video_id INTEGER NOT NULL REFERENCES videos(id)`, `stopped REAL` (nullable), `length REAL`",
-        "Add `CREATE UNIQUE INDEX IF NOT EXISTS idx_video_timings_video_id ON video_timings(video_id)` to enforce 1-to-1 relationship",
-        "Update db/sql/insert_video.sql to remove `stop_time` from the INSERT column list and VALUES placeholder",
-        "Remove `StoppedAt float64` field from `NoteVideo` struct in db/models.go",
-        "Update `getOrCreateVideo` in db/functions.go to not pass `v.StoppedAt` to InsertVideoSQL",
-        "Update `newNoteVideo` helper in tui/tui.go to remove the `stoppedAt float64` parameter and the `StoppedAt` field assignment",
-        "Update all callers of `newNoteVideo` in tui/tui.go to remove the stoppedAt argument (pass only path and duration)",
-        "Update the `SelectNoteVideosByNote` scan in db/functions.go to not scan into `v.StoppedAt`",
-        "Update select_note_videos_by_note.sql if it selects stop_time",
+        "Create db/sql/upsert_note_clip_pending.sql: INSERT INTO note_clips (note_id, folder, filename, extension, format, filesize, status, started_at, finished_at, error_at, log) VALUES (?, ?, ?, 'mp4', 'mp4', 0, 'pending', NULL, NULL, NULL, '') ON CONFLICT(note_id) DO UPDATE SET folder=excluded.folder, filename=excluded.filename, extension='mp4', format='mp4', filesize=0, status='pending', started_at=NULL, finished_at=NULL, error_at=NULL, log=''",
+        "Add UNIQUE constraint on note_clips(note_id) to db/sql/migrations/001_create_videos_table.sql (CREATE UNIQUE INDEX IF NOT EXISTS idx_note_clips_note_id ON note_clips(note_id))",
+        "Add UpsertNoteClipPending(db *sql.DB, noteID int64, folder, filename string) error to db/functions.go",
+        "Embed the new SQL file in db/queries.go following the existing //go:embed pattern with an exported var UpsertNoteClipPendingSQL constant",
         "CGO_ENABLED=0 go build ./... passes with no errors",
         "CGO_ENABLED=0 go vet ./... passes with no errors"
       ],
@@ -27,16 +21,14 @@
     },
     {
       "id": "US-002",
-      "title": "Add VideoTiming DB model and SQL queries",
-      "description": "As a developer, I need Go structs and SQL queries to read and write video_timings rows.",
+      "title": "Add clip folder/filename computation helper",
+      "description": "As a developer, I need a pure function that computes the output folder and filename for a clip from note data so I can call it consistently from multiple places.",
       "acceptanceCriteria": [
-        "Add `VideoTiming` struct to db/models.go with fields: `ID int64`, `VideoID int64`, `Stopped *float64` (pointer for nullable), `Length float64`",
-        "Create db/sql/insert_video_timing.sql: `INSERT INTO video_timings (video_id, stopped, length) VALUES (?, ?, ?)`",
-        "Create db/sql/select_video_timing_by_video.sql: `SELECT id, video_id, stopped, length FROM video_timings WHERE video_id = ? LIMIT 1`",
-        "Create db/sql/upsert_video_timing_stopped.sql: `INSERT INTO video_timings (video_id, stopped, length) VALUES (?, ?, 0) ON CONFLICT(video_id) DO UPDATE SET stopped = excluded.stopped`",
-        "Embed all new SQL files in db/sql.go (or equivalent embed file) following the existing `//go:embed` pattern with exported `var` constants",
-        "Add `EnsureVideoTiming(db *sql.DB, videoID int64, length float64) (*VideoTiming, error)` to db/functions.go — selects existing row, inserts with stopped=NULL if not found, returns the row",
-        "Add `UpdateVideoTimingStopped(db *sql.DB, videoID int64, stopped float64) error` to db/functions.go — executes the upsert SQL",
+        "Create new file clip/paths.go in a new top-level clip/ package",
+        "Add ClipPaths(videoPath, category, player string, attempt int, outcome string, startSeconds float64) (folder, filename string) function",
+        "Folder = filepath.Join(filepath.Dir(videoPath), 'clips', strings.ToLower(strings.ReplaceAll(category, ' ', '_')), strings.ToLower(strings.ReplaceAll(player, ' ', '_')))",
+        "Filename is formatted as {HHMMSS}-{player}-{category}-{outcome}-{attempt}.mp4 where HHMMSS is zero-padded hours/minutes/seconds from startSeconds (e.g. 003045 for 1845 seconds), and player/category/outcome have spaces replaced with underscores and are lowercased",
+        "Example: startSeconds=1845.0, player='John Smith', category='Tackle', outcome='Success', attempt=2 → filename '003045-john_smith-tackle-success-2.mp4'",
         "CGO_ENABLED=0 go build ./... passes with no errors",
         "CGO_ENABLED=0 go vet ./... passes with no errors"
       ],
@@ -46,15 +38,13 @@
     },
     {
       "id": "US-003",
-      "title": "Add EnsureVideo function and call it on open",
-      "description": "As the app, I need to register a video in the database the first time it is opened so that timing data can be associated with it.",
+      "title": "Queue pending clip on note insert and update",
+      "description": "As the app, I need a clip record queued automatically whenever a note with tackle and timing data is saved, so it gets picked up by the background worker.",
       "acceptanceCriteria": [
-        "Add public `EnsureVideo(db *sql.DB, path string, filesize int64, format string) (int64, error)` to db/functions.go — returns existing video ID if found via select_video_by_path.sql, otherwise inserts via insert_video.sql and returns new ID",
-        "In cmd/root.go openCmd, after mpv connects and the TUI path is taken, open the database and call `db.EnsureVideo(database, absPath, info.Size(), \"\")` to get `videoID`",
-        "After EnsureVideo, call `db.EnsureVideoTiming(database, videoID, duration)` (use duration from mpv if available, else 0) to get `*VideoTiming`",
-        "Pass `videoID int64` as a new parameter to `tui.Run`",
-        "Update `tui.Run` signature in tui/tui.go to accept `videoID int64` and pass it to `NewModel`",
-        "Update `NewModel` to accept and store `videoID int64` on the `Model` struct",
+        "Add a new exported function QueueClipIfNeeded(database *sql.DB, noteID int64, videoPath string) error to db/functions.go that: loads note (category), timing (start), tackle (player, attempt, outcome) for the noteID; if any are missing silently returns nil; calls clip.ClipPaths to compute folder/filename; calls UpsertNoteClipPending",
+        "Call QueueClipIfNeeded after tx.Commit() in InsertNoteWithChildren (pass videoPath from NoteVideo if present, else return nil)",
+        "Call QueueClipIfNeeded after tx.Commit() in UpdateNoteWithChildren — look up the video path via SelectNoteVideosByNote within the function",
+        "If QueueClipIfNeeded returns an error, log it but do not fail the insert/update",
         "CGO_ENABLED=0 go build ./... passes with no errors",
         "CGO_ENABLED=0 go vet ./... passes with no errors"
       ],
@@ -64,13 +54,16 @@
     },
     {
       "id": "US-004",
-      "title": "Resume playback from stopped position on open",
-      "description": "As a user, I want the video to resume at the position I last stopped at when I reopen it, so I don't have to manually seek back.",
+      "title": "Add MarkClipProcessing, MarkClipComplete, MarkClipError DB functions",
+      "description": "As the background processor, I need fine-grained DB update functions to set individual lifecycle fields atomically as ffmpeg progresses.",
       "acceptanceCriteria": [
-        "In cmd/root.go openCmd, after calling EnsureVideoTiming, check if `timing.Stopped != nil && *timing.Stopped > 0`",
-        "If true, call `client.Seek(*timing.Stopped)` followed by `client.Pause()` before launching the TUI",
-        "After seeking, print to terminal: `fmt.Printf(\"Resuming from %s\\n\", timeutil.FormatTime(*timing.Stopped))`",
-        "If `timing.Stopped` is nil or 0, no seek is performed and the video plays from the beginning as normal",
+        "Create db/sql/mark_clip_processing.sql: UPDATE note_clips SET status='processing', started_at=? WHERE id=?",
+        "Create db/sql/mark_clip_complete.sql: UPDATE note_clips SET status='complete', finished_at=?, filesize=?, log='' WHERE id=?",
+        "Create db/sql/mark_clip_error.sql: UPDATE note_clips SET status='error', error_at=?, log=? WHERE id=?",
+        "Add MarkClipProcessing(db *sql.DB, clipID int64, startedAt time.Time) error to db/functions.go",
+        "Add MarkClipComplete(db *sql.DB, clipID int64, finishedAt time.Time, filesize int64) error to db/functions.go",
+        "Add MarkClipError(db *sql.DB, clipID int64, errorAt time.Time, log string) error to db/functions.go",
+        "Embed all three new SQL files in db/queries.go with exported var constants",
         "CGO_ENABLED=0 go build ./... passes with no errors",
         "CGO_ENABLED=0 go vet ./... passes with no errors"
       ],
@@ -80,12 +73,13 @@
     },
     {
       "id": "US-005",
-      "title": "Update stopped position when video is paused",
-      "description": "As a user, I want the app to record my current position whenever I pause, so the correct resume point is always saved.",
+      "title": "Add SelectNextPendingClip DB query",
+      "description": "As the background processor, I need a query that returns the next pending clip with all the data required to run ffmpeg, so I do not have to make multiple round-trips.",
       "acceptanceCriteria": [
-        "In tui/tui.go `handleVideoKeys`, when the pause toggle key fires and `m.client.TogglePause()` succeeds, fetch `timePos` via `m.client.GetTimePos()` and call `db.UpdateVideoTimingStopped(m.db, m.videoID, timePos)` if no error",
-        "In tui/tui.go `handleCommand` for the `pause` case, after `m.client.Pause()` succeeds, fetch `timePos` via `m.client.GetTimePos()` and call `db.UpdateVideoTimingStopped(m.db, m.videoID, timePos)` if no error",
-        "If `GetTimePos` returns an error (not connected), the DB update is silently skipped and playback/command handling continues normally",
+        "Create db/sql/select_next_pending_clip.sql that SELECTs one row from note_clips WHERE status='pending' ORDER BY id ASC LIMIT 1, JOINing notes (category), note_timing (start, end), note_tackles (player, attempt, outcome), and videos (path) via notes.video_id",
+        "Add PendingClip struct to db/models.go with fields: ClipID int64, NoteID int64, Folder string, Filename string, VideoPath string, Category string, Player string, Attempt int, Outcome string, Start float64, End float64",
+        "Add SelectNextPendingClip(db *sql.DB) (*PendingClip, error) to db/functions.go — returns nil, nil when no row found (sql.ErrNoRows)",
+        "Embed the new SQL file in db/queries.go",
         "CGO_ENABLED=0 go build ./... passes with no errors",
         "CGO_ENABLED=0 go vet ./... passes with no errors"
       ],
@@ -95,12 +89,18 @@
     },
     {
       "id": "US-006",
-      "title": "Update stopped position when a note is started",
-      "description": "As a user, I want the resume point saved whenever I start creating a note, clip, or tackle, since those mark a meaningful pause point.",
+      "title": "Implement background clip processor goroutine",
+      "description": "As a user, I want clips to be generated automatically in the background after saving a note, so the TUI stays responsive.",
       "acceptanceCriteria": [
-        "In tui/tui.go, locate the note creation handler (where `timestamp` is fetched from mpv before opening the note form) and add `db.UpdateVideoTimingStopped(m.db, m.videoID, timestamp)` immediately after `timestamp` is successfully obtained",
-        "Do the same for the clip-start handler and the tackle-start handler — each already fetches a `timestamp` from mpv; call UpdateVideoTimingStopped with that value",
-        "If the timestamp fetch fails (not connected), the DB update is skipped and form creation continues as before",
+        "Create clip/processor.go with a Processor struct holding *sql.DB",
+        "Processor.Start(ctx context.Context) launches a goroutine that loops: call db.SelectNextPendingClip; if nil sleep 2 seconds and retry; if found process it",
+        "Processing a clip: call db.MarkClipProcessing with time.Now(); create output directory with os.MkdirAll; build ffmpeg command (see FR-6 in PRD); run with exec.CommandContext capturing combined stdout+stderr",
+        "ffmpeg command uses: -y -i {video_path} -ss {start} -t {duration} with drawtext overlay for timestamp (HH:MM:SS from note_timing.start), outcome, and 'Attempt {N}' — stacked bottom-left (x=10, y=h-th, y=h-th-36, y=h-th-72), fontsize=28, fontcolor=white, enable='lt(t,3)'",
+        "Clip duration = max(4.0, note_timing.end - note_timing.start) seconds",
+        "On exit code 0: stat the output file for filesize, call db.MarkClipComplete",
+        "On non-zero exit or exec error: call db.MarkClipError with combined output as log string",
+        "If ffmpeg binary is not found in PATH: call db.MarkClipError with log='ffmpeg not found in PATH'",
+        "Goroutine exits cleanly when ctx is cancelled",
         "CGO_ENABLED=0 go build ./... passes with no errors",
         "CGO_ENABLED=0 go vet ./... passes with no errors"
       ],
@@ -110,16 +110,32 @@
     },
     {
       "id": "US-007",
-      "title": "Update stopped position on app exit",
-      "description": "As a user, I want my exact position saved when I quit the app so I can resume accurately next time.",
+      "title": "Start processor goroutine from main app entry point",
+      "description": "As the app, I need the background clip processor started when the app launches so it begins processing any queued clips.",
       "acceptanceCriteria": [
-        "In tui/tui.go, locate the quit key handler (where `tea.Quit` cmd is returned) and before returning, call `m.client.GetTimePos()` to get the current position",
-        "If `GetTimePos` succeeds, call `db.UpdateVideoTimingStopped(m.db, m.videoID, timePos)`",
-        "If `GetTimePos` fails (not connected or error), skip the update and quit proceeds normally",
+        "In cmd/root.go (or the openCmd handler), after the database is opened, create a clip.Processor{DB: database} and call processor.Start(ctx) where ctx is cancelled when the app exits",
+        "Use context.WithCancel derived from context.Background() if no existing context exists; call cancel() in a defer or on app shutdown",
+        "The processor start must happen before tui.Run so it is active during the session",
         "CGO_ENABLED=0 go build ./... passes with no errors",
         "CGO_ENABLED=0 go vet ./... passes with no errors"
       ],
       "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Manual clip re-generate keybinding in TUI",
+      "description": "As a user, I want to press Ctrl+R on a selected note to force clip re-generation, even if the clip was already generated.",
+      "acceptanceCriteria": [
+        "In tui/tui.go handleNotesKeys, add a case for ctrl+r (key.Matches(msg, key.NewBinding(key.WithKeys('ctrl+r'))))",
+        "Handler calls a new startRegenerateClip(noteID) method that: loads note video path, timing, tackle data; calls clip.ClipPaths to compute folder/filename; deletes the existing file at filepath.Join(folder, filename) if it exists (os.Remove, ignore not-exist error); calls db.UpsertNoteClipPending",
+        "Handler is guarded: no action when m.form != nil or search/command mode is active",
+        "After queuing, set a status message on the model (e.g. m.statusMsg = 'Clip queued for regeneration') displayed in the TUI footer for 3 seconds",
+        "CGO_ENABLED=0 go build ./... passes with no errors",
+        "CGO_ENABLED=0 go vet ./... passes with no errors"
+      ],
+      "priority": 8,
       "passes": true,
       "notes": ""
     }

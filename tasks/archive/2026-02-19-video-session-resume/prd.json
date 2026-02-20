@@ -1,0 +1,127 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/video-session-resume",
+  "description": "Video Session Resume - Track per-video playback position in a dedicated video_timings table and resume from the last stopped position on reopen",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Update migration schema: remove stop_time, add video_timings table",
+      "description": "As a developer, I need the database schema updated so that video timing state is stored in a dedicated 1-to-1 table rather than a column on videos.",
+      "acceptanceCriteria": [
+        "Remove `stop_time REAL` column from the `videos` table definition in db/sql/migrations/001_create_videos_table.sql",
+        "Add `video_timings` table to db/sql/migrations/001_create_videos_table.sql with columns: `id INTEGER PRIMARY KEY`, `video_id INTEGER NOT NULL REFERENCES videos(id)`, `stopped REAL` (nullable), `length REAL`",
+        "Add `CREATE UNIQUE INDEX IF NOT EXISTS idx_video_timings_video_id ON video_timings(video_id)` to enforce 1-to-1 relationship",
+        "Update db/sql/insert_video.sql to remove `stop_time` from the INSERT column list and VALUES placeholder",
+        "Remove `StoppedAt float64` field from `NoteVideo` struct in db/models.go",
+        "Update `getOrCreateVideo` in db/functions.go to not pass `v.StoppedAt` to InsertVideoSQL",
+        "Update `newNoteVideo` helper in tui/tui.go to remove the `stoppedAt float64` parameter and the `StoppedAt` field assignment",
+        "Update all callers of `newNoteVideo` in tui/tui.go to remove the stoppedAt argument (pass only path and duration)",
+        "Update the `SelectNoteVideosByNote` scan in db/functions.go to not scan into `v.StoppedAt`",
+        "Update select_note_videos_by_note.sql if it selects stop_time",
+        "CGO_ENABLED=0 go build ./... passes with no errors",
+        "CGO_ENABLED=0 go vet ./... passes with no errors"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Add VideoTiming DB model and SQL queries",
+      "description": "As a developer, I need Go structs and SQL queries to read and write video_timings rows.",
+      "acceptanceCriteria": [
+        "Add `VideoTiming` struct to db/models.go with fields: `ID int64`, `VideoID int64`, `Stopped *float64` (pointer for nullable), `Length float64`",
+        "Create db/sql/insert_video_timing.sql: `INSERT INTO video_timings (video_id, stopped, length) VALUES (?, ?, ?)`",
+        "Create db/sql/select_video_timing_by_video.sql: `SELECT id, video_id, stopped, length FROM video_timings WHERE video_id = ? LIMIT 1`",
+        "Create db/sql/upsert_video_timing_stopped.sql: `INSERT INTO video_timings (video_id, stopped, length) VALUES (?, ?, 0) ON CONFLICT(video_id) DO UPDATE SET stopped = excluded.stopped`",
+        "Embed all new SQL files in db/sql.go (or equivalent embed file) following the existing `//go:embed` pattern with exported `var` constants",
+        "Add `EnsureVideoTiming(db *sql.DB, videoID int64, length float64) (*VideoTiming, error)` to db/functions.go — selects existing row, inserts with stopped=NULL if not found, returns the row",
+        "Add `UpdateVideoTimingStopped(db *sql.DB, videoID int64, stopped float64) error` to db/functions.go — executes the upsert SQL",
+        "CGO_ENABLED=0 go build ./... passes with no errors",
+        "CGO_ENABLED=0 go vet ./... passes with no errors"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Add EnsureVideo function and call it on open",
+      "description": "As the app, I need to register a video in the database the first time it is opened so that timing data can be associated with it.",
+      "acceptanceCriteria": [
+        "Add public `EnsureVideo(db *sql.DB, path string, filesize int64, format string) (int64, error)` to db/functions.go — returns existing video ID if found via select_video_by_path.sql, otherwise inserts via insert_video.sql and returns new ID",
+        "In cmd/root.go openCmd, after mpv connects and the TUI path is taken, open the database and call `db.EnsureVideo(database, absPath, info.Size(), \"\")` to get `videoID`",
+        "After EnsureVideo, call `db.EnsureVideoTiming(database, videoID, duration)` (use duration from mpv if available, else 0) to get `*VideoTiming`",
+        "Pass `videoID int64` as a new parameter to `tui.Run`",
+        "Update `tui.Run` signature in tui/tui.go to accept `videoID int64` and pass it to `NewModel`",
+        "Update `NewModel` to accept and store `videoID int64` on the `Model` struct",
+        "CGO_ENABLED=0 go build ./... passes with no errors",
+        "CGO_ENABLED=0 go vet ./... passes with no errors"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Resume playback from stopped position on open",
+      "description": "As a user, I want the video to resume at the position I last stopped at when I reopen it, so I don't have to manually seek back.",
+      "acceptanceCriteria": [
+        "In cmd/root.go openCmd, after calling EnsureVideoTiming, check if `timing.Stopped != nil && *timing.Stopped > 0`",
+        "If true, call `client.Seek(*timing.Stopped)` followed by `client.Pause()` before launching the TUI",
+        "After seeking, print to terminal: `fmt.Printf(\"Resuming from %s\\n\", timeutil.FormatTime(*timing.Stopped))`",
+        "If `timing.Stopped` is nil or 0, no seek is performed and the video plays from the beginning as normal",
+        "CGO_ENABLED=0 go build ./... passes with no errors",
+        "CGO_ENABLED=0 go vet ./... passes with no errors"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Update stopped position when video is paused",
+      "description": "As a user, I want the app to record my current position whenever I pause, so the correct resume point is always saved.",
+      "acceptanceCriteria": [
+        "In tui/tui.go `handleVideoKeys`, when the pause toggle key fires and `m.client.TogglePause()` succeeds, fetch `timePos` via `m.client.GetTimePos()` and call `db.UpdateVideoTimingStopped(m.db, m.videoID, timePos)` if no error",
+        "In tui/tui.go `handleCommand` for the `pause` case, after `m.client.Pause()` succeeds, fetch `timePos` via `m.client.GetTimePos()` and call `db.UpdateVideoTimingStopped(m.db, m.videoID, timePos)` if no error",
+        "If `GetTimePos` returns an error (not connected), the DB update is silently skipped and playback/command handling continues normally",
+        "CGO_ENABLED=0 go build ./... passes with no errors",
+        "CGO_ENABLED=0 go vet ./... passes with no errors"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Update stopped position when a note is started",
+      "description": "As a user, I want the resume point saved whenever I start creating a note, clip, or tackle, since those mark a meaningful pause point.",
+      "acceptanceCriteria": [
+        "In tui/tui.go, locate the note creation handler (where `timestamp` is fetched from mpv before opening the note form) and add `db.UpdateVideoTimingStopped(m.db, m.videoID, timestamp)` immediately after `timestamp` is successfully obtained",
+        "Do the same for the clip-start handler and the tackle-start handler — each already fetches a `timestamp` from mpv; call UpdateVideoTimingStopped with that value",
+        "If the timestamp fetch fails (not connected), the DB update is skipped and form creation continues as before",
+        "CGO_ENABLED=0 go build ./... passes with no errors",
+        "CGO_ENABLED=0 go vet ./... passes with no errors"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Update stopped position on app exit",
+      "description": "As a user, I want my exact position saved when I quit the app so I can resume accurately next time.",
+      "acceptanceCriteria": [
+        "In tui/tui.go, locate the quit key handler (where `tea.Quit` cmd is returned) and before returning, call `m.client.GetTimePos()` to get the current position",
+        "If `GetTimePos` succeeds, call `db.UpdateVideoTimingStopped(m.db, m.videoID, timePos)`",
+        "If `GetTimePos` fails (not connected or error), skip the update and quit proceeds normally",
+        "CGO_ENABLED=0 go build ./... passes with no errors",
+        "CGO_ENABLED=0 go vet ./... passes with no errors"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

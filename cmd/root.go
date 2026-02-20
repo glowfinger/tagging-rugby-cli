@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/user/tagging-rugby-cli/clip"
 	"github.com/user/tagging-rugby-cli/db"
 	"github.com/user/tagging-rugby-cli/deps"
 	"github.com/user/tagging-rugby-cli/mpv"
@@ -136,6 +138,12 @@ var openCmd = &cobra.Command{
 				}
 			}
 			defer database.Close()
+
+			// Start background clip processor
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			processor := clip.Processor{DB: database}
+			processor.Start(ctx)
 
 			// Register the video in the database and get its ID
 			videoID, err := db.EnsureVideo(database, absPath, info.Size(), "")

@@ -3,8 +3,10 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // EnsureVideoTiming selects the video_timing row for the given videoID; inserts one (with stopped=NULL) if not found.
@@ -90,6 +92,60 @@ func getOrCreateVideo(tx *sql.Tx, v NoteVideo) (int64, error) {
 	return result.LastInsertId()
 }
 
+// SelectNextPendingClip returns the next pending clip with all data needed to run ffmpeg.
+// Returns nil, nil when no pending clip is found.
+func SelectNextPendingClip(database *sql.DB) (*PendingClip, error) {
+	var c PendingClip
+	err := database.QueryRow(SelectNextPendingClipSQL).Scan(
+		&c.ClipID, &c.NoteID, &c.Folder, &c.Filename,
+		&c.VideoPath, &c.Category, &c.Player, &c.Attempt, &c.Outcome,
+		&c.Start, &c.End,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("select next pending clip: %w", err)
+	}
+	return &c, nil
+}
+
+// MarkClipProcessing updates a note_clips row to processing status with the given start time.
+func MarkClipProcessing(db *sql.DB, clipID int64, startedAt time.Time) error {
+	_, err := db.Exec(MarkClipProcessingSQL, startedAt, clipID)
+	if err != nil {
+		return fmt.Errorf("mark clip processing: %w", err)
+	}
+	return nil
+}
+
+// MarkClipComplete updates a note_clips row to complete status with the given finish time and filesize.
+func MarkClipComplete(db *sql.DB, clipID int64, finishedAt time.Time, filesize int64) error {
+	_, err := db.Exec(MarkClipCompleteSQL, finishedAt, filesize, clipID)
+	if err != nil {
+		return fmt.Errorf("mark clip complete: %w", err)
+	}
+	return nil
+}
+
+// MarkClipError updates a note_clips row to error status with the given error time and log message.
+func MarkClipError(db *sql.DB, clipID int64, errorAt time.Time, logMsg string) error {
+	_, err := db.Exec(MarkClipErrorSQL, errorAt, logMsg, clipID)
+	if err != nil {
+		return fmt.Errorf("mark clip error: %w", err)
+	}
+	return nil
+}
+
+// UpsertNoteClipPending inserts or resets a note_clips row to pending status so the background worker can pick it up.
+func UpsertNoteClipPending(db *sql.DB, noteID int64, folder, filename string) error {
+	_, err := db.Exec(UpsertNoteClipPendingSQL, noteID, folder, filename)
+	if err != nil {
+		return fmt.Errorf("upsert note clip pending: %w", err)
+	}
+	return nil
+}
+
 // InsertNoteClip inserts a note_clips row.
 func InsertNoteClip(db *sql.DB, noteID int64, folder, filename, extension, format string, filesize int64, status string, startedAt, finishedAt, errorAt interface{}, log string) error {
 	_, err := db.Exec(InsertNoteClipSQL, noteID, folder, filename, extension, format, filesize, status, startedAt, finishedAt, errorAt, log)
@@ -161,6 +217,39 @@ func InsertNoteHighlight(db *sql.DB, noteID int64, highlightType string) error {
 		return fmt.Errorf("insert note highlight: %w", err)
 	}
 	return nil
+}
+
+// QueueClipIfNeeded checks if the note has all required data (category, timing, tackle) and queues a clip
+// generation job by upserting a pending note_clips row. Silently returns nil if any data is missing.
+// Note: path computation is inlined here (same logic as clip.ClipPaths) to avoid an import cycle between db and clip.
+func QueueClipIfNeeded(database *sql.DB, noteID int64, videoPath string) error {
+	note, err := SelectNoteByID(database, noteID)
+	if err != nil {
+		return nil
+	}
+
+	timings, err := SelectNoteTimingByNote(database, noteID)
+	if err != nil || len(timings) == 0 {
+		return nil
+	}
+
+	tackles, err := SelectNoteTacklesByNote(database, noteID)
+	if err != nil || len(tackles) == 0 {
+		return nil
+	}
+
+	t := tackles[0]
+	categorySlug := strings.ToLower(strings.ReplaceAll(note.Category, " ", "_"))
+	playerSlug := strings.ToLower(strings.ReplaceAll(t.Player, " ", "_"))
+	outcomeSlug := strings.ToLower(strings.ReplaceAll(t.Outcome, " ", "_"))
+	folder := filepath.Join(filepath.Dir(videoPath), "clips", categorySlug, playerSlug)
+	totalSecs := int(timings[0].Start)
+	hours := totalSecs / 3600
+	minutes := (totalSecs % 3600) / 60
+	seconds := totalSecs % 60
+	filename := fmt.Sprintf("%02d%02d%02d-%s-%s-%s-%d.mp4", hours, minutes, seconds, playerSlug, categorySlug, outcomeSlug, t.Attempt)
+
+	return UpsertNoteClipPending(database, noteID, folder, filename)
 }
 
 // InsertNoteWithChildren inserts a note and its related child records in a transaction.
@@ -236,6 +325,13 @@ func InsertNoteWithChildren(database *sql.DB, category string, children NoteChil
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("commit transaction: %w", err)
 	}
+
+	if len(children.Videos) > 0 {
+		if err := QueueClipIfNeeded(database, noteID, children.Videos[0].Path); err != nil {
+			log.Printf("queue clip after insert: %v", err)
+		}
+	}
+
 	return noteID, nil
 }
 
@@ -286,6 +382,14 @@ func UpdateNoteWithChildren(database *sql.DB, noteID int64, children NoteChildre
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit transaction: %w", err)
 	}
+
+	videos, err := SelectNoteVideosByNote(database, noteID)
+	if err == nil && len(videos) > 0 {
+		if err := QueueClipIfNeeded(database, noteID, videos[0].Path); err != nil {
+			log.Printf("queue clip after update: %v", err)
+		}
+	}
+
 	return nil
 }
 

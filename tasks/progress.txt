@@ -1,32 +1,91 @@
 # Ralph Progress Log
-# Branch: ralph/video-session-resume
+# Branch: ralph/tackle-clip-generation
 # Started: 2026-02-19
 
 ## Codebase Patterns
-- Use `CGO_ENABLED=0` for all Go build/vet/run commands (modernc.org/sqlite requirement)
-- Go binary at `/home/node/go/bin/go` — export PATH before commands
-- DB SQL files live in db/sql/*.sql and are embedded via //go:embed in db/queries.go (not sql.go)
-- SQL constants follow pattern: var InsertVideoTimingSQL = ... (exported, from embed)
-- db/models.go holds all structs; db/functions.go holds all DB helper functions
-- getOrCreateVideo is private (lowercase), used only inside InsertNoteWithChildren transaction
-- EnsureVideo is public — calls SelectVideoByPathSQL then InsertVideoSQL; in db/functions.go
-- tui.Run signature: func Run(client *mpv.Client, db *sql.DB, videoPath string, videoID int64) error
-- NewModel signature: func NewModel(client *mpv.Client, db *sql.DB, videoPath string, videoID int64) *Model
-- Model.videoID stores the DB video ID; used in all video timing update calls
-- StoppedAt was removed from NoteVideo struct and related SQL — tracking moved to video_timings table
-- cmd/clip.go, cmd/note.go, cmd/tackle.go also had StoppedAt in NoteVideo literals — needed cleanup
-- Seek+Pause pattern for resume: client.Seek(*timing.Stopped) then client.Pause() before TUI launch
+- db/queries.go uses //go:embed for all SQL files; always add new SQL embeds there as exported var constants
+- db/functions.go has all DB functions; follow existing error wrapping pattern with fmt.Errorf("operation: %w", err)
+- Migration file is db/sql/migrations/001_create_videos_table.sql — add indexes/constraints here
+- CIRCULAR IMPORT DANGER: db cannot import clip (clip imports db) — inline any clip logic needed in db package
+- tui can safely import clip (clip does not import tui)
+- New message types in tui/tui.go must be excluded from huh form delegation block in Update() if they should not be forwarded to forms
 
+## 2026-02-19 - US-001
+- Implemented UpsertNoteClipPending DB function and SQL
+- Created db/sql/upsert_note_clip_pending.sql with INSERT ... ON CONFLICT upsert
+- Added UNIQUE INDEX idx_note_clips_note_id to migration file
+- Added UpsertNoteClipPendingSQL embed to db/queries.go
+- Added UpsertNoteClipPending(db, noteID, folder, filename) to db/functions.go
+- **Learnings for future iterations:**
+  - NoteVideo struct has NoteID field but videos table doesn't have note_id — join is through notes.video_id
+  - The migration SQL file (001) is the canonical schema — add new indexes there (no separate migration files needed based on current pattern)
+  - CGO_ENABLED=0 required for all builds due to modernc.org/sqlite
 ---
 
-## 2026-02-19 - US-001 through US-007
-- Implemented all 7 user stories for video session resume feature
-- Files changed: db/sql/migrations/001_create_videos_table.sql, db/sql/insert_video.sql, db/sql/select_note_videos_by_note.sql, db/models.go, db/functions.go, db/queries.go, db/sql/insert_video_timing.sql, db/sql/select_video_timing_by_video.sql, db/sql/upsert_video_timing_stopped.sql, tui/tui.go, cmd/root.go, cmd/clip.go, cmd/note.go, cmd/tackle.go
+## 2026-02-19 - US-003
+- Added QueueClipIfNeeded(database, noteID, videoPath) to db/functions.go
+- Integrated call after tx.Commit() in InsertNoteWithChildren (uses children.Videos[0].Path)
+- Integrated call after tx.Commit() in UpdateNoteWithChildren (looks up path via SelectNoteVideosByNote)
+- Errors from QueueClipIfNeeded are logged but don't fail the insert/update
+- Had to import github.com/user/tagging-rugby-cli/clip and log packages into db/functions.go
 - **Learnings for future iterations:**
-  - embed file is db/queries.go (not db/sql.go as progress.txt initially said)
-  - StoppedAt removal cascaded to cmd/ files not just tui/ — always grep entire repo for field names before removing
-  - EnsureVideoTiming uses INSERT ... ON CONFLICT pattern for upsert (SQLite UPSERT requires UNIQUE index)
-  - videoID=0 is used as "not registered" sentinel — guard all DB calls with `m.videoID > 0`
-  - Two ctrl+c handlers exist: one in global key handler, one in stats view handler — both needed quit-save logic
+  - db → clip import is fine (no circular dependency since clip imports only stdlib)
+  - log.Printf is used for non-fatal errors in db operations
+  - UpdateNoteWithChildren previously had only one Commit — video lookup must happen AFTER commit (using database not tx)
+---
+
+## 2026-02-19 - US-008
+- Added statusMsg string field to Model in tui/tui.go
+- Added clearStatusMsg type; excluded from huh form delegation in Update
+- Added ctrl+r case to handleNotesKeys → calls startRegenerateClip()
+- startRegenerateClip: loads videos/timing/tackles, calls clip.ClipPaths, os.Remove, UpsertNoteClipPending
+- Sets m.statusMsg = "Clip queued for regeneration", cleared after 3s via clearStatusMsg
+- View shows statusMsg in footer instead of commandInput when non-empty
+- Added clip import to tui/tui.go (safe — clip does not import tui)
+- **Learnings for future iterations:**
+  - New bubbletea message types must be added to form delegation exclusion chain in Update()
+  - statusMsg field + clearStatusMsg pattern mirrors clearResultMsg for commandInput results
+---
+
+## 2026-02-19 - US-007
+- Added context.WithCancel, clip.Processor{DB: database}.Start(ctx) in cmd/root.go openCmd TUI branch
+- defer cancel() ensures goroutine exits when app quits
+- Processor starts before tui.Run so it is active during session
+---
+
+## 2026-02-19 - US-006
+- Created clip/processor.go with Processor{DB *sql.DB} and Start(ctx context.Context) goroutine
+- Polls SelectNextPendingClip every 2s; processClip on match
+- ffmpeg drawtext: timestamp (HH:MM:SS from start), outcome, Attempt N — bottom-left stack at y=h-th/h-th-36/h-th-72
+- CRITICAL: db→clip creates circular import since clip imports db — resolved by removing clip import from db
+  and inlining ClipPaths logic directly in QueueClipIfNeeded in db/functions.go
+---
+
+## 2026-02-19 - US-005
+- Created db/sql/select_next_pending_clip.sql (JOINs note_clips, notes, videos, note_timing, note_tackles)
+- Added PendingClip struct to db/models.go
+- Added SelectNextPendingClip (nil,nil on ErrNoRows), added embed
+---
+
+## 2026-02-19 - US-004
+- Created mark_clip_processing.sql, mark_clip_complete.sql, mark_clip_error.sql
+- Added MarkClipProcessing, MarkClipComplete, MarkClipError to db/functions.go
+- Added time import to db/functions.go
+---
+
+## 2026-02-19 - US-003
+- Added QueueClipIfNeeded(database, noteID, videoPath) to db/functions.go (with inlined ClipPaths logic)
+- Integrated after tx.Commit() in InsertNoteWithChildren and UpdateNoteWithChildren
+- Errors logged but don't fail insert/update
+---
+
+## 2026-02-19 - US-002
+- Created clip/paths.go in a new top-level clip/ package
+- ClipPaths(videoPath, category, player, attempt, outcome, startSeconds) returns (folder, filename)
+- Folder: <videoDir>/clips/<category_slug>/<player_slug>
+- Filename: HHMMSS-player-category-outcome-attempt.mp4 (zero-padded, lowercase, underscored)
+- **Learnings for future iterations:**
+  - new clip/ package at top-level; Go module already handles it (no go.mod changes needed)
+  - 1845s → "003045" (00h30m45s), not "3045" — use %02d for hours, minutes, seconds
 ---
 

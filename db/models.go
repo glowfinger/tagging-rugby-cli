@@ -75,6 +75,21 @@ type NoteHighlight struct {
 	Type   string
 }
 
+// PendingClip holds the data required to process a pending clip generation job.
+type PendingClip struct {
+	ClipID    int64
+	NoteID    int64
+	Folder    string
+	Filename  string
+	VideoPath string
+	Category  string
+	Player    string
+	Attempt   int
+	Outcome   string
+	Start     float64
+	End       float64
+}
+
 // VideoTiming represents a row in the video_timings table.
 type VideoTiming struct {
 	ID      int64
