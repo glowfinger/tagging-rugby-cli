@@ -653,6 +653,18 @@ func LoadNoteForEdit(database *sql.DB, noteID int64) (*EditTackleData, error) {
 	return data, nil
 }
 
+// QueryExportProgress returns aggregate clip export counts for the given video path.
+func QueryExportProgress(database *sql.DB, videoPath string) (ExportProgress, error) {
+	var ep ExportProgress
+	err := database.QueryRow(SelectExportProgressSQL, videoPath).Scan(
+		&ep.TotalTackles, &ep.CompletedClips, &ep.PendingClips, &ep.ErrorClips,
+	)
+	if err != nil {
+		return ExportProgress{}, fmt.Errorf("query export progress: %w", err)
+	}
+	return ep, nil
+}
+
 // DeleteNote deletes a note by ID. Cascade handles child records.
 func DeleteNote(database *sql.DB, id int64) error {
 	result, err := database.Exec(DeleteNoteSQL, id)
