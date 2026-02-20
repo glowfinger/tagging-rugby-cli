@@ -12,6 +12,8 @@
       "Bash(export PATH=\"/home/node/go/bin:$PATH\")",
       "Bash(git status:*)",
       "Bash(export PATH=$PATH:/home/node/go/bin)"
-    ]
+    ],
+    "deny": [
+      "Read(./obsidian/**)"]
   }
 }
