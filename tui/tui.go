@@ -292,12 +292,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Quit
 		case "?":
-			if m.focus != FocusSearch {
+			if m.focus != FocusSearch && m.width >= 61 {
 				m.showHelp = true
 				return m, nil
 			}
 		case "s", "S":
-			if m.focus != FocusSearch {
+			if m.focus != FocusSearch && m.width >= 61 {
 				m.loadTackleStats()
 				m.statsView.Active = true
 				return m, nil
@@ -650,6 +650,9 @@ func (m *Model) handleCommandInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // openNoteInput opens the huh note form.
 func (m *Model) openNoteInput() (tea.Model, tea.Cmd) {
+	if m.width < 61 {
+		return m, nil
+	}
 	if m.client == nil || !m.client.IsConnected() {
 		m.commandInput.SetResult("Not connected to mpv", true)
 		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
@@ -748,6 +751,9 @@ func (m *Model) saveNoteFromForm() (tea.Model, tea.Cmd) {
 
 // openTackleInput opens the huh tackle wizard form.
 func (m *Model) openTackleInput() (tea.Model, tea.Cmd) {
+	if m.width < 61 {
+		return m, nil
+	}
 	if m.client == nil || !m.client.IsConnected() {
 		m.commandInput.SetResult("Not connected to mpv", true)
 		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
@@ -2132,7 +2138,9 @@ func (m *Model) handleStatsViewInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "?":
 		// Show help overlay
-		m.showHelp = true
+		if m.width >= 61 {
+			m.showHelp = true
+		}
 		return m, nil
 	case "/":
 		// Enter filter mode
