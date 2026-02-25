@@ -1902,11 +1902,6 @@ func (m *Model) View() string {
 		return "Error: " + m.err.Error() + "\n\nPress Ctrl+C to quit.\n"
 	}
 
-	// If stats view is active, show it instead of normal view
-	if m.statsView.Active {
-		return components.StatsView(m.statsView, m.width, m.height)
-	}
-
 	// --- Responsive multi-column layout ---
 	// Available height for columns: total height minus timeline (2 lines) and command input (1 line)
 	colHeight := m.height - 3
