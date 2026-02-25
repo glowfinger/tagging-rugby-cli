@@ -1912,27 +1912,6 @@ func (m *Model) View() string {
 		return components.StatsView(m.statsView, m.width, m.height)
 	}
 
-	// Check if confirm discard dialog is active — show it as overlay
-	if m.confirmDiscardForm != nil {
-		controlsDisplay := components.ControlsDisplay(m.width)
-		confirmView := truncateViewToWidth(m.confirmDiscardForm.View(), m.width)
-		return controlsDisplay + "\n" + confirmView
-	}
-
-	// Check if note form is active — show huh form as overlay
-	if m.noteForm != nil {
-		controlsDisplay := components.ControlsDisplay(m.width)
-		noteFormView := truncateViewToWidth(m.noteForm.View(), m.width)
-		return controlsDisplay + "\n" + noteFormView
-	}
-
-	// Check if tackle form is active — show huh wizard as overlay
-	if m.tackleForm != nil {
-		controlsDisplay := components.ControlsDisplay(m.width)
-		tackleFormView := truncateViewToWidth(m.tackleForm.View(), m.width)
-		return controlsDisplay + "\n" + tackleFormView
-	}
-
 	// --- Responsive multi-column layout ---
 	// Available height for columns: total height minus timeline (2 lines) and command input (1 line)
 	colHeight := m.height - 3
