@@ -61,7 +61,7 @@
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -76,7 +76,7 @@
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -91,7 +91,7 @@
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -106,7 +106,7 @@
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -122,7 +122,7 @@
         "Doc reviewed and no stale references remain"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": ""
     }
   ]
