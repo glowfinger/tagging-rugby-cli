@@ -29,8 +29,8 @@ tui/
     modeindicator.go  # ModeIndicator() — displays current focus and input mode
     controls.go       # ControlGroup, GetControlGroups(), ControlGroupLines(), RenderInfoBox(), RenderControlBox() (Deprecated)
     statspanel.go     # StatsPanel() — stats summary, event distribution, tackle stats table
-    statsview.go      # StatsViewState, PlayerStats, StatsView() — full-screen stats overlay
-    help.go           # HelpOverlay() — keybinding reference overlay
+    statsview.go      # StatsViewState, PlayerStats, StatsView() — sortable stats view (renders in Column 2)
+    help.go           # HelpOverlay() — keybinding reference (renders in Column 2)
     exportindicator.go # ExportIndicatorState, ExportIndicator() — tackle clip export progress box
   forms/
     theme.go          # Theme() — custom huh theme matching the Ciapre palette
@@ -50,7 +50,7 @@ tui/
 `View()` in `tui.go` orchestrates the full screen render each frame:
 
 ```
-1. Early returns (quitting, error, video box)
+1. Early returns (quitting, error)
 2. Normal multi-column layout — forms and overlays render inside Column 2:
    a. StatusBar          — full width, 1 line
    b. Columns            — responsive 2/3/4-col grid
@@ -107,7 +107,7 @@ Constrains content to an exact `Width x Height` bounding box:
 
 Responsive column width calculation with no border separator overhead (borders = 0). Constants: `Col1Width = 30`, `Col3Width = 40`, `Col4Width = 30`, `ColMinWidth = 30`, `Col4ShowThreshold = 170`. Column 3 is fixed at 40 cells; Column 2 gets all remaining space.
 
-`overlayActive` is `true` when any form or overlay is rendering in Column 2 (`m.form != nil || m.showHelp || m.statsView.Active`). When true, Column 3 is always hidden regardless of terminal width so Column 2 gets extra space.
+`overlayActive` is `true` when any form or overlay is rendering in Column 2 (`m.noteForm != nil || m.tackleForm != nil || m.confirmDiscardForm != nil || m.showHelp || m.statsView.Active`). When true, Column 3 is always hidden regardless of terminal width so Column 2 gets extra space.
 
 **Normal layout** (`overlayActive == false`):
 
@@ -201,12 +201,12 @@ Each component in `tui/components/` follows the pattern:
 
 - **State:** `StatsViewState{Active, Stats []PlayerStats, SortColumn, SortAscending, SelectedRow, ScrollOffset}`
 - **Signature:** `StatsView(state StatsViewState, width, height int) string`
-- Renders: full-screen sortable stats table overlay
+- Renders: sortable stats table (placed in Column 2 when active)
 
 ### HelpOverlay (`help.go`)
 
 - **Signature:** `HelpOverlay(width, height int) string`
-- Renders: full-screen keybinding reference grouped by function
+- Renders: keybinding reference grouped by function (placed in Column 2 when active)
 
 ### ExportIndicator (`exportindicator.go`)
 
@@ -225,40 +225,61 @@ Each component in `tui/components/` follows the pattern:
 - Refreshed in the Model via `refreshExportProgress()` called from the existing ~250 ms video-position tick handler.
 - DB source: `db.QueryExportProgress(db, videoPath)` → `db.ExportProgress{TotalTackles, CompletedClips, PendingClips, ErrorClips}` backed by `db/sql/select_export_progress.sql`.
 
-## Overlay-in-Column-2 Pattern
+## Column 2 Content Replacement Pattern
 
-All forms and overlays render inside Column 2 instead of as full-screen takeovers. This keeps Column 1 (video status, export indicator) and Column 4 (keybinding reference) visible while the user interacts with a form or browses help/stats.
+Forms and interactive views are rendered as full-width, full-height containers that
+**replace** Column 2's normal content (search bar + notes list). They are not floating
+overlays — they are statically placed inside the Column 2 slot and sized to fill it
+exactly via `layout.Container{Width: width, Height: height}.Render(...)`.
 
-### Items that use this pattern
+This keeps Column 1 (video status, export indicator) and Column 4 (keybinding reference)
+visible at all times.
+
+### Items that replace Column 2
 
 | Item | Trigger key | Type |
 |------|-------------|------|
 | Note form | `N` | huh form |
 | Tackle wizard | `T` | huh form |
 | Confirm discard | automatic (when editing) | huh form |
-| Help overlay | `?` | static render |
+| Help | `?` | static render |
 | Stats view | `S` | interactive render |
 
 ### Activation guard (narrow mode)
 
-Before opening any form or overlay, `View()` / key handlers check that Column 2 is visible (`termWidth >= 61`). If not, the key press is silently ignored. This prevents rendering forms into a zero-width column.
+Before replacing Column 2, key handlers check that Column 2 is visible (`termWidth >= 61`).
+If not, the key press is silently ignored. This prevents rendering a form into a
+zero-width or negative-width container.
 
 ### `overlayActive` flag
 
-`View()` computes `overlayActive := m.form != nil || m.showHelp || m.statsView.Active` and passes it to `ComputeColumnWidths`. This causes Column 3 to hide and Column 2 to expand.
+`View()` computes:
+
+```go
+overlayActive := m.noteForm != nil || m.tackleForm != nil || m.confirmDiscardForm != nil || m.showHelp || m.statsView.Active
+```
+
+and passes it to `ComputeColumnWidths`. This causes Column 3 to hide and Column 2 to
+expand into the freed space.
 
 ### Column 2 conditional rendering
 
-At the top of `renderColumn2(width, height int)`:
+`renderColumn2(width, height int)` checks active state at the top, in priority order,
+and returns the first match wrapped in `layout.Container{Width: width, Height: height}`:
 
-1. If `m.form != nil` → render `m.form.View()` inside `layout.Container{Width: width, Height: height}`
-2. Else if `m.showHelp` → render `HelpOverlay(width, height)`
-3. Else if `m.statsView.Active` → render `StatsView(m.statsView, width, height)`
-4. Else → render normal search input + notes list (existing behaviour)
+1. `m.confirmDiscardForm != nil` → `Container.Render(m.confirmDiscardForm.View())`
+2. `m.noteForm != nil` → `Container.Render(m.noteForm.View())`
+3. `m.tackleForm != nil` → `Container.Render(m.tackleForm.View())`
+4. `m.showHelp` → `Container.Render(HelpOverlay(width, height))`
+5. `m.statsView.Active` → `Container.Render(StatsView(m.statsView, width, height))`
+6. Otherwise → search input + notes list (normal content)
+
+Confirm Discard is checked first because both it and its parent form (note or tackle)
+may be non-nil simultaneously — Confirm Discard wins the display slot.
 
 ### Dismissal
 
-**Esc** is the single key to exit any active form or overlay. See [Global Keys](#global-keys) below.
+**Esc** is the single key to exit any active form or view. See [Global Keys](#global-keys) below.
 
 ---
 
@@ -310,7 +331,7 @@ These keys are handled before any focus-specific handler:
 | Key | Action |
 |-----|--------|
 | `Ctrl+C` | Quit |
-| `Esc` | **If** a form or overlay is active → dismiss it (close help, close stats, or abort huh form); **else if** `FocusSearch` → clear search input and return to `FocusNotes`; **otherwise** no-op |
+| `Esc` | Unified dismiss handler, checked in priority order: 1) `m.confirmDiscardForm != nil` → close it and re-open parent form; 2) `m.noteForm != nil` → trigger huh abort (discard guard may show confirm dialog); 3) `m.tackleForm != nil` → trigger huh abort; 4) `m.showHelp` → set `m.showHelp = false`; 5) `m.statsView.Active` → set `m.statsView.Active = false`; 6) `FocusSearch` → clear search input and return to `FocusNotes`; 7) otherwise → fall through to other handlers (e.g. cancel command mode) |
 
 ### Video Focus (FocusVideo)
 - `Space` — toggle play/pause
