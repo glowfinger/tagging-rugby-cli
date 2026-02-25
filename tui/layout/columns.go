@@ -17,10 +17,46 @@ const (
 // Returns individual column widths and whether columns 2, 3, and 4 should be shown.
 // Column 1 is always fixed at Col1Width (30). Column 3 is fixed at Col3Width (40).
 // Column 4 is fixed at Col4Width (30). Column 2 gets all remaining space.
+//
+// When overlayActive is false (normal layout):
 // Hide order: Col4 first (below 170), then Col3 (col2 would fall below 30), then Col2 (below 30 cells).
 // Col1 is always visible at any terminal width.
-func ComputeColumnWidths(termWidth int) (col1, col2, col3, col4 int, showCol2, showCol3, showCol4 bool) {
+//
+// When overlayActive is true (overlay layout):
+// Col3 is always hidden. Layout:
+//   >= 170: Col1=30, Col4=30, Col2=termWidth-60
+//   61-169: Col1=30, Col2=termWidth-30; Col4 hidden
+//   <= 60:  Col1=30 only; Col2, Col3, Col4 hidden
+func ComputeColumnWidths(termWidth int, overlayActive bool) (col1, col2, col3, col4 int, showCol2, showCol3, showCol4 bool) {
 	col1 = Col1Width
+
+	if overlayActive {
+		// Overlay layout: Col3 is always hidden
+		showCol3 = false
+		col3 = 0
+		if termWidth >= Col4ShowThreshold {
+			// >= 170: Col1 + Col2 (form) + Col4
+			showCol4 = true
+			col4 = Col4Width
+			col2 = termWidth - col1 - col4
+			showCol2 = col2 > 0
+		} else if termWidth >= 61 {
+			// 61-169: Col1 + Col2 (form); Col4 hidden
+			showCol4 = false
+			col4 = 0
+			col2 = termWidth - col1
+			showCol2 = true
+		} else {
+			// <= 60: Col1 only; forms blocked
+			showCol4 = false
+			showCol2 = false
+			col2 = 0
+			col4 = 0
+		}
+		return
+	}
+
+	// Normal layout (overlayActive == false)
 
 	// Step 1: Determine if col4 is shown
 	showCol4 = termWidth >= Col4ShowThreshold

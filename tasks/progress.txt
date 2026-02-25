@@ -1,42 +1,23 @@
 # Ralph Progress Log
-# Branch: ralph/export-indicator
-# Started: 2026-02-20
+# Branch: ralph/overlay-in-column-2
+# Started: 2026-02-25
 
 ## Codebase Patterns
 - SQL embeds: add `//go:embed sql/<name>.sql` to db/queries.go, then use the var in db/functions.go
 - RenderInfoBox content lines: pass ` ` (space) + content + ` ` (space) to get visual padding inside borders; innerWidth for content = width - 4
 - Tick handler in tui.go: add refresh calls inside `case tickMsg:` before `return m, tickCmd()`
 - Column render: always split rendered box on "\n" then append to lines slice; wrap whole column in layout.Container
+- ComputeColumnWidths is only called in View() in tui.go — update signature there and in tui/layout/columns.go
 
-## 2026-02-20 - US-001
-- What was implemented: ExportProgress struct in db/models.go, select_export_progress.sql, SelectExportProgressSQL embed in db/queries.go, QueryExportProgress function in db/functions.go
-- Files changed: db/models.go, db/queries.go, db/functions.go, db/sql/select_export_progress.sql
-- **Learnings for future iterations:**
-  - QueryRow().Scan() pattern is consistent across all DB query functions in this codebase
-  - SQL uses LEFT JOIN for note_clips so tackles without clips still appear in results
 ---
 
-## 2026-02-20 - US-002
-- What was implemented: ExportIndicatorState struct, ExportStatus() method, ExportIndicator() render function in tui/components/exportindicator.go
-- Files changed: tui/components/exportindicator.go (new file)
+## 2026-02-25 - US-001
+- What was implemented: Added `overlayActive bool` second param to `ComputeColumnWidths` in tui/layout/columns.go; updated call site in tui/tui.go to pass `false`
+- Files changed: tui/layout/columns.go, tui/tui.go
+- Overlay layout logic: when overlayActive=true: >=170 → Col1+Col2+Col4 (Col2=termWidth-60); 61-169 → Col1+Col2 (Col2=termWidth-30); <=60 → Col1 only
+- go vet passes
 - **Learnings for future iterations:**
-  - Content lines for RenderInfoBox: start with " " and end with " " so content is padded 1 char from each border
-  - innerWidth = width - 4: 2 for border chars, 2 for the leading/trailing padding spaces in each line
-  - lipgloss.Width() must be used when calculating padding around styled text (ANSI escape sequences inflate len())
+  - ComputeColumnWidths call site in tui.go passes `false` for now — US-002 will replace it with computed `overlayActive`
+  - The function signature change is the only thing needed for US-001; no behavior change in the codebase yet
 ---
 
-## 2026-02-20 - US-003
-- What was implemented: exportIndicator field on Model, refreshExportProgress() method, call in tickMsg handler
-- Files changed: tui/tui.go
-- **Learnings for future iterations:**
-  - The tickMsg handler already calls updateStatusFromMpv() and loadTackleStatsForPanel() — export refresh fits the same pattern
-  - Silent error handling (return without updating state) is the established pattern for background refresh methods
----
-
-## 2026-02-20 - US-004
-- What was implemented: ExportIndicator box appended to column 1 lines before Container wrap
-- Files changed: tui/columns.go
-- **Learnings for future iterations:**
-  - All content in renderColumn1 follows: render component → split on "\n" → append to lines slice
-  - The layout.Container wrap at the end handles height/scroll — just append content freely before it
----

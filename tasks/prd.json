@@ -1,17 +1,18 @@
 {
   "project": "tagging-rugby-cli",
-  "branchName": "ralph/export-indicator",
-  "description": "Export Indicator - Real-time tackle clip export progress box in Column 1 showing status, clip count, and progress bar derived from the database",
+  "branchName": "ralph/overlay-in-column-2",
+  "description": "Overlay-in-Column-2 Pattern - Move all forms and overlays into Column 2, keeping Columns 1 and 4 visible at all times. When a form or overlay is active, Column 3 hides to give Column 2 extra space.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Add ExportProgress DB struct and query function",
-      "description": "As a developer, I need a database struct and query function that computes tackle clip export progress for the active video so the TUI has accurate counts to display.",
+      "title": "Add overlayActive to ComputeColumnWidths",
+      "description": "As a developer, I need ComputeColumnWidths to accept an overlayActive parameter so Column 3 hides and Column 2 expands whenever a form or overlay is open.",
       "acceptanceCriteria": [
-        "Add ExportProgress struct to db/models.go with fields: TotalTackles int, CompletedClips int, PendingClips int, ErrorClips int",
-        "Create db/sql/select_export_progress.sql with SQL: SELECT COUNT(DISTINCT n.id) AS total_tackles, COUNT(CASE WHEN nc.status = 'completed' THEN 1 END) AS completed_clips, COUNT(CASE WHEN nc.status = 'pending' THEN 1 END) AS pending_clips, COUNT(CASE WHEN nc.status = 'error' THEN 1 END) AS error_clips FROM notes n INNER JOIN videos v ON v.id = n.video_id LEFT JOIN note_clips nc ON nc.note_id = n.id WHERE v.path = ? AND n.category = 'tackle'",
-        "Embed the new SQL file in db/queries.go following the existing //go:embed pattern, exposing it as SelectExportProgressSQL string constant",
-        "Add QueryExportProgress(database *sql.DB, videoPath string) (ExportProgress, error) function to db/functions.go that executes SelectExportProgressSQL, scans the single result row into ExportProgress, and returns it",
+        "ComputeColumnWidths(termWidth int, overlayActive bool) — new signature with second param",
+        "When overlayActive == false, behaviour is identical to current (no regression)",
+        "When overlayActive == true, Column 3 is always hidden regardless of terminal width",
+        "Overlay layout widths match the architecture table: >= 170: Col1=30, Col4=30, Col2=termWidth-60; Col3 hidden; 61-169: Col1=30, Col2=termWidth-30; Col3 and Col4 hidden; <= 60: Col1=30 only; Col2, Col3, Col4 hidden",
+        "All existing call-sites of ComputeColumnWidths updated to pass the new param",
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 1,
@@ -20,48 +21,105 @@
     },
     {
       "id": "US-002",
-      "title": "Add ExportIndicator render component",
-      "description": "As a developer, I need a pure render function that converts ExportIndicatorState into a 5-line InfoBox so Column 1 can display export progress.",
+      "title": "Add overlayActive computation in View()",
+      "description": "As a developer, I need View() to compute a single overlayActive flag and pass it everywhere that needs it, so the layout reacts consistently to any active form or overlay.",
       "acceptanceCriteria": [
-        "Create tui/components/exportindicator.go with ExportIndicatorState struct: TotalTackles int, CompletedClips int, PendingClips int, ErrorClips int",
-        "Add ExportStatus() string method on ExportIndicatorState with priority logic: returns 'Completed' when TotalTackles > 0 && CompletedClips == TotalTackles && PendingClips == 0 && ErrorClips == 0; returns 'Processing' when PendingClips > 0; returns 'Error' when ErrorClips > 0 && PendingClips == 0; returns 'Ready' for all other cases",
-        "Add ExportIndicator(state ExportIndicatorState, width int) string function that builds 3 content lines and calls RenderInfoBox(\"Export\", contentLines, width, false)",
-        "Row 1: label 'Status:' left-aligned, value right-aligned in innerWidth, value coloured using lipgloss: Ready=styles.Lavender, Processing=styles.Amber, Error=styles.Red, Completed=styles.Green",
-        "Row 2: label 'Clips:' left-aligned, value '<completed>/<total>' right-aligned in innerWidth, both numbers in styles.LightLavender",
-        "Row 3: ASCII progress bar spanning innerWidth chars using '█' for filled and '░' for empty, coloured styles.Cyan; fraction = CompletedClips/TotalTackles clamped to [0.0, 1.0]; empty bar (all '░') when TotalTackles == 0; filled = int(fraction * float64(innerWidth))",
-        "innerWidth = width - 4 (2 border chars + 2 padding spaces)",
+        "View() computes overlayActive := m.noteForm != nil || m.tackleForm != nil || m.confirmDiscardForm != nil || m.showHelp || m.statsView.Active",
+        "overlayActive is passed to ComputeColumnWidths",
+        "overlayActive is passed to renderColumn3 (to render empty / skip when true)",
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Wire ExportIndicatorState into the TUI Model",
-      "description": "As a developer, I need the TUI Model to hold and refresh ExportIndicatorState on the existing ~250ms tick so the render component always has live data.",
+      "title": "Render forms inside Column 2",
+      "description": "As a user, I want to see the Note form, Tackle form, and Confirm Discard dialog inside Column 2 so that Column 1 and Column 4 remain visible while I fill in the form.",
       "acceptanceCriteria": [
-        "Add exportIndicator components.ExportIndicatorState field to tui.Model struct in tui/tui.go",
-        "Add (m *Model) refreshExportProgress() method to tui/tui.go that: calls db.QueryExportProgress(m.db, m.videoPath); on success maps result fields into m.exportIndicator (TotalTackles, CompletedClips, PendingClips, ErrorClips); on error silently returns without changing m.exportIndicator",
-        "In the existing tea.Tick handler in Update() that refreshes m.statusBar.TimePos (the ~250ms video position poll), add a call to m.refreshExportProgress()",
+        "renderColumn2(width, height int) checks form state at the top, in this order: 1) m.confirmDiscardForm != nil -> render layout.Container{Width:width, Height:height}.Render(m.confirmDiscardForm.View()); 2) m.noteForm != nil -> render layout.Container{Width:width, Height:height}.Render(m.noteForm.View()); 3) m.tackleForm != nil -> render layout.Container{Width:width, Height:height}.Render(m.tackleForm.View()); 4) Otherwise -> existing search input + notes list (unchanged)",
+        "The full-screen overlay code in View() that returns early for forms is removed",
+        "Column 1 and Column 4 are visible while any form is open (manual verification)",
+        "Form content is truncated/padded to exact Column 2 dimensions via Container",
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Render ExportIndicator at the bottom of Column 1",
-      "description": "As a user, I want to see the Export Indicator box at the bottom of Column 1 so I can monitor tackle clip export progress without leaving the tagging view.",
+      "title": "Render Help overlay inside Column 2",
+      "description": "As a user, I want the Help overlay (?) to appear inside Column 2 so I can still see my video status and keybinding reference while reading help.",
       "acceptanceCriteria": [
-        "In renderColumn1 in tui/columns.go, after appending the Selected Tag detail card lines (or after the summary box when no item is selected), append the output of components.ExportIndicator(m.exportIndicator, width) split on newlines",
-        "The ExportIndicator box is always appended (even when TotalTackles == 0 — shows Status: Ready, Clips: 0/0, empty bar)",
-        "The overall Column 1 output remains wrapped in layout.Container{Width: width, Height: height}.Render(...) guaranteeing exact dimensions",
+        "renderColumn2 renders components.HelpOverlay(width, height) when m.showHelp == true (before form checks — or after, since they're mutually exclusive)",
+        "The early-return if m.showHelp { return components.HelpOverlay(...) } in View() is removed",
+        "Column 1 and Column 4 remain visible when help is open (manual verification)",
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Render Stats View inside Column 2",
+      "description": "As a user, I want the Stats view (S) to appear inside Column 2 so I can see my video status while browsing stats.",
+      "acceptanceCriteria": [
+        "renderColumn2 renders components.StatsView(m.statsView, width, height) when m.statsView.Active == true",
+        "The early-return if m.statsView.Active { return ... } in View() is removed",
+        "Column 1 and Column 4 remain visible when stats view is open (manual verification)",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Unified Esc handler to dismiss any form or overlay",
+      "description": "As a user, I want to press Esc once to exit any active form or overlay, without needing to know which one is open.",
+      "acceptanceCriteria": [
+        "A single, early Esc handler in Update() runs before focus-specific handlers",
+        "Esc handler priority: 1) m.confirmDiscardForm != nil -> close it and re-open the parent form; 2) m.noteForm != nil -> trigger huh abort; 3) m.tackleForm != nil -> trigger huh abort; 4) m.showHelp == true -> set m.showHelp = false; 5) m.statsView.Active == true -> set m.statsView.Active = false; 6) m.focus == FocusSearch -> clear search input and return to FocusNotes; 7) Otherwise -> no-op",
+        "No other Esc handlers in the codebase handle help or stats dismissal (deduplicated)",
+        "Pressing Esc while in FocusSearch with no form/overlay still clears search (unchanged)",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Activation guard for narrow terminals",
+      "description": "As a developer, I want form and overlay activation to be silently blocked when the terminal is too narrow (< 61 columns) so that forms are never rendered into a zero-width or negative-width column.",
+      "acceptanceCriteria": [
+        "All form/overlay open functions check m.width >= 61 before activating",
+        "Affected functions: note form open, tackle form open, m.showHelp = true, m.statsView.Active = true",
+        "If terminal is too narrow, the key press is silently ignored (no error message)",
+        "Confirm discard guard is exempt (it can only appear if a parent form is already open)",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Update TUI-ARCHITECTURE.md",
+      "description": "As a developer, I want TUI-ARCHITECTURE.md to accurately reflect the implemented design so it can be used as a reliable reference.",
+      "acceptanceCriteria": [
+        "ComputeColumnWidths signature in the doc updated to include overlayActive bool",
+        "Overlay-in-Column-2 Pattern section verified against the implemented code and corrected where needed",
+        "renderColumn2 conditional rendering order in the doc matches the actual implementation order",
+        "Any references to full-screen overlay return paths removed from the doc",
+        "Esc handler section updated to reflect the unified handler priority list",
+        "Doc reviewed and no stale references remain"
+      ],
+      "priority": 8,
+      "passes": false,
       "notes": ""
     }
   ]

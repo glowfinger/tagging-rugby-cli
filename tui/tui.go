@@ -1940,7 +1940,7 @@ func (m *Model) View() string {
 		colHeight = 5
 	}
 
-	col1Width, col2Width, col3Width, col4Width, showCol2, showCol3, showCol4 := layout.ComputeColumnWidths(m.width)
+	col1Width, col2Width, col3Width, col4Width, showCol2, showCol3, showCol4 := layout.ComputeColumnWidths(m.width, false)
 
 	var columnsView string
 	if showCol4 && showCol3 {
