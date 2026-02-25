@@ -1940,14 +1940,15 @@ func (m *Model) View() string {
 		colHeight = 5
 	}
 
-	col1Width, col2Width, col3Width, col4Width, showCol2, showCol3, showCol4 := layout.ComputeColumnWidths(m.width, false)
+	overlayActive := m.noteForm != nil || m.tackleForm != nil || m.confirmDiscardForm != nil || m.showHelp || m.statsView.Active
+	col1Width, col2Width, col3Width, col4Width, showCol2, showCol3, showCol4 := layout.ComputeColumnWidths(m.width, overlayActive)
 
 	var columnsView string
 	if showCol4 && showCol3 {
 		columns := []string{
 			m.renderColumn1(col1Width, colHeight),
 			m.renderColumn2(col2Width, colHeight),
-			m.renderColumn3(col3Width, colHeight),
+			m.renderColumn3(col3Width, colHeight, overlayActive),
 			m.renderColumn4(col4Width, colHeight),
 		}
 		widths := []int{col1Width, col2Width, col3Width, col4Width}
@@ -1964,7 +1965,7 @@ func (m *Model) View() string {
 		columns := []string{
 			m.renderColumn1(col1Width, colHeight),
 			m.renderColumn2(col2Width, colHeight),
-			m.renderColumn3(col3Width, colHeight),
+			m.renderColumn3(col3Width, colHeight, overlayActive),
 		}
 		widths := []int{col1Width, col2Width, col3Width}
 		columnsView = layout.JoinColumns(columns, widths, colHeight)

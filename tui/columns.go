@@ -135,7 +135,11 @@ func (m *Model) renderColumn2(width, height int) string {
 }
 
 // renderColumn3 renders Column 3: Live stats summary, bar graph, top players leaderboard.
-func (m *Model) renderColumn3(width, height int) string {
+// When overlayActive is true, returns an empty container (column is hidden by layout anyway).
+func (m *Model) renderColumn3(width, height int, overlayActive bool) string {
+	if overlayActive {
+		return layout.Container{Width: width, Height: height}.Render("")
+	}
 	return layout.Container{Width: width, Height: height}.Render(
 		components.StatsPanel(m.statsView.Stats, m.notesList.Items, width, height))
 }
