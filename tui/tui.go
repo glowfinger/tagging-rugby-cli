@@ -209,10 +209,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// Handle help overlay - any key dismisses it
-		if m.showHelp {
-			m.showHelp = false
-			return m, nil
+		// Unified Esc handler — covers all overlay/form/search dismissal in priority order
+		if msg.String() == "esc" {
+			if m.confirmDiscardForm != nil {
+				return m.handleConfirmDiscardUpdate(msg)
+			}
+			if m.noteForm != nil {
+				return m.handleNoteFormUpdate(msg)
+			}
+			if m.tackleForm != nil {
+				return m.handleTackleFormUpdate(msg)
+			}
+			if m.showHelp {
+				m.showHelp = false
+				return m, nil
+			}
+			if m.statsView.Active {
+				m.statsView.Active = false
+				return m, nil
+			}
+			if m.focus == FocusSearch {
+				m.searchInput.Clear()
+				m.focus = FocusNotes
+				return m, nil
+			}
 		}
 
 		// Handle stats view input
@@ -2118,10 +2138,6 @@ func (m *Model) handleStatsViewInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Enter filter mode
 		m.statsView.FilterMode = true
 		m.statsView.FilterInput = ""
-		return m, nil
-	case "esc":
-		// Clear all filters
-		m.statsView.ClearFilters()
 		return m, nil
 	}
 	return m, nil
