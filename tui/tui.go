@@ -1902,11 +1902,6 @@ func (m *Model) View() string {
 		return "Error: " + m.err.Error() + "\n\nPress Ctrl+C to quit.\n"
 	}
 
-	// If help overlay is active, show it instead of normal view
-	if m.showHelp {
-		return components.HelpOverlay(m.width, m.height)
-	}
-
 	// If stats view is active, show it instead of normal view
 	if m.statsView.Active {
 		return components.StatsView(m.statsView, m.width, m.height)

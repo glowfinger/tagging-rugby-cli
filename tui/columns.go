@@ -119,6 +119,9 @@ func (m *Model) renderColumn2(width, height int) string {
 	if m.tackleForm != nil {
 		return layout.Container{Width: width, Height: height}.Render(m.tackleForm.View())
 	}
+	if m.showHelp {
+		return layout.Container{Width: width, Height: height}.Render(components.HelpOverlay(width, height))
+	}
 
 	// Search box takes 3 lines (InfoBox top border + content + bottom border)
 	searchBoxHeight := 3
