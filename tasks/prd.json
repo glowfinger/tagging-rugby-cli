@@ -1,7 +1,7 @@
 {
   "project": "tagging-rugby-cli",
   "branchName": "ralph/overlay-in-column-2",
-  "description": "Overlay-in-Column-2 Pattern - Move all forms and overlays into Column 2, keeping Columns 1 and 4 visible at all times. When a form or overlay is active, Column 3 hides to give Column 2 extra space.",
+  "description": "Column 2 Content Replacement - Forms and views replace Column 2's search bar and notes list as full-width, full-height containers. Columns 1 and 4 stay visible at all times. When Column 2 is in replacement mode, Column 3 hides to give Column 2 extra space.",
   "userStories": [
     {
       "id": "US-001",
@@ -30,18 +30,19 @@
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Render forms inside Column 2",
-      "description": "As a user, I want to see the Note form, Tackle form, and Confirm Discard dialog inside Column 2 so that Column 1 and Column 4 remain visible while I fill in the form.",
+      "title": "Replace Column 2 with forms (Note, Tackle, Confirm Discard)",
+      "description": "As a user, I want the Note form, Tackle form, and Confirm Discard dialog to replace Column 2's search bar and notes list so that Column 1 and Column 4 remain visible while I fill in a form.",
       "acceptanceCriteria": [
-        "renderColumn2(width, height int) checks form state at the top, in this order: 1) m.confirmDiscardForm != nil -> render layout.Container{Width:width, Height:height}.Render(m.confirmDiscardForm.View()); 2) m.noteForm != nil -> render layout.Container{Width:width, Height:height}.Render(m.noteForm.View()); 3) m.tackleForm != nil -> render layout.Container{Width:width, Height:height}.Render(m.tackleForm.View()); 4) Otherwise -> existing search input + notes list (unchanged)",
-        "The full-screen overlay code in View() that returns early for forms is removed",
+        "renderColumn2(width, height int) checks form state at the top, in this order: 1) m.confirmDiscardForm != nil -> return layout.Container{Width:width, Height:height}.Render(m.confirmDiscardForm.View()); 2) m.noteForm != nil -> return layout.Container{Width:width, Height:height}.Render(m.noteForm.View()); 3) m.tackleForm != nil -> return layout.Container{Width:width, Height:height}.Render(m.tackleForm.View()); 4) Otherwise -> existing search input + notes list (unchanged)",
+        "The full-screen early-return code in View() for all three forms is removed",
+        "The search bar and notes list are not rendered while any form is active",
         "Column 1 and Column 4 are visible while any form is open (manual verification)",
-        "Form content is truncated/padded to exact Column 2 dimensions via Container",
+        "Form content fills exactly the Column 2 width x height via Container",
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 3,
@@ -50,12 +51,13 @@
     },
     {
       "id": "US-004",
-      "title": "Render Help overlay inside Column 2",
-      "description": "As a user, I want the Help overlay (?) to appear inside Column 2 so I can still see my video status and keybinding reference while reading help.",
+      "title": "Replace Column 2 with Help content",
+      "description": "As a user, I want pressing ? to replace Column 2's search bar and notes list with the Help content so I can read keybinding reference while Column 1 and Column 4 remain visible.",
       "acceptanceCriteria": [
-        "renderColumn2 renders components.HelpOverlay(width, height) when m.showHelp == true (before form checks — or after, since they're mutually exclusive)",
+        "renderColumn2 returns layout.Container{Width:width, Height:height}.Render(components.HelpOverlay(width, height)) when m.showHelp == true",
         "The early-return if m.showHelp { return components.HelpOverlay(...) } in View() is removed",
-        "Column 1 and Column 4 remain visible when help is open (manual verification)",
+        "The search bar and notes list are not rendered while help is active",
+        "Column 1 and Column 4 remain visible when help is active (manual verification)",
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 4,
@@ -64,12 +66,13 @@
     },
     {
       "id": "US-005",
-      "title": "Render Stats View inside Column 2",
-      "description": "As a user, I want the Stats view (S) to appear inside Column 2 so I can see my video status while browsing stats.",
+      "title": "Replace Column 2 with Stats View",
+      "description": "As a user, I want pressing S to replace Column 2's search bar and notes list with the Stats view so I can browse stats while Column 1 and Column 4 remain visible.",
       "acceptanceCriteria": [
-        "renderColumn2 renders components.StatsView(m.statsView, width, height) when m.statsView.Active == true",
+        "renderColumn2 returns layout.Container{Width:width, Height:height}.Render(components.StatsView(m.statsView, width, height)) when m.statsView.Active == true",
         "The early-return if m.statsView.Active { return ... } in View() is removed",
-        "Column 1 and Column 4 remain visible when stats view is open (manual verification)",
+        "The search bar and notes list are not rendered while stats view is active",
+        "Column 1 and Column 4 remain visible when stats view is active (manual verification)",
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 5,

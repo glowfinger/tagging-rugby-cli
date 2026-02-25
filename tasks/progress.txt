@@ -21,3 +21,14 @@
   - The function signature change is the only thing needed for US-001; no behavior change in the codebase yet
 ---
 
+## 2026-02-25 - US-002
+- What was implemented: Computed `overlayActive` flag in View() and passed it to ComputeColumnWidths and renderColumn3
+- Files changed: tui/tui.go, tui/columns.go
+- overlayActive := m.noteForm != nil || m.tackleForm != nil || m.confirmDiscardForm != nil || m.showHelp || m.statsView.Active
+- renderColumn3 signature updated to accept overlayActive bool; returns empty Container when true (defensive, since layout won't show col3 when overlayActive anyway)
+- go vet passes
+- **Learnings for future iterations:**
+  - US-003/004/005 will remove the early-return blocks in View() for forms/help/stats; overlayActive is already wired so layout will react correctly once those early returns are gone
+  - renderColumn3 is in tui/columns.go (not tui.go) — renderColumn1, renderColumn2 and renderColumn4 are also in columns.go
+---
+
