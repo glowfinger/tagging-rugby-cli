@@ -110,6 +110,8 @@ type Model struct {
 	videoID int64
 	// statusMsg is a transient message shown in the TUI footer for a few seconds
 	statusMsg string
+	// exportIndicator holds the current export progress state for Column 1
+	exportIndicator components.ExportIndicatorState
 }
 
 // newNoteVideo builds a NoteVideo with filesize and format populated from the filesystem.
@@ -192,6 +194,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Refresh stats for column 3 periodically (every tick is fine, query is fast)
 		m.loadTackleStatsForPanel()
+		// Refresh export progress for the indicator in column 1
+		m.refreshExportProgress()
 		// Continue ticking
 		return m, tickCmd()
 
@@ -2307,4 +2311,20 @@ func (m *Model) loadTackleStatsForPanel() {
 	if !m.statsView.Active {
 		m.statsView.Stats = stats
 	}
+}
+
+// refreshExportProgress queries the database for the current export progress and updates m.exportIndicator.
+// On error it silently returns without changing the existing state.
+func (m *Model) refreshExportProgress() {
+	if m.db == nil {
+		return
+	}
+	result, err := db.QueryExportProgress(m.db, m.videoPath)
+	if err != nil {
+		return
+	}
+	m.exportIndicator.TotalTackles = result.TotalTackles
+	m.exportIndicator.CompletedClips = result.CompletedClips
+	m.exportIndicator.PendingClips = result.PendingClips
+	m.exportIndicator.ErrorClips = result.ErrorClips
 }

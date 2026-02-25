@@ -1,1 +1,1 @@
-UPDATE note_clips SET status='complete', finished_at=?, filesize=?, log='' WHERE id=?
+UPDATE note_clips SET status='completed', finished_at=?, filesize=?, log='' WHERE id=?

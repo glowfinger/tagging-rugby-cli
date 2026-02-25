@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -138,6 +139,13 @@ var openCmd = &cobra.Command{
 				}
 			}
 			defer database.Close()
+
+			// Queue any tackle notes that have no clip, had a previous error, or were
+			// left in 'processing' state by a prior session that didn't exit cleanly.
+			// Must run before processor.Start() so there are no races.
+			if err := db.QueueUnprocessedTackleClips(database, absPath); err != nil {
+				log.Printf("queue unprocessed tackle clips on startup: %v", err)
+			}
 
 			// Start background clip processor
 			ctx, cancel := context.WithCancel(context.Background())

@@ -1,91 +1,42 @@
 # Ralph Progress Log
-# Branch: ralph/tackle-clip-generation
-# Started: 2026-02-19
+# Branch: ralph/export-indicator
+# Started: 2026-02-20
 
 ## Codebase Patterns
-- db/queries.go uses //go:embed for all SQL files; always add new SQL embeds there as exported var constants
-- db/functions.go has all DB functions; follow existing error wrapping pattern with fmt.Errorf("operation: %w", err)
-- Migration file is db/sql/migrations/001_create_videos_table.sql — add indexes/constraints here
-- CIRCULAR IMPORT DANGER: db cannot import clip (clip imports db) — inline any clip logic needed in db package
-- tui can safely import clip (clip does not import tui)
-- New message types in tui/tui.go must be excluded from huh form delegation block in Update() if they should not be forwarded to forms
+- SQL embeds: add `//go:embed sql/<name>.sql` to db/queries.go, then use the var in db/functions.go
+- RenderInfoBox content lines: pass ` ` (space) + content + ` ` (space) to get visual padding inside borders; innerWidth for content = width - 4
+- Tick handler in tui.go: add refresh calls inside `case tickMsg:` before `return m, tickCmd()`
+- Column render: always split rendered box on "\n" then append to lines slice; wrap whole column in layout.Container
 
-## 2026-02-19 - US-001
-- Implemented UpsertNoteClipPending DB function and SQL
-- Created db/sql/upsert_note_clip_pending.sql with INSERT ... ON CONFLICT upsert
-- Added UNIQUE INDEX idx_note_clips_note_id to migration file
-- Added UpsertNoteClipPendingSQL embed to db/queries.go
-- Added UpsertNoteClipPending(db, noteID, folder, filename) to db/functions.go
+## 2026-02-20 - US-001
+- What was implemented: ExportProgress struct in db/models.go, select_export_progress.sql, SelectExportProgressSQL embed in db/queries.go, QueryExportProgress function in db/functions.go
+- Files changed: db/models.go, db/queries.go, db/functions.go, db/sql/select_export_progress.sql
 - **Learnings for future iterations:**
-  - NoteVideo struct has NoteID field but videos table doesn't have note_id — join is through notes.video_id
-  - The migration SQL file (001) is the canonical schema — add new indexes there (no separate migration files needed based on current pattern)
-  - CGO_ENABLED=0 required for all builds due to modernc.org/sqlite
+  - QueryRow().Scan() pattern is consistent across all DB query functions in this codebase
+  - SQL uses LEFT JOIN for note_clips so tackles without clips still appear in results
 ---
 
-## 2026-02-19 - US-003
-- Added QueueClipIfNeeded(database, noteID, videoPath) to db/functions.go
-- Integrated call after tx.Commit() in InsertNoteWithChildren (uses children.Videos[0].Path)
-- Integrated call after tx.Commit() in UpdateNoteWithChildren (looks up path via SelectNoteVideosByNote)
-- Errors from QueueClipIfNeeded are logged but don't fail the insert/update
-- Had to import github.com/user/tagging-rugby-cli/clip and log packages into db/functions.go
+## 2026-02-20 - US-002
+- What was implemented: ExportIndicatorState struct, ExportStatus() method, ExportIndicator() render function in tui/components/exportindicator.go
+- Files changed: tui/components/exportindicator.go (new file)
 - **Learnings for future iterations:**
-  - db → clip import is fine (no circular dependency since clip imports only stdlib)
-  - log.Printf is used for non-fatal errors in db operations
-  - UpdateNoteWithChildren previously had only one Commit — video lookup must happen AFTER commit (using database not tx)
+  - Content lines for RenderInfoBox: start with " " and end with " " so content is padded 1 char from each border
+  - innerWidth = width - 4: 2 for border chars, 2 for the leading/trailing padding spaces in each line
+  - lipgloss.Width() must be used when calculating padding around styled text (ANSI escape sequences inflate len())
 ---
 
-## 2026-02-19 - US-008
-- Added statusMsg string field to Model in tui/tui.go
-- Added clearStatusMsg type; excluded from huh form delegation in Update
-- Added ctrl+r case to handleNotesKeys → calls startRegenerateClip()
-- startRegenerateClip: loads videos/timing/tackles, calls clip.ClipPaths, os.Remove, UpsertNoteClipPending
-- Sets m.statusMsg = "Clip queued for regeneration", cleared after 3s via clearStatusMsg
-- View shows statusMsg in footer instead of commandInput when non-empty
-- Added clip import to tui/tui.go (safe — clip does not import tui)
+## 2026-02-20 - US-003
+- What was implemented: exportIndicator field on Model, refreshExportProgress() method, call in tickMsg handler
+- Files changed: tui/tui.go
 - **Learnings for future iterations:**
-  - New bubbletea message types must be added to form delegation exclusion chain in Update()
-  - statusMsg field + clearStatusMsg pattern mirrors clearResultMsg for commandInput results
+  - The tickMsg handler already calls updateStatusFromMpv() and loadTackleStatsForPanel() — export refresh fits the same pattern
+  - Silent error handling (return without updating state) is the established pattern for background refresh methods
 ---
 
-## 2026-02-19 - US-007
-- Added context.WithCancel, clip.Processor{DB: database}.Start(ctx) in cmd/root.go openCmd TUI branch
-- defer cancel() ensures goroutine exits when app quits
-- Processor starts before tui.Run so it is active during session
----
-
-## 2026-02-19 - US-006
-- Created clip/processor.go with Processor{DB *sql.DB} and Start(ctx context.Context) goroutine
-- Polls SelectNextPendingClip every 2s; processClip on match
-- ffmpeg drawtext: timestamp (HH:MM:SS from start), outcome, Attempt N — bottom-left stack at y=h-th/h-th-36/h-th-72
-- CRITICAL: db→clip creates circular import since clip imports db — resolved by removing clip import from db
-  and inlining ClipPaths logic directly in QueueClipIfNeeded in db/functions.go
----
-
-## 2026-02-19 - US-005
-- Created db/sql/select_next_pending_clip.sql (JOINs note_clips, notes, videos, note_timing, note_tackles)
-- Added PendingClip struct to db/models.go
-- Added SelectNextPendingClip (nil,nil on ErrNoRows), added embed
----
-
-## 2026-02-19 - US-004
-- Created mark_clip_processing.sql, mark_clip_complete.sql, mark_clip_error.sql
-- Added MarkClipProcessing, MarkClipComplete, MarkClipError to db/functions.go
-- Added time import to db/functions.go
----
-
-## 2026-02-19 - US-003
-- Added QueueClipIfNeeded(database, noteID, videoPath) to db/functions.go (with inlined ClipPaths logic)
-- Integrated after tx.Commit() in InsertNoteWithChildren and UpdateNoteWithChildren
-- Errors logged but don't fail insert/update
----
-
-## 2026-02-19 - US-002
-- Created clip/paths.go in a new top-level clip/ package
-- ClipPaths(videoPath, category, player, attempt, outcome, startSeconds) returns (folder, filename)
-- Folder: <videoDir>/clips/<category_slug>/<player_slug>
-- Filename: HHMMSS-player-category-outcome-attempt.mp4 (zero-padded, lowercase, underscored)
+## 2026-02-20 - US-004
+- What was implemented: ExportIndicator box appended to column 1 lines before Container wrap
+- Files changed: tui/columns.go
 - **Learnings for future iterations:**
-  - new clip/ package at top-level; Go module already handles it (no go.mod changes needed)
-  - 1845s → "003045" (00h30m45s), not "3045" — use %02d for hours, minutes, seconds
+  - All content in renderColumn1 follows: render component → split on "\n" → append to lines slice
+  - The layout.Container wrap at the end handles height/scroll — just append content freely before it
 ---
-

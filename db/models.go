@@ -90,6 +90,14 @@ type PendingClip struct {
 	End       float64
 }
 
+// ExportProgress holds aggregate clip export counts for the active video.
+type ExportProgress struct {
+	TotalTackles   int
+	CompletedClips int
+	PendingClips   int
+	ErrorClips     int
+}
+
 // VideoTiming represents a row in the video_timings table.
 type VideoTiming struct {
 	ID      int64

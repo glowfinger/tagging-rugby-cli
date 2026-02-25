@@ -139,3 +139,6 @@ var SelectNotesWithVideoSQL string
 //go:embed sql/select_tackle_stats.sql
 var SelectTackleStatsSQL string
 
+//go:embed sql/select_export_progress.sql
+var SelectExportProgressSQL string
+

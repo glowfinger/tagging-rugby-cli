@@ -20,24 +20,23 @@
               "icon": "lucide-file",
               "title": "Bugs"
             }
-          }
-        ]
-      },
-      {
-        "id": "477d0d0edddef058",
-        "type": "tabs",
-        "children": [
+          },
           {
-            "id": "e269e9d4f29332d2",
+            "id": "3564bae636a510f0",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "type": "markdown",
+              "state": {
+                "file": "Active Prompt.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Active Prompt"
             }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -176,6 +175,7 @@
   },
   "left-ribbon": {
     "hiddenItems": {
+      "bases:Create new base": false,
       "switcher:Open quick switcher": false,
       "graph:Open graph view": false,
       "canvas:Create new canvas": false,
@@ -184,8 +184,10 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "6d4094e1033ec707",
+  "active": "3564bae636a510f0",
   "lastOpenFiles": [
+    "Prompt dump.md",
+    "Active Prompt.md",
     "Welcome.md",
     "Bugs.md"
   ]

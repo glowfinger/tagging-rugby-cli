@@ -100,6 +100,10 @@ func (m *Model) renderColumn1(width, height int) string {
 		lines = append(lines, strings.Split(infoBox, "\n")...)
 	}
 
+	// Export progress indicator (always shown)
+	exportBox := components.ExportIndicator(m.exportIndicator, width)
+	lines = append(lines, strings.Split(exportBox, "\n")...)
+
 	return layout.Container{Width: width, Height: height}.Render(strings.Join(lines, "\n"))
 }
 
