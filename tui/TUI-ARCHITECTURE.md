@@ -31,6 +31,7 @@ tui/
     statspanel.go     # StatsPanel() — stats summary, event distribution, tackle stats table
     statsview.go      # StatsViewState, PlayerStats, StatsView() — full-screen stats overlay
     help.go           # HelpOverlay() — keybinding reference overlay
+    exportindicator.go # ExportIndicatorState, ExportIndicator() — tackle clip export progress box
   forms/
     theme.go          # Theme() — custom huh theme matching the Ciapre palette
     noteform.go       # NoteFormResult, NewNoteForm() — note input form
@@ -49,16 +50,20 @@ tui/
 `View()` in `tui.go` orchestrates the full screen render each frame:
 
 ```
-1. Early returns (quitting, error, help overlay, stats view, video box)
-2. Form overlays (confirm discard, note form, tackle form)
-3. Normal multi-column layout:
+1. Early returns (quitting, error, video box)
+2. Normal multi-column layout — forms and overlays render inside Column 2:
    a. StatusBar          — full width, 1 line
    b. Columns            — responsive 2/3/4-col grid
+                           (Column 2 shows form/overlay content when active)
    c. Timeline           — full width, 2 lines (progress bar + markers)
    d. CommandInput       — full width, 1 line
 ```
 
 The final output is: `statusBar + "\n" + columnsView + "\n" + timeline + "\n" + commandInput`
+
+> **Note:** Help overlay, stats view, and all huh forms (note, tackle, confirm discard)
+> render **inside Column 2** rather than as full-screen takeovers. See
+> [Overlay-in-Column-2 Pattern](#overlay-in-column-2-pattern) below.
 
 ### Column Rendering
 
@@ -66,10 +71,10 @@ Each column is rendered independently by a method on `*Model`:
 
 | Column | Method | Content |
 |--------|--------|---------|
-| 1 | `renderColumn1(width, height)` | Video status, mode indicator, summary counts, selected tag detail |
-| 2 | `renderColumn2(width, height)` | Search input (3 lines) + scrollable notes/tackles table (wrapped in InfoBox) |
-| 3 | `renderColumn3(width, height)` | Event distribution bar graph, tackle stats table |
-| 4 | `renderColumn4(width, height)` | Keybinding control groups via RenderInfoBox (Playback, Navigation, Views) |
+| 1 | `renderColumn1(width, height)` | Video status, mode indicator, summary counts, selected tag detail, export indicator (bottom) |
+| 2 | `renderColumn2(width, height)` | **Conditional:** active form/overlay (note form, tackle form, confirm discard, help overlay, stats view) when any is open; otherwise search input + scrollable notes/tackles table |
+| 3 | `renderColumn3(width, height)` | Event distribution bar graph, tackle stats table — **hidden when any form/overlay is active** |
+| 4 | `renderColumn4(width, height)` | Keybinding control groups via RenderInfoBox (Playback, Navigation, Views) — remains visible when form/overlay is active |
 
 Each method wraps its output in `layout.Container{Width, Height}.Render(...)` to
 guarantee exact dimensions. The containerized columns are then joined by
@@ -98,9 +103,13 @@ Constrains content to an exact `Width x Height` bounding box:
 - Each line is padded/truncated to `Width` via `PadToWidth`
 - Output is always exactly `Height` lines, each exactly `Width` visual columns
 
-### ComputeColumnWidths(termWidth int) (col1, col2, col3, col4 int, showCol2, showCol3, showCol4 bool)
+### ComputeColumnWidths(termWidth int, overlayActive bool) (col1, col2, col3, col4 int, showCol2, showCol3, showCol4 bool)
 
 Responsive column width calculation with no border separator overhead (borders = 0). Constants: `Col1Width = 30`, `Col3Width = 40`, `Col4Width = 30`, `ColMinWidth = 30`, `Col4ShowThreshold = 170`. Column 3 is fixed at 40 cells; Column 2 gets all remaining space.
+
+`overlayActive` is `true` when any form or overlay is rendering in Column 2 (`m.form != nil || m.showHelp || m.statsView.Active`). When true, Column 3 is always hidden regardless of terminal width so Column 2 gets extra space.
+
+**Normal layout** (`overlayActive == false`):
 
 | Terminal Width | Layout | Column Sizing |
 |---------------|--------|---------------|
@@ -109,7 +118,15 @@ Responsive column width calculation with no border separator overhead (borders =
 | 61 - 101 | 2-column | Col 1 = 30 (fixed), Col 3 hidden, Col 2 = all remaining space |
 | <= 60 | 1-column | Col 1 = 30 (fixed) only |
 
-Hide order: Col 4 first (< 170), then Col 3 (when Col 2 would fall below 30 cells), then Col 2 (when < 30 cells). Col 1 always visible.
+**Overlay layout** (`overlayActive == true`):
+
+| Terminal Width | Layout | Column Sizing |
+|---------------|--------|---------------|
+| >= 170 | Col 1 + Col 2 (form) + Col 4 | Col 1 = 30, Col 4 = 30, Col 2 = termWidth − 60 |
+| 61 - 169 | Col 1 + Col 2 (form) | Col 1 = 30, Col 2 = termWidth − 30 |
+| <= 60 | Col 1 only (forms blocked) | Col 1 = 30 (form/overlay activation is prevented) |
+
+Hide order (normal): Col 4 first (< 170), then Col 3 (when Col 2 would fall below 30 cells), then Col 2 (when < 30 cells). Col 1 always visible.
 
 ### JoinColumns(columns []string, widths []int, height int) string
 
@@ -191,6 +208,60 @@ Each component in `tui/components/` follows the pattern:
 - **Signature:** `HelpOverlay(width, height int) string`
 - Renders: full-screen keybinding reference grouped by function
 
+### ExportIndicator (`exportindicator.go`)
+
+- **State:** `ExportIndicatorState{TotalTackles, CompletedClips, PendingClips, ErrorClips int}`
+- **Method:** `ExportStatus() string` — maps aggregate DB state to one of four labels:
+  - `"Completed"` — `TotalTackles > 0 && CompletedClips == TotalTackles && PendingClips == 0 && ErrorClips == 0`
+  - `"Processing"` — `PendingClips > 0`
+  - `"Error"` — `ErrorClips > 0 && PendingClips == 0`
+  - `"Ready"` — all other cases (including zero total)
+- **Signature:** `ExportIndicator(state ExportIndicatorState, width int) string`
+- Renders: `RenderInfoBox("Export", ...)` with 3 content rows:
+  - Row 1 — `Status: <value>` — colour-coded: Ready=Lavender, Processing=Amber, Error=Red, Completed=Green
+  - Row 2 — `Clips:  <completed>/<total>` — both numbers in LightLavender
+  - Row 3 — ASCII progress bar (`█` filled, `░` empty) spanning `width-4` chars, coloured Cyan; fraction = `CompletedClips/TotalTackles` (clamped [0,1]; empty bar when total=0)
+- Placed as the last (bottom) item in Column 1; always rendered regardless of clip count.
+- Refreshed in the Model via `refreshExportProgress()` called from the existing ~250 ms video-position tick handler.
+- DB source: `db.QueryExportProgress(db, videoPath)` → `db.ExportProgress{TotalTackles, CompletedClips, PendingClips, ErrorClips}` backed by `db/sql/select_export_progress.sql`.
+
+## Overlay-in-Column-2 Pattern
+
+All forms and overlays render inside Column 2 instead of as full-screen takeovers. This keeps Column 1 (video status, export indicator) and Column 4 (keybinding reference) visible while the user interacts with a form or browses help/stats.
+
+### Items that use this pattern
+
+| Item | Trigger key | Type |
+|------|-------------|------|
+| Note form | `N` | huh form |
+| Tackle wizard | `T` | huh form |
+| Confirm discard | automatic (when editing) | huh form |
+| Help overlay | `?` | static render |
+| Stats view | `S` | interactive render |
+
+### Activation guard (narrow mode)
+
+Before opening any form or overlay, `View()` / key handlers check that Column 2 is visible (`termWidth >= 61`). If not, the key press is silently ignored. This prevents rendering forms into a zero-width column.
+
+### `overlayActive` flag
+
+`View()` computes `overlayActive := m.form != nil || m.showHelp || m.statsView.Active` and passes it to `ComputeColumnWidths`. This causes Column 3 to hide and Column 2 to expand.
+
+### Column 2 conditional rendering
+
+At the top of `renderColumn2(width, height int)`:
+
+1. If `m.form != nil` → render `m.form.View()` inside `layout.Container{Width: width, Height: height}`
+2. Else if `m.showHelp` → render `HelpOverlay(width, height)`
+3. Else if `m.statsView.Active` → render `StatsView(m.statsView, width, height)`
+4. Else → render normal search input + notes list (existing behaviour)
+
+### Dismissal
+
+**Esc** is the single key to exit any active form or overlay. See [Global Keys](#global-keys) below.
+
+---
+
 ## Focus System (`tui/focus.go`)
 
 The TUI has a focus system that routes keyboard input to the correct panel.
@@ -232,6 +303,15 @@ Digit keys accumulate in a number buffer. Any non-digit/non-G key clears the buf
 
 ## Keybindings
 
+### Global Keys
+
+These keys are handled before any focus-specific handler:
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+C` | Quit |
+| `Esc` | **If** a form or overlay is active → dismiss it (close help, close stats, or abort huh form); **else if** `FocusSearch` → clear search input and return to `FocusNotes`; **otherwise** no-op |
+
 ### Video Focus (FocusVideo)
 - `Space` — toggle play/pause
 - `H` — seek backward by step size
@@ -265,12 +345,15 @@ Forms use the [huh](https://github.com/charmbracelet/huh) library with a custom 
 ### Integration Pattern
 
 1. **Store** `*huh.Form` + result struct in `Model` (nil when form is inactive)
-2. **Open:** Call `form.Init()`, return its `tea.Cmd`
+2. **Open:** Call `form.Init()`, return its `tea.Cmd`; opening is blocked if terminal width < 61
 3. **Delegate:** In `Update()`, forward ALL messages to the form (not just `KeyMsg` — huh
    needs cursor blink, focus messages, etc.)
 4. **Submit:** Check `form.State == huh.StateCompleted` to read bound result values
-5. **Cancel:** Check `form.State == huh.StateAborted` to handle Esc
+5. **Cancel:** Check `form.State == huh.StateAborted` to handle Esc (huh sets this state when Esc is pressed)
 6. **Close:** Set form pointer to `nil` to deactivate
+7. **Render:** Form output is placed in Column 2 via `renderColumn2`. The parent `View()` sets
+   `overlayActive = true` which hides Column 3 and expands Column 2. Form content is wrapped in
+   `layout.Container{Width: col2Width, Height: col2Height}.Render(m.form.View())`.
 
 ### Available Forms
 

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/user/tagging-rugby-cli/db"
@@ -81,20 +82,29 @@ func (p *Processor) processClip(ctx context.Context, c *db.PendingClip) {
 		duration = 4.0
 	}
 
-	// Format timestamp as HH:MM:SS
+	// ffmpeg filtergraph has two escaping levels:
+	//   Level 2 (filtergraph): sees '\\:' and converts '\\' → '\', leaving ':' bare.
+	//   Level 1 (option):      sees '\:' and treats the ':' as a literal (not a separator).
+	// So colons in option values need '\\:' in the runtime string, which requires
+	// '\\\\:' (4 backslashes + colon) in the Go source.
 	totalSecs := int(c.Start)
 	hours := totalSecs / 3600
 	minutes := (totalSecs % 3600) / 60
 	seconds := totalSecs % 60
-	timestamp := fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
+	timestamp := fmt.Sprintf("%02d\\\\:%02d\\\\:%02d", hours, minutes, seconds)
 
-	// Build drawtext filter chain
+	// Escape colons in free-text fields using the same double-escape.
+	outcome := strings.ReplaceAll(c.Outcome, ":", "\\\\:")
+
+	// Build drawtext filter chain. No single quotes used — only backslash escaping.
+	// The comma in lt(t,3) is escaped as '\,' so it is not treated as a filter
+	// separator at the filtergraph level.
 	drawtext := fmt.Sprintf(
-		"drawtext=text='%s':x=10:y=h-th:fontsize=28:fontcolor=white:enable='lt(t,3)',"+
-			"drawtext=text='%s':x=10:y=h-th-36:fontsize=28:fontcolor=white:enable='lt(t,3)',"+
-			"drawtext=text='Attempt %d':x=10:y=h-th-72:fontsize=28:fontcolor=white:enable='lt(t,3)'",
+		"drawtext=text=%s:x=10:y=h-th:fontsize=28:fontcolor=white:enable=lt(t\\,3),"+
+			"drawtext=text=%s:x=10:y=h-th-36:fontsize=28:fontcolor=white:enable=lt(t\\,3),"+
+			"drawtext=text=Attempt %d:x=10:y=h-th-72:fontsize=28:fontcolor=white:enable=lt(t\\,3)",
 		timestamp,
-		c.Outcome,
+		outcome,
 		c.Attempt,
 	)
 

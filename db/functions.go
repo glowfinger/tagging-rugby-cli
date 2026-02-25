@@ -409,6 +409,46 @@ func UpdateNoteTiming(database *sql.DB, noteID int64, start, end float64) error 
 	return nil
 }
 
+// QueueUnprocessedTackleClips queues clip generation for all tackle notes on the given video
+// that have no note_clips row or have a note_clips row in 'error' status.
+// This is called on startup so that notes from previous sessions (or failed clips) are retried.
+func QueueUnprocessedTackleClips(database *sql.DB, videoPath string) error {
+	rows, err := database.Query(`
+		SELECT n.id
+		FROM notes n
+		INNER JOIN videos v ON v.id = n.video_id
+		INNER JOIN note_timing ntim ON ntim.note_id = n.id
+		INNER JOIN note_tackles nt ON nt.note_id = n.id
+		LEFT JOIN note_clips nc ON nc.note_id = n.id
+		WHERE v.path = ?
+		  AND n.category = 'tackle'
+		  AND (nc.id IS NULL OR nc.status = 'error' OR nc.status = 'processing')
+	`, videoPath)
+	if err != nil {
+		return fmt.Errorf("query unprocessed tackles: %w", err)
+	}
+	defer rows.Close()
+
+	var noteIDs []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return fmt.Errorf("scan note id: %w", err)
+		}
+		noteIDs = append(noteIDs, id)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, id := range noteIDs {
+		if err := QueueClipIfNeeded(database, id, videoPath); err != nil {
+			log.Printf("queue unprocessed tackle clip (note %d): %v", id, err)
+		}
+	}
+	return nil
+}
+
 // SelectNoteByID returns a single note by ID.
 func SelectNoteByID(database *sql.DB, id int64) (*Note, error) {
 	var n Note

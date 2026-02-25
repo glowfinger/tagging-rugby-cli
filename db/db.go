@@ -35,8 +35,29 @@ func Open() (*sql.DB, error) {
 		return nil, err
 	}
 
+	// Enable WAL journal mode: allows concurrent readers + one writer,
+	// greatly reducing SQLITE_BUSY errors from the background clip processor.
+	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	// Wait up to 5 seconds on lock contention rather than failing immediately.
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	// Enable foreign keys
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	// Ensure the UNIQUE INDEX on note_clips(note_id) exists. This index is
+	// required for the ON CONFLICT(note_id) upsert in UpsertNoteClipPending.
+	// Existing databases that were migrated before this index was added to
+	// the migration file won't have it, so we create it here idempotently.
+	if _, err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_note_clips_note_id ON note_clips(note_id)"); err != nil {
 		db.Close()
 		return nil, err
 	}
