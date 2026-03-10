@@ -814,7 +814,9 @@ func (m *Model) openEditTackleInput() (tea.Model, tea.Cmd) {
 			Player:   data.Player,
 			Attempt:  fmt.Sprintf("%d", data.Attempt),
 			Outcome:  data.Outcome,
-			Followed: data.Followed,
+			Height:     data.Height,
+			Technique: data.Technique,
+			Followed:   data.Followed,
 			Notes:    data.Notes,
 			Zone:     data.Zone,
 			Star:     data.Star,
@@ -947,7 +949,7 @@ func (m *Model) saveTackleFromForm() (tea.Model, tea.Cmd) {
 			newNoteVideo(m.videoPath, duration),
 		},
 		Tackles: []db.NoteTackle{
-			{Player: result.Player, Attempt: attempt, Outcome: result.Outcome},
+			{Player: result.Player, Attempt: attempt, Outcome: result.Outcome, Height: result.Height, Technique: result.Technique},
 		},
 	}
 
@@ -1031,7 +1033,7 @@ func (m *Model) saveEditTackleFromForm() (tea.Model, tea.Cmd) {
 	// Build children for update
 	children := db.NoteChildren{
 		Tackles: []db.NoteTackle{
-			{Player: result.Player, Attempt: attempt, Outcome: result.Outcome},
+			{Player: result.Player, Attempt: attempt, Outcome: result.Outcome, Height: result.Height, Technique: result.Technique},
 		},
 	}
 

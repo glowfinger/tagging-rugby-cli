@@ -53,17 +53,17 @@ func Open() (*sql.DB, error) {
 		return nil, err
 	}
 
+	// Run migrations
+	if err := runMigrations(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	// Ensure the UNIQUE INDEX on note_clips(note_id) exists. This index is
 	// required for the ON CONFLICT(note_id) upsert in UpsertNoteClipPending.
 	// Existing databases that were migrated before this index was added to
 	// the migration file won't have it, so we create it here idempotently.
 	if _, err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_note_clips_note_id ON note_clips(note_id)"); err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	// Run migrations
-	if err := runMigrations(db); err != nil {
 		db.Close()
 		return nil, err
 	}

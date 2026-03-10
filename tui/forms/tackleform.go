@@ -16,7 +16,9 @@ type TackleFormResult struct {
 	Outcome string
 
 	// Step 2: Optional fields
-	Followed string // maps to note_detail type="followed"
+	Height     string // maps to note_tackles.height
+	Technique string // maps to note_tackles.technique
+	Followed   string // maps to note_detail type="followed"
 	Notes    string // maps to note_detail type="notes"
 	Zone     string // maps to note_zones
 	Star     bool   // maps to note_highlights type="star"
@@ -43,6 +45,12 @@ type EditTackleFormResult struct {
 // The timestamp is displayed as a header in H:MM:SS format.
 // The result pointer is bound to the form fields and will be populated on submit.
 func NewTackleForm(timestamp float64, result *TackleFormResult) *huh.Form {
+	if result.Height == "" {
+		result.Height = "ok"
+	}
+	if result.Technique == "" {
+		result.Technique = "ok"
+	}
 	header := fmt.Sprintf("Add Tackle @ %s", timeutil.FormatTime(timestamp))
 
 	form := huh.NewForm(
@@ -90,6 +98,16 @@ func NewTackleForm(timestamp float64, result *TackleFormResult) *huh.Form {
 		// Step 2: Optional fields (maps to note_details, note_zones, note_highlights)
 		huh.NewGroup(
 			huh.NewNote().Title(header).Description("Step 2 of 2: Optional Details"),
+
+			huh.NewInput().
+				Title("Height").
+				Description("Optional - tackle height (e.g. high, mid, low)").
+				Value(&result.Height),
+
+			huh.NewInput().
+				Title("Technique").
+				Description("Optional - tackle technique (e.g. ok, good, poor)").
+				Value(&result.Technique),
 
 			huh.NewInput().
 				Title("Followed").
@@ -203,6 +221,16 @@ func NewEditTackleForm(timestamp float64, endSeconds float64, result *EditTackle
 		// Step 2: Optional fields (maps to note_details, note_zones, note_highlights)
 		huh.NewGroup(
 			huh.NewNote().Title(header).Description("Step 2 of 2: Optional Details"),
+
+			huh.NewInput().
+				Title("Height").
+				Description("Optional - tackle height (e.g. high, mid, low)").
+				Value(&result.Height),
+
+			huh.NewInput().
+				Title("Technique").
+				Description("Optional - tackle technique (e.g. ok, good, poor)").
+				Value(&result.Technique),
 
 			huh.NewInput().
 				Title("Followed").

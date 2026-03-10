@@ -49,7 +49,9 @@ type NoteTackle struct {
 	NoteID  int64
 	Player  string
 	Attempt int
-	Outcome string
+	Outcome    string
+	Height     string
+	Technique string
 }
 
 // NoteZone represents a row in the note_zones table.
