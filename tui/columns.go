@@ -107,8 +107,25 @@ func (m *Model) renderColumn1(width, height int) string {
 	return layout.Container{Width: width, Height: height}.Render(strings.Join(lines, "\n"))
 }
 
-// renderColumn2 renders Column 2: Search input + scrollable list of all tags/events.
+// renderColumn2 renders Column 2: forms when active, otherwise search input + scrollable list of all tags/events.
 func (m *Model) renderColumn2(width, height int) string {
+	// Form overlays replace the normal content — checked in priority order
+	if m.confirmDiscardForm != nil {
+		return layout.Container{Width: width, Height: height}.Render(m.confirmDiscardForm.View())
+	}
+	if m.noteForm != nil {
+		return layout.Container{Width: width, Height: height}.Render(m.noteForm.View())
+	}
+	if m.tackleForm != nil {
+		return layout.Container{Width: width, Height: height}.Render(m.tackleForm.View())
+	}
+	if m.showHelp {
+		return layout.Container{Width: width, Height: height}.Render(components.HelpOverlay(width, height))
+	}
+	if m.statsView.Active {
+		return layout.Container{Width: width, Height: height}.Render(components.StatsView(m.statsView, width, height))
+	}
+
 	// Search box takes 3 lines (InfoBox top border + content + bottom border)
 	searchBoxHeight := 3
 	searchBox := components.SearchInput(m.searchInput, width, m.focus == FocusSearch)
@@ -135,7 +152,11 @@ func (m *Model) renderColumn2(width, height int) string {
 }
 
 // renderColumn3 renders Column 3: Live stats summary, bar graph, top players leaderboard.
-func (m *Model) renderColumn3(width, height int) string {
+// When overlayActive is true, returns an empty container (column is hidden by layout anyway).
+func (m *Model) renderColumn3(width, height int, overlayActive bool) string {
+	if overlayActive {
+		return layout.Container{Width: width, Height: height}.Render("")
+	}
 	return layout.Container{Width: width, Height: height}.Render(
 		components.StatsPanel(m.statsView.Stats, m.notesList.Items, width, height))
 }

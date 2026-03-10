@@ -209,10 +209,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// Handle help overlay - any key dismisses it
-		if m.showHelp {
-			m.showHelp = false
-			return m, nil
+		// Unified Esc handler — covers all overlay/form/search dismissal in priority order
+		if msg.String() == "esc" {
+			if m.confirmDiscardForm != nil {
+				return m.handleConfirmDiscardUpdate(msg)
+			}
+			if m.noteForm != nil {
+				return m.handleNoteFormUpdate(msg)
+			}
+			if m.tackleForm != nil {
+				return m.handleTackleFormUpdate(msg)
+			}
+			if m.showHelp {
+				m.showHelp = false
+				return m, nil
+			}
+			if m.statsView.Active {
+				m.statsView.Active = false
+				return m, nil
+			}
+			if m.focus == FocusSearch {
+				m.searchInput.Clear()
+				m.focus = FocusNotes
+				return m, nil
+			}
 		}
 
 		// Handle stats view input
@@ -272,12 +292,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Quit
 		case "?":
-			if m.focus != FocusSearch {
+			if m.focus != FocusSearch && m.width >= 61 {
 				m.showHelp = true
 				return m, nil
 			}
 		case "s", "S":
-			if m.focus != FocusSearch {
+			if m.focus != FocusSearch && m.width >= 61 {
 				m.loadTackleStats()
 				m.statsView.Active = true
 				return m, nil
@@ -630,6 +650,9 @@ func (m *Model) handleCommandInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // openNoteInput opens the huh note form.
 func (m *Model) openNoteInput() (tea.Model, tea.Cmd) {
+	if m.width < 61 {
+		return m, nil
+	}
 	if m.client == nil || !m.client.IsConnected() {
 		m.commandInput.SetResult("Not connected to mpv", true)
 		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
@@ -728,6 +751,9 @@ func (m *Model) saveNoteFromForm() (tea.Model, tea.Cmd) {
 
 // openTackleInput opens the huh tackle wizard form.
 func (m *Model) openTackleInput() (tea.Model, tea.Cmd) {
+	if m.width < 61 {
+		return m, nil
+	}
 	if m.client == nil || !m.client.IsConnected() {
 		m.commandInput.SetResult("Not connected to mpv", true)
 		return m, tea.Tick(resultDisplayDuration, func(t time.Time) tea.Msg {
@@ -1902,37 +1928,6 @@ func (m *Model) View() string {
 		return "Error: " + m.err.Error() + "\n\nPress Ctrl+C to quit.\n"
 	}
 
-	// If help overlay is active, show it instead of normal view
-	if m.showHelp {
-		return components.HelpOverlay(m.width, m.height)
-	}
-
-	// If stats view is active, show it instead of normal view
-	if m.statsView.Active {
-		return components.StatsView(m.statsView, m.width, m.height)
-	}
-
-	// Check if confirm discard dialog is active — show it as overlay
-	if m.confirmDiscardForm != nil {
-		controlsDisplay := components.ControlsDisplay(m.width)
-		confirmView := truncateViewToWidth(m.confirmDiscardForm.View(), m.width)
-		return controlsDisplay + "\n" + confirmView
-	}
-
-	// Check if note form is active — show huh form as overlay
-	if m.noteForm != nil {
-		controlsDisplay := components.ControlsDisplay(m.width)
-		noteFormView := truncateViewToWidth(m.noteForm.View(), m.width)
-		return controlsDisplay + "\n" + noteFormView
-	}
-
-	// Check if tackle form is active — show huh wizard as overlay
-	if m.tackleForm != nil {
-		controlsDisplay := components.ControlsDisplay(m.width)
-		tackleFormView := truncateViewToWidth(m.tackleForm.View(), m.width)
-		return controlsDisplay + "\n" + tackleFormView
-	}
-
 	// --- Responsive multi-column layout ---
 	// Available height for columns: total height minus timeline (2 lines) and command input (1 line)
 	colHeight := m.height - 3
@@ -1940,14 +1935,15 @@ func (m *Model) View() string {
 		colHeight = 5
 	}
 
-	col1Width, col2Width, col3Width, col4Width, showCol2, showCol3, showCol4 := layout.ComputeColumnWidths(m.width)
+	overlayActive := m.noteForm != nil || m.tackleForm != nil || m.confirmDiscardForm != nil || m.showHelp || m.statsView.Active
+	col1Width, col2Width, col3Width, col4Width, showCol2, showCol3, showCol4 := layout.ComputeColumnWidths(m.width, overlayActive)
 
 	var columnsView string
 	if showCol4 && showCol3 {
 		columns := []string{
 			m.renderColumn1(col1Width, colHeight),
 			m.renderColumn2(col2Width, colHeight),
-			m.renderColumn3(col3Width, colHeight),
+			m.renderColumn3(col3Width, colHeight, overlayActive),
 			m.renderColumn4(col4Width, colHeight),
 		}
 		widths := []int{col1Width, col2Width, col3Width, col4Width}
@@ -1964,7 +1960,7 @@ func (m *Model) View() string {
 		columns := []string{
 			m.renderColumn1(col1Width, colHeight),
 			m.renderColumn2(col2Width, colHeight),
-			m.renderColumn3(col3Width, colHeight),
+			m.renderColumn3(col3Width, colHeight, overlayActive),
 		}
 		widths := []int{col1Width, col2Width, col3Width}
 		columnsView = layout.JoinColumns(columns, widths, colHeight)
@@ -2142,16 +2138,14 @@ func (m *Model) handleStatsViewInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "?":
 		// Show help overlay
-		m.showHelp = true
+		if m.width >= 61 {
+			m.showHelp = true
+		}
 		return m, nil
 	case "/":
 		// Enter filter mode
 		m.statsView.FilterMode = true
 		m.statsView.FilterInput = ""
-		return m, nil
-	case "esc":
-		// Clear all filters
-		m.statsView.ClearFilters()
 		return m, nil
 	}
 	return m, nil

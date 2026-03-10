@@ -1,0 +1,68 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/export-indicator",
+  "description": "Export Indicator - Real-time tackle clip export progress box in Column 1 showing status, clip count, and progress bar derived from the database",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add ExportProgress DB struct and query function",
+      "description": "As a developer, I need a database struct and query function that computes tackle clip export progress for the active video so the TUI has accurate counts to display.",
+      "acceptanceCriteria": [
+        "Add ExportProgress struct to db/models.go with fields: TotalTackles int, CompletedClips int, PendingClips int, ErrorClips int",
+        "Create db/sql/select_export_progress.sql with SQL: SELECT COUNT(DISTINCT n.id) AS total_tackles, COUNT(CASE WHEN nc.status = 'completed' THEN 1 END) AS completed_clips, COUNT(CASE WHEN nc.status = 'pending' THEN 1 END) AS pending_clips, COUNT(CASE WHEN nc.status = 'error' THEN 1 END) AS error_clips FROM notes n INNER JOIN videos v ON v.id = n.video_id LEFT JOIN note_clips nc ON nc.note_id = n.id WHERE v.path = ? AND n.category = 'tackle'",
+        "Embed the new SQL file in db/queries.go following the existing //go:embed pattern, exposing it as SelectExportProgressSQL string constant",
+        "Add QueryExportProgress(database *sql.DB, videoPath string) (ExportProgress, error) function to db/functions.go that executes SelectExportProgressSQL, scans the single result row into ExportProgress, and returns it",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Add ExportIndicator render component",
+      "description": "As a developer, I need a pure render function that converts ExportIndicatorState into a 5-line InfoBox so Column 1 can display export progress.",
+      "acceptanceCriteria": [
+        "Create tui/components/exportindicator.go with ExportIndicatorState struct: TotalTackles int, CompletedClips int, PendingClips int, ErrorClips int",
+        "Add ExportStatus() string method on ExportIndicatorState with priority logic: returns 'Completed' when TotalTackles > 0 && CompletedClips == TotalTackles && PendingClips == 0 && ErrorClips == 0; returns 'Processing' when PendingClips > 0; returns 'Error' when ErrorClips > 0 && PendingClips == 0; returns 'Ready' for all other cases",
+        "Add ExportIndicator(state ExportIndicatorState, width int) string function that builds 3 content lines and calls RenderInfoBox(\"Export\", contentLines, width, false)",
+        "Row 1: label 'Status:' left-aligned, value right-aligned in innerWidth, value coloured using lipgloss: Ready=styles.Lavender, Processing=styles.Amber, Error=styles.Red, Completed=styles.Green",
+        "Row 2: label 'Clips:' left-aligned, value '<completed>/<total>' right-aligned in innerWidth, both numbers in styles.LightLavender",
+        "Row 3: ASCII progress bar spanning innerWidth chars using '█' for filled and '░' for empty, coloured styles.Cyan; fraction = CompletedClips/TotalTackles clamped to [0.0, 1.0]; empty bar (all '░') when TotalTackles == 0; filled = int(fraction * float64(innerWidth))",
+        "innerWidth = width - 4 (2 border chars + 2 padding spaces)",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Wire ExportIndicatorState into the TUI Model",
+      "description": "As a developer, I need the TUI Model to hold and refresh ExportIndicatorState on the existing ~250ms tick so the render component always has live data.",
+      "acceptanceCriteria": [
+        "Add exportIndicator components.ExportIndicatorState field to tui.Model struct in tui/tui.go",
+        "Add (m *Model) refreshExportProgress() method to tui/tui.go that: calls db.QueryExportProgress(m.db, m.videoPath); on success maps result fields into m.exportIndicator (TotalTackles, CompletedClips, PendingClips, ErrorClips); on error silently returns without changing m.exportIndicator",
+        "In the existing tea.Tick handler in Update() that refreshes m.statusBar.TimePos (the ~250ms video position poll), add a call to m.refreshExportProgress()",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Render ExportIndicator at the bottom of Column 1",
+      "description": "As a user, I want to see the Export Indicator box at the bottom of Column 1 so I can monitor tackle clip export progress without leaving the tagging view.",
+      "acceptanceCriteria": [
+        "In renderColumn1 in tui/columns.go, after appending the Selected Tag detail card lines (or after the summary box when no item is selected), append the output of components.ExportIndicator(m.exportIndicator, width) split on newlines",
+        "The ExportIndicator box is always appended (even when TotalTackles == 0 — shows Status: Ready, Clips: 0/0, empty bar)",
+        "The overall Column 1 output remains wrapped in layout.Container{Width: width, Height: height}.Render(...) guaranteeing exact dimensions",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}
