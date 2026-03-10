@@ -13,26 +13,24 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Bugs.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "Bugs"
-            }
-          },
-          {
-            "id": "3564bae636a510f0",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
                 "file": "Active Prompt.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
               "title": "Active Prompt"
+            }
+          },
+          {
+            "id": "e287d28fb0d48cbf",
+            "type": "leaf",
+            "state": {
+              "type": "release-notes",
+              "state": {
+                "currentVersion": "1.12.4"
+              },
+              "icon": "lucide-book-up",
+              "title": "Release Notes 1.12.4"
             }
           }
         ],
@@ -184,11 +182,11 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "3564bae636a510f0",
+  "active": "e287d28fb0d48cbf",
   "lastOpenFiles": [
     "Prompt dump.md",
+    "Bugs.md",
     "Active Prompt.md",
-    "Welcome.md",
-    "Bugs.md"
+    "Welcome.md"
   ]
 }

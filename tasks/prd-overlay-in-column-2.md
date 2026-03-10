@@ -1,16 +1,18 @@
-# PRD: Overlay-in-Column-2 Pattern
+# PRD: Column 2 Content Replacement Pattern
 
 ## Introduction
 
-Currently, all forms (Note, Tackle, Confirm Discard) and overlays (Help, Stats View) are
+Currently, all forms (Note, Tackle, Confirm Discard) and views (Help, Stats) are
 rendered as **full-screen takeovers** that replace the entire TUI. This hides Column 1
 (video status, export progress) and Column 4 (keybinding reference) while the user
 interacts with a form — losing important context.
 
-This feature moves all forms and overlays into **Column 2**, keeping Columns 1 and 4
-visible at all times. When a form or overlay is active, Column 3 (stats) hides to give
-Column 2 the extra space it needs. A single, unified `Esc` key handler dismisses any
-active form or overlay.
+This feature replaces Column 2's normal content (search bar + notes list) with a
+full-width, full-height container that renders the active form or view. Forms and views
+are **not** floating overlays — they are placed statically in the Column 2 slot, sized
+to fill it exactly via `layout.Container{Width, Height}.Render(...)`. Columns 1 and 4
+stay visible at all times. When Column 2 is in replacement mode, Column 3 (stats) hides
+to give Column 2 the extra space.
 
 The TUI-ARCHITECTURE.md already documents this as the target design. This PRD implements
 what the architecture describes.
@@ -19,14 +21,15 @@ what the architecture describes.
 
 ## Goals
 
-- All five form/overlay types render inside Column 2, not as full-screen takeovers
-- Column 3 hides whenever any form or overlay is active (`overlayActive` flag)
+- All five items (Note form, Tackle form, Confirm Discard, Help, Stats) replace Column 2's
+  search bar + notes list as full-width, full-height containers
+- The replacement content is sized exactly to the Column 2 slot via `layout.Container`
+- Column 3 hides whenever Column 2 is in replacement mode (`overlayActive` flag)
 - Column 2 expands to use the space freed by hiding Column 3
 - `ComputeColumnWidths` accepts an `overlayActive bool` parameter and applies the
   overlay layout table from the architecture doc
-- `Esc` is the single, unified key to dismiss any active form or overlay
-- Forms cannot be opened when the terminal is too narrow (width < 61), matching the
-  architecture guard
+- `Esc` is the single, unified key to exit any active replacement content
+- Forms cannot be opened when the terminal is too narrow (width < 61)
 - TUI-ARCHITECTURE.md is updated to reflect any implementation details that diverged
   from the original spec during development
 
@@ -66,47 +69,52 @@ or overlay.
 
 ---
 
-### US-003: Render forms inside Column 2
+### US-003: Replace Column 2 with forms (Note, Tackle, Confirm Discard)
 
-**Description:** As a user, I want to see the Note form, Tackle form, and Confirm Discard
-dialog inside Column 2 so that Column 1 (video status, export) and Column 4 (keybindings)
-remain visible while I fill in the form.
+**Description:** As a user, I want the Note form, Tackle form, and Confirm Discard dialog
+to replace Column 2's search bar and notes list so that Column 1 (video status, export)
+and Column 4 (keybindings) remain visible while I fill in a form.
 
 **Acceptance Criteria:**
 - [ ] `renderColumn2(width, height int)` checks form state at the top, in this order:
-  1. `m.confirmDiscardForm != nil` → render `layout.Container{Width:width, Height:height}.Render(m.confirmDiscardForm.View())`
-  2. `m.noteForm != nil` → render `layout.Container{Width:width, Height:height}.Render(m.noteForm.View())`
-  3. `m.tackleForm != nil` → render `layout.Container{Width:width, Height:height}.Render(m.tackleForm.View())`
+  1. `m.confirmDiscardForm != nil` → return `layout.Container{Width:width, Height:height}.Render(m.confirmDiscardForm.View())`
+  2. `m.noteForm != nil` → return `layout.Container{Width:width, Height:height}.Render(m.noteForm.View())`
+  3. `m.tackleForm != nil` → return `layout.Container{Width:width, Height:height}.Render(m.tackleForm.View())`
   4. Otherwise → existing search input + notes list (unchanged)
-- [ ] The full-screen overlay code in `View()` that returns early for forms is removed
+- [ ] The full-screen early-return code in `View()` for all three forms is removed
+- [ ] The search bar and notes list are not rendered while any form is active
 - [ ] Column 1 and Column 4 are visible while any form is open (manual verification)
-- [ ] Form content is truncated/padded to exact Column 2 dimensions via Container
+- [ ] Form content fills exactly the Column 2 width × height via Container
 - [ ] `CGO_ENABLED=0 go vet ./...` passes
 
 ---
 
-### US-004: Render Help overlay inside Column 2
+### US-004: Replace Column 2 with Help content
 
-**Description:** As a user, I want the Help overlay (`?`) to appear inside Column 2 so I
-can still see my video status and keybinding reference while reading help.
+**Description:** As a user, I want pressing `?` to replace Column 2's search bar and
+notes list with the Help content so I can read keybinding reference while Column 1 and
+Column 4 remain visible.
 
 **Acceptance Criteria:**
-- [ ] `renderColumn2` renders `components.HelpOverlay(width, height)` when `m.showHelp == true` (before form checks — or after, since they're mutually exclusive)
+- [ ] `renderColumn2` returns `layout.Container{Width:width, Height:height}.Render(components.HelpOverlay(width, height))` when `m.showHelp == true`
 - [ ] The early-return `if m.showHelp { return components.HelpOverlay(...) }` in `View()` is removed
-- [ ] Column 1 and Column 4 remain visible when help is open (manual verification)
+- [ ] The search bar and notes list are not rendered while help is active
+- [ ] Column 1 and Column 4 remain visible when help is active (manual verification)
 - [ ] `CGO_ENABLED=0 go vet ./...` passes
 
 ---
 
-### US-005: Render Stats View inside Column 2
+### US-005: Replace Column 2 with Stats View
 
-**Description:** As a user, I want the Stats view (`S`) to appear inside Column 2 so I
-can see my video status while browsing stats.
+**Description:** As a user, I want pressing `S` to replace Column 2's search bar and
+notes list with the Stats view so I can browse stats while Column 1 and Column 4 remain
+visible.
 
 **Acceptance Criteria:**
-- [ ] `renderColumn2` renders `components.StatsView(m.statsView, width, height)` when `m.statsView.Active == true`
+- [ ] `renderColumn2` returns `layout.Container{Width:width, Height:height}.Render(components.StatsView(m.statsView, width, height))` when `m.statsView.Active == true`
 - [ ] The early-return `if m.statsView.Active { return ... }` in `View()` is removed
-- [ ] Column 1 and Column 4 remain visible when stats view is open (manual verification)
+- [ ] The search bar and notes list are not rendered while stats view is active
+- [ ] Column 1 and Column 4 remain visible when stats view is active (manual verification)
 - [ ] `CGO_ENABLED=0 go vet ./...` passes
 
 ---
