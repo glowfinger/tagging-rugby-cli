@@ -1,0 +1,39 @@
+# Ralph Progress Log
+# Branch: ralph/notes-list-clip-indicator
+# Started: 2026-03-11
+
+## Codebase Patterns
+- Badge rendering in noteslist.go: prepend plain `[X] ` to raw text BEFORE truncation, then render badge segments separately with per-character styles after baseStyle is determined
+- sql.NullTime for nullable timestamp columns from SQLite via database/sql
+
+## 2026-03-11 - US-001
+- Added `ClipStatus string` and `ClipFinishedAt *time.Time` fields to `components.ListItem` in tui/components/noteslist.go
+- Added `"time"` import to noteslist.go
+- Files changed: tui/components/noteslist.go
+- **Learnings for future iterations:**
+  - The ListItem struct is in tui/components/noteslist.go (same file as NotesList/renderTableRow)
+  - CGO_ENABLED=0 required for all go build/vet due to modernc.org/sqlite
+---
+
+## 2026-03-11 - US-002
+- Extended loadNotesAndTackles() SQL query to LEFT JOIN note_clips and select status + finished_at
+- Used sql.NullTime to scan nullable finished_at column
+- Set ClipStatus and ClipFinishedAt on each ListItem
+- Files changed: tui/tui.go
+- **Learnings for future iterations:**
+  - database/sql and time packages already imported in tui/tui.go
+  - note_clips table has columns: note_id, status, finished_at
+---
+
+## 2026-03-11 - US-003
+- Added badge determination logic (badgeLetter + badgeColor) based on ClipStatus before text truncation
+- Prepended `[X] ` to raw text before truncation so full field stays bounded to textWidth
+- Added time.Now() call at top of NotesList(), passed now to renderTableRow
+- Rendered badge with split styling: brackets+space use baseStyle, letter uses badgeColor
+- Files changed: tui/components/noteslist.go
+- **Learnings for future iterations:**
+  - Badge is 4 chars `[X] ` — after truncation, `text[4:]` gives the remaining display text
+  - `baseStyle.Foreground(color)` creates a new style inheriting background from baseStyle — correct for selected/match rows
+  - The `renderField` helper handles query highlighting for all non-badge fields; text field needs custom rendering when badge present
+---
+

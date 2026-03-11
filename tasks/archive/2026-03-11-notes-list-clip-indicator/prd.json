@@ -1,0 +1,55 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/notes-list-clip-indicator",
+  "description": "Notes List Clip Status Indicator - Prepend a one-letter badge ([p]/[w]/[e]/[f]) to the Text column for each note with a clip record, showing clip export state at a glance. The [f] finished badge auto-hides 5 seconds after completion.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Extend ListItem with ClipStatus and ClipFinishedAt fields",
+      "description": "As a developer, I need the ListItem struct to carry clip status data so the renderer can decide whether and what indicator to display.",
+      "acceptanceCriteria": [
+        "Add `ClipStatus string` field to `components.ListItem` in tui/components/noteslist.go (values: empty string, 'pending', 'processing', 'completed', 'error')",
+        "Add `ClipFinishedAt *time.Time` field to `components.ListItem`",
+        "Import `time` package in noteslist.go if not already present",
+        "CGO_ENABLED=0 go build ./... passes",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Populate ClipStatus and ClipFinishedAt in loadNotesAndTackles()",
+      "description": "As a developer, I need loadNotesAndTackles() to fetch each note's clip status from the database so it is available for rendering.",
+      "acceptanceCriteria": [
+        "The inline SQL in loadNotesAndTackles() in tui/tui.go is extended with `LEFT JOIN note_clips nc ON nc.note_id = n.id` and selects `COALESCE(nc.status, '')` and `nc.finished_at`",
+        "A `sql.NullTime` local variable is used to scan the nullable `finished_at` column",
+        "Each built `components.ListItem` has `ClipStatus` set from the scanned status string",
+        "Each built `components.ListItem` has `ClipFinishedAt` set to `&finishedAt.Time` when `finishedAt.Valid`, otherwise nil",
+        "CGO_ENABLED=0 go build ./... passes",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Render clip status badge in the Text column",
+      "description": "As a user, I want to see a one-letter clip status badge prepended to the Text column in the notes list so I can identify pending, processing, errored, and recently-finished clips at a glance.",
+      "acceptanceCriteria": [
+        "`NotesList()` in tui/components/noteslist.go calls `time.Now()` once at the top and passes it to `renderTableRow`",
+        "`renderTableRow` signature gains `now time.Time` parameter",
+        "Badge logic in renderTableRow: ClipStatus='pending' -> prefix `[p] ` with letter in styles.Lavender; ClipStatus='processing' -> prefix `[w] ` with letter in styles.Amber; ClipStatus='error' -> prefix `[e] ` with letter in styles.Red; ClipStatus='completed' AND ClipFinishedAt != nil AND now.Sub(*ClipFinishedAt) <= 5s -> prefix `[f] ` with letter in styles.Green; all other cases (empty status, completed > 5s ago, nil FinishedAt) -> no prefix",
+        "Badge brackets `[` and `]` and trailing space are rendered using the row's existing `baseStyle`; only the letter itself uses the coloured style",
+        "The badge prefix string is prepended to the raw `text` variable BEFORE the existing textWidth truncation step, so the full text field (badge + text) is bounded to textWidth",
+        "CGO_ENABLED=0 go build ./... passes",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}
