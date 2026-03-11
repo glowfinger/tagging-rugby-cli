@@ -16,10 +16,12 @@ type TackleFormResult struct {
 	Outcome string
 
 	// Step 2: Optional fields
-	Followed string // maps to note_detail type="followed"
-	Notes    string // maps to note_detail type="notes"
-	Zone     string // maps to note_zones
-	Star     bool   // maps to note_highlights type="star"
+	Followed  string // maps to note_detail type="followed"
+	Notes     string // maps to note_detail type="notes"
+	Zone      string // maps to note_zones
+	Height    string // maps to note_tackles.height (optional: high/mid/low)
+	Technique string // maps to note_tackles.technique (optional, free text)
+	Star      bool   // maps to note_highlights type="star"
 }
 
 // HasData returns true if any user-entered field in the tackle form has data.
@@ -105,6 +107,22 @@ func NewTackleForm(timestamp float64, result *TackleFormResult) *huh.Form {
 				Title("Zone").
 				Description("Optional - field zone").
 				Value(&result.Zone),
+
+			huh.NewSelect[string]().
+				Title("Height").
+				Description("Optional").
+				Options(
+					huh.NewOption("None", ""),
+					huh.NewOption("High", "high"),
+					huh.NewOption("Mid", "mid"),
+					huh.NewOption("Low", "low"),
+				).
+				Value(&result.Height),
+
+			huh.NewInput().
+				Title("Technique").
+				Description("Optional - e.g. shoulder, choke, ankle").
+				Value(&result.Technique),
 
 			huh.NewConfirm().
 				Title("Star").
@@ -218,6 +236,22 @@ func NewEditTackleForm(timestamp float64, endSeconds float64, result *EditTackle
 				Title("Zone").
 				Description("Optional - field zone").
 				Value(&result.Zone),
+
+			huh.NewSelect[string]().
+				Title("Height").
+				Description("Optional").
+				Options(
+					huh.NewOption("None", ""),
+					huh.NewOption("High", "high"),
+					huh.NewOption("Mid", "mid"),
+					huh.NewOption("Low", "low"),
+				).
+				Value(&result.Height),
+
+			huh.NewInput().
+				Title("Technique").
+				Description("Optional - e.g. shoulder, choke, ankle").
+				Value(&result.Technique),
 
 			huh.NewConfirm().
 				Title("Star").

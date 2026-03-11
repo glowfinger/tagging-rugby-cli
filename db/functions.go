@@ -184,8 +184,8 @@ func InsertNoteTiming(db *sql.DB, noteID int64, start, end float64) error {
 }
 
 // InsertNoteTackle inserts a note_tackles row.
-func InsertNoteTackle(db *sql.DB, noteID int64, player string, attempt int, outcome string) error {
-	_, err := db.Exec(InsertNoteTackleSQL, noteID, player, attempt, outcome)
+func InsertNoteTackle(db *sql.DB, noteID int64, player string, attempt int, outcome, height, technique string) error {
+	_, err := db.Exec(InsertNoteTackleSQL, noteID, player, attempt, outcome, height, technique)
 	if err != nil {
 		return fmt.Errorf("insert note tackle: %w", err)
 	}
@@ -302,7 +302,7 @@ func InsertNoteWithChildren(database *sql.DB, category string, children NoteChil
 		}
 	}
 	for _, t := range children.Tackles {
-		if _, err := tx.Exec(InsertNoteTackleSQL, noteID, t.Player, t.Attempt, t.Outcome); err != nil {
+		if _, err := tx.Exec(InsertNoteTackleSQL, noteID, t.Player, t.Attempt, t.Outcome, t.Height, t.Technique); err != nil {
 			return 0, fmt.Errorf("insert note tackle: %w", err)
 		}
 	}
@@ -359,7 +359,7 @@ func UpdateNoteWithChildren(database *sql.DB, noteID int64, children NoteChildre
 
 	// Re-insert child records
 	for _, t := range children.Tackles {
-		if _, err := tx.Exec(InsertNoteTackleSQL, noteID, t.Player, t.Attempt, t.Outcome); err != nil {
+		if _, err := tx.Exec(InsertNoteTackleSQL, noteID, t.Player, t.Attempt, t.Outcome, t.Height, t.Technique); err != nil {
 			return fmt.Errorf("insert note tackle: %w", err)
 		}
 	}
@@ -546,7 +546,7 @@ func SelectNoteTacklesByNote(database *sql.DB, noteID int64) ([]NoteTackle, erro
 	var tackles []NoteTackle
 	for rows.Next() {
 		var t NoteTackle
-		if err := rows.Scan(&t.ID, &t.NoteID, &t.Player, &t.Attempt, &t.Outcome); err != nil {
+		if err := rows.Scan(&t.ID, &t.NoteID, &t.Player, &t.Attempt, &t.Outcome, &t.Height, &t.Technique); err != nil {
 			return nil, err
 		}
 		tackles = append(tackles, t)
@@ -616,6 +616,8 @@ type EditTackleData struct {
 	Player     string
 	Attempt    int
 	Outcome    string
+	Height     string
+	Technique  string
 	Followed   string
 	Notes      string
 	Zone       string
@@ -638,6 +640,8 @@ func LoadNoteForEdit(database *sql.DB, noteID int64) (*EditTackleData, error) {
 		data.Player = tackles[0].Player
 		data.Attempt = tackles[0].Attempt
 		data.Outcome = tackles[0].Outcome
+		data.Height = tackles[0].Height
+		data.Technique = tackles[0].Technique
 	}
 
 	// Load timing data

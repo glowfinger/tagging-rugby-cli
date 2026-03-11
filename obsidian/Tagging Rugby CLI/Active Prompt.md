@@ -1,9 +1,7 @@
-Load the prd skill and create a PRD that reads and updates the TUI-ARCHITECTURE.md to have an export indicator in the note list
+Load the prd skill and create a PRD that reads and updates the TUI-ARCHITECTURE.md add height and technique to the note_tackles table
 
-The indicator to be prepended to the text in the text column
-The indicator should not only be visible for clips that are not completed or finished in the last 5 seconds
-The one letter indicator should be wrapped in square bracket sand have a after the right bracket
-e for error
-w for in progress
-p for pending
-f for finished
+- Modify 001_create_videos_table to have the correct db structure
+- This can happen now, as the data is only test data
+- Both are optional in the database
+- Both should be ok by default in the  form
+- Both should be on the second page of the tackle edit form

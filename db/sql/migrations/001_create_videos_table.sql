@@ -53,7 +53,9 @@ CREATE TABLE IF NOT EXISTS note_tackles (
     note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
     player TEXT,
     attempt INTEGER,
-    outcome TEXT
+    outcome TEXT,
+    height TEXT,
+    technique TEXT
 );
 
 CREATE TABLE IF NOT EXISTS note_zones (

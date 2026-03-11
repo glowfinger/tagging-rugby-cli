@@ -45,11 +45,13 @@ type NoteTiming struct {
 
 // NoteTackle represents a row in the note_tackles table.
 type NoteTackle struct {
-	ID      int64
-	NoteID  int64
-	Player  string
-	Attempt int
-	Outcome string
+	ID        int64
+	NoteID    int64
+	Player    string
+	Attempt   int
+	Outcome   string
+	Height    string
+	Technique string
 }
 
 // NoteZone represents a row in the note_zones table.
