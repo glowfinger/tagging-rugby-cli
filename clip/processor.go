@@ -91,21 +91,35 @@ func (p *Processor) processClip(ctx context.Context, c *db.PendingClip) {
 	hours := totalSecs / 3600
 	minutes := (totalSecs % 3600) / 60
 	seconds := totalSecs % 60
-	timestamp := fmt.Sprintf("%02d\\\\:%02d\\\\:%02d", hours, minutes, seconds)
+	startTimestamp := fmt.Sprintf("%02d\\\\:%02d\\\\:%02d", hours, minutes, seconds)
+
+	endTotalSecs := int(c.End)
+	endHours := endTotalSecs / 3600
+	endMinutes := (endTotalSecs % 3600) / 60
+	endSeconds := endTotalSecs % 60
+	endTimestamp := fmt.Sprintf("%02d\\\\:%02d\\\\:%02d", endHours, endMinutes, endSeconds)
 
 	// Escape colons in free-text fields using the same double-escape.
 	outcome := strings.ReplaceAll(c.Outcome, ":", "\\\\:")
+	player := strings.ReplaceAll(c.Player, ":", "\\\\:")
+	filename := strings.ReplaceAll(c.Filename, ":", "\\\\:")
 
 	// Build drawtext filter chain. No single quotes used — only backslash escaping.
-	// The comma in lt(t,3) is escaped as '\,' so it is not treated as a filter
+	// The comma in lt(t,2) is escaped as '\,' so it is not treated as a filter
 	// separator at the filtergraph level.
 	drawtext := fmt.Sprintf(
-		"drawtext=text=%s:x=10:y=h-th:fontsize=28:fontcolor=white:enable=lt(t\\,3),"+
-			"drawtext=text=%s:x=10:y=h-th-36:fontsize=28:fontcolor=white:enable=lt(t\\,3),"+
-			"drawtext=text=Attempt %d:x=10:y=h-th-72:fontsize=28:fontcolor=white:enable=lt(t\\,3)",
-		timestamp,
+		"drawtext=text=Note ID\\\\: %d:x=10:y=h-th:fontsize=28:fontcolor=white:bordercolor=#131211:borderw=2:enable=lt(t\\,2),"+
+			"drawtext=text=Filename\\\\: %s:x=10:y=h-th-36:fontsize=28:fontcolor=white:bordercolor=#131211:borderw=2:enable=lt(t\\,2),"+
+			"drawtext=text=Outcome\\\\: %s %d:x=10:y=h-th-72:fontsize=28:fontcolor=white:bordercolor=#131211:borderw=2:enable=lt(t\\,2),"+
+			"drawtext=text=Player\\\\: %s:x=10:y=h-th-108:fontsize=28:fontcolor=white:bordercolor=#131211:borderw=2:enable=lt(t\\,2),"+
+			"drawtext=text=Time\\\\: %s/%s:x=10:y=h-th-144:fontsize=28:fontcolor=white:bordercolor=#131211:borderw=2:enable=lt(t\\,2)",
+		c.NoteID,
+		filename,
 		outcome,
 		c.Attempt,
+		player,
+		startTimestamp,
+		endTimestamp,
 	)
 
 	args := []string{
