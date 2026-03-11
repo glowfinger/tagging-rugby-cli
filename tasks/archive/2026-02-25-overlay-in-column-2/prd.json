@@ -1,0 +1,129 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/overlay-in-column-2",
+  "description": "Column 2 Content Replacement - Forms and views replace Column 2's search bar and notes list as full-width, full-height containers. Columns 1 and 4 stay visible at all times. When Column 2 is in replacement mode, Column 3 hides to give Column 2 extra space.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add overlayActive to ComputeColumnWidths",
+      "description": "As a developer, I need ComputeColumnWidths to accept an overlayActive parameter so Column 3 hides and Column 2 expands whenever a form or overlay is open.",
+      "acceptanceCriteria": [
+        "ComputeColumnWidths(termWidth int, overlayActive bool) — new signature with second param",
+        "When overlayActive == false, behaviour is identical to current (no regression)",
+        "When overlayActive == true, Column 3 is always hidden regardless of terminal width",
+        "Overlay layout widths match the architecture table: >= 170: Col1=30, Col4=30, Col2=termWidth-60; Col3 hidden; 61-169: Col1=30, Col2=termWidth-30; Col3 and Col4 hidden; <= 60: Col1=30 only; Col2, Col3, Col4 hidden",
+        "All existing call-sites of ComputeColumnWidths updated to pass the new param",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Add overlayActive computation in View()",
+      "description": "As a developer, I need View() to compute a single overlayActive flag and pass it everywhere that needs it, so the layout reacts consistently to any active form or overlay.",
+      "acceptanceCriteria": [
+        "View() computes overlayActive := m.noteForm != nil || m.tackleForm != nil || m.confirmDiscardForm != nil || m.showHelp || m.statsView.Active",
+        "overlayActive is passed to ComputeColumnWidths",
+        "overlayActive is passed to renderColumn3 (to render empty / skip when true)",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Replace Column 2 with forms (Note, Tackle, Confirm Discard)",
+      "description": "As a user, I want the Note form, Tackle form, and Confirm Discard dialog to replace Column 2's search bar and notes list so that Column 1 and Column 4 remain visible while I fill in a form.",
+      "acceptanceCriteria": [
+        "renderColumn2(width, height int) checks form state at the top, in this order: 1) m.confirmDiscardForm != nil -> return layout.Container{Width:width, Height:height}.Render(m.confirmDiscardForm.View()); 2) m.noteForm != nil -> return layout.Container{Width:width, Height:height}.Render(m.noteForm.View()); 3) m.tackleForm != nil -> return layout.Container{Width:width, Height:height}.Render(m.tackleForm.View()); 4) Otherwise -> existing search input + notes list (unchanged)",
+        "The full-screen early-return code in View() for all three forms is removed",
+        "The search bar and notes list are not rendered while any form is active",
+        "Column 1 and Column 4 are visible while any form is open (manual verification)",
+        "Form content fills exactly the Column 2 width x height via Container",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Replace Column 2 with Help content",
+      "description": "As a user, I want pressing ? to replace Column 2's search bar and notes list with the Help content so I can read keybinding reference while Column 1 and Column 4 remain visible.",
+      "acceptanceCriteria": [
+        "renderColumn2 returns layout.Container{Width:width, Height:height}.Render(components.HelpOverlay(width, height)) when m.showHelp == true",
+        "The early-return if m.showHelp { return components.HelpOverlay(...) } in View() is removed",
+        "The search bar and notes list are not rendered while help is active",
+        "Column 1 and Column 4 remain visible when help is active (manual verification)",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Replace Column 2 with Stats View",
+      "description": "As a user, I want pressing S to replace Column 2's search bar and notes list with the Stats view so I can browse stats while Column 1 and Column 4 remain visible.",
+      "acceptanceCriteria": [
+        "renderColumn2 returns layout.Container{Width:width, Height:height}.Render(components.StatsView(m.statsView, width, height)) when m.statsView.Active == true",
+        "The early-return if m.statsView.Active { return ... } in View() is removed",
+        "The search bar and notes list are not rendered while stats view is active",
+        "Column 1 and Column 4 remain visible when stats view is active (manual verification)",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Unified Esc handler to dismiss any form or overlay",
+      "description": "As a user, I want to press Esc once to exit any active form or overlay, without needing to know which one is open.",
+      "acceptanceCriteria": [
+        "A single, early Esc handler in Update() runs before focus-specific handlers",
+        "Esc handler priority: 1) m.confirmDiscardForm != nil -> close it and re-open the parent form; 2) m.noteForm != nil -> trigger huh abort; 3) m.tackleForm != nil -> trigger huh abort; 4) m.showHelp == true -> set m.showHelp = false; 5) m.statsView.Active == true -> set m.statsView.Active = false; 6) m.focus == FocusSearch -> clear search input and return to FocusNotes; 7) Otherwise -> no-op",
+        "No other Esc handlers in the codebase handle help or stats dismissal (deduplicated)",
+        "Pressing Esc while in FocusSearch with no form/overlay still clears search (unchanged)",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Activation guard for narrow terminals",
+      "description": "As a developer, I want form and overlay activation to be silently blocked when the terminal is too narrow (< 61 columns) so that forms are never rendered into a zero-width or negative-width column.",
+      "acceptanceCriteria": [
+        "All form/overlay open functions check m.width >= 61 before activating",
+        "Affected functions: note form open, tackle form open, m.showHelp = true, m.statsView.Active = true",
+        "If terminal is too narrow, the key press is silently ignored (no error message)",
+        "Confirm discard guard is exempt (it can only appear if a parent form is already open)",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Update TUI-ARCHITECTURE.md",
+      "description": "As a developer, I want TUI-ARCHITECTURE.md to accurately reflect the implemented design so it can be used as a reliable reference.",
+      "acceptanceCriteria": [
+        "ComputeColumnWidths signature in the doc updated to include overlayActive bool",
+        "Overlay-in-Column-2 Pattern section verified against the implemented code and corrected where needed",
+        "renderColumn2 conditional rendering order in the doc matches the actual implementation order",
+        "Any references to full-screen overlay return paths removed from the doc",
+        "Esc handler section updated to reflect the unified handler priority list",
+        "Doc reviewed and no stale references remain"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

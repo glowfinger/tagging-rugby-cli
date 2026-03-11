@@ -4,6 +4,7 @@ package components
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/user/tagging-rugby-cli/pkg/timeutil"
@@ -38,6 +39,10 @@ type ListItem struct {
 	Player string
 	// Team is the optional team name
 	Team string
+	// ClipStatus is the export status of the note's clip record (empty, 'pending', 'processing', 'completed', 'error')
+	ClipStatus string
+	// ClipFinishedAt is the time the clip export finished, or nil if not finished
+	ClipFinishedAt *time.Time
 }
 
 // NotesListState holds the state for the notes list component.
@@ -135,6 +140,8 @@ func NotesList(state NotesListState, width, height int, currentTimePos float64, 
 		currentMatchIdx = matches[currentMatch]
 	}
 
+	now := time.Now()
+
 	// Render visible rows
 	for row := 0; row < visibleRows; row++ {
 		itemIndex := state.ScrollOffset + row
@@ -144,7 +151,7 @@ func NotesList(state NotesListState, width, height int, currentTimePos float64, 
 			rowNum := itemIndex + 1
 			isMatch := matchSet[itemIndex]
 			isCurrentMatch := itemIndex == currentMatchIdx
-			lines = append(lines, renderTableRow(item, isSelected, isMatch, isCurrentMatch, rowNum, rowWidth, idWidth, timeWidth, catWidth, textWidth, width, query))
+			lines = append(lines, renderTableRow(item, isSelected, isMatch, isCurrentMatch, rowNum, rowWidth, idWidth, timeWidth, catWidth, textWidth, width, query, now))
 		} else {
 			// Empty row
 			lines = append(lines, "")
@@ -191,7 +198,7 @@ func (s *NotesListState) scrollToCurrentTime(currentTimePos float64, visibleRows
 // renderTableRow renders a single table row.
 // When query is non-empty and the row is a match, the matching substring is highlighted
 // inline rather than coloring the whole row. Matched rows get a subtle background.
-func renderTableRow(item ListItem, selected, isMatch, isCurrentMatch bool, rowNum, rowWidth, idWidth, timeWidth, catWidth, textWidth, fullWidth int, query string) string {
+func renderTableRow(item ListItem, selected, isMatch, isCurrentMatch bool, rowNum, rowWidth, idWidth, timeWidth, catWidth, textWidth, fullWidth int, query string, now time.Time) string {
 	// Format row number: right-aligned, no # prefix (e.g., "  1", " 12", "123")
 	rowStr := fmt.Sprintf("%*d", rowWidth, rowNum)
 
@@ -210,8 +217,27 @@ func renderTableRow(item ListItem, selected, isMatch, isCurrentMatch bool, rowNu
 		catStr = "tackle"
 	}
 
-	// Truncate text if needed
+	// Determine clip status badge (letter + color)
+	badgeLetter := ""
+	var badgeColor lipgloss.Color
+	switch item.ClipStatus {
+	case "pending":
+		badgeLetter, badgeColor = "p", styles.Lavender
+	case "processing":
+		badgeLetter, badgeColor = "w", styles.Amber
+	case "error":
+		badgeLetter, badgeColor = "e", styles.Red
+	case "completed":
+		if item.ClipFinishedAt != nil && now.Sub(*item.ClipFinishedAt) <= 5*time.Second {
+			badgeLetter, badgeColor = "f", styles.Green
+		}
+	}
+
+	// Prepend badge prefix to raw text BEFORE truncation so full field is bounded to textWidth
 	text := item.Text
+	if badgeLetter != "" {
+		text = "[" + badgeLetter + "] " + text
+	}
 	if len(text) > textWidth {
 		text = text[:textWidth-3] + "..."
 	}
@@ -251,6 +277,23 @@ func renderTableRow(item ListItem, selected, isMatch, isCurrentMatch bool, rowNu
 		return baseStyle.Render(padded)
 	}
 
+	// Render the text field, applying badge letter colour when a badge is present
+	var textFieldRendered string
+	if badgeLetter != "" && len(text) >= 4 {
+		// text starts with "[X] " — render brackets+space with baseStyle, letter with badgeColor
+		letterStyle := baseStyle.Foreground(badgeColor)
+		rest := text[4:] // skip "[X] " (4 chars)
+		padded := fmt.Sprintf("%-*s", textWidth-4, rest)
+		textFieldRendered = baseStyle.Render("[") + letterStyle.Render(badgeLetter) + baseStyle.Render("] ") + baseStyle.Render(padded)
+	} else {
+		padded := fmt.Sprintf("%-*s", textWidth, text)
+		if query != "" && (isMatch || isCurrentMatch) {
+			textFieldRendered = highlightSubstring(padded, query, baseStyle, highlightBg)
+		} else {
+			textFieldRendered = baseStyle.Render(padded)
+		}
+	}
+
 	// Build row with inline highlighting per field
 	space := baseStyle.Render(" ")
 	row := space +
@@ -258,7 +301,7 @@ func renderTableRow(item ListItem, selected, isMatch, isCurrentMatch bool, rowNu
 		renderField(idStr, idWidth) + space +
 		renderField(timeStr, timeWidth) + space +
 		renderField(catStr, catWidth) + space +
-		renderField(text, textWidth)
+		textFieldRendered
 
 	// Pad to full width
 	rowVisW := lipgloss.Width(row)

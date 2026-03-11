@@ -196,6 +196,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loadTackleStatsForPanel()
 		// Refresh export progress for the indicator in column 1
 		m.refreshExportProgress()
+		// Refresh notes list to pick up clip status changes from background worker
+		m.loadNotesAndTackles()
 		// Continue ticking
 		return m, tickCmd()
 
@@ -2027,12 +2029,13 @@ func (m *Model) loadNotesAndTackles() {
 
 	var items []components.ListItem
 
-	// Query all notes for this video with timing info
+	// Query all notes for this video with timing info and clip status
 	rows, err := m.db.Query(`
-		SELECT n.id, n.category, COALESCE(nt.start, 0)
+		SELECT n.id, n.category, COALESCE(nt.start, 0), COALESCE(nc.status, ''), nc.finished_at
 		FROM notes n
 		INNER JOIN videos v ON v.id = n.video_id
 		LEFT JOIN note_timing nt ON nt.note_id = n.id
+		LEFT JOIN note_clips nc ON nc.note_id = n.id
 		WHERE v.path = ?
 		ORDER BY nt.start ASC`, m.videoPath)
 	if err != nil {
@@ -2044,7 +2047,9 @@ func (m *Model) loadNotesAndTackles() {
 		var noteID int64
 		var category string
 		var timestamp float64
-		if err := rows.Scan(&noteID, &category, &timestamp); err != nil {
+		var clipStatus string
+		var finishedAt sql.NullTime
+		if err := rows.Scan(&noteID, &category, &timestamp, &clipStatus, &finishedAt); err != nil {
 			continue
 		}
 
@@ -2052,6 +2057,11 @@ func (m *Model) loadNotesAndTackles() {
 			ID:               noteID,
 			TimestampSeconds: timestamp,
 			Category:         category,
+			ClipStatus:       clipStatus,
+		}
+		if finishedAt.Valid {
+			t := finishedAt.Time
+			item.ClipFinishedAt = &t
 		}
 
 		// Determine type based on category
@@ -2096,9 +2106,17 @@ func (m *Model) loadNotesAndTackles() {
 		items = append(items, item)
 	}
 
+	prevSelected := m.notesList.SelectedIndex
+	prevScroll := m.notesList.ScrollOffset
 	m.notesList.Items = items
-	m.notesList.SelectedIndex = 0
-	m.notesList.ScrollOffset = 0
+	if prevSelected >= len(items) {
+		prevSelected = len(items) - 1
+	}
+	if prevSelected < 0 {
+		prevSelected = 0
+	}
+	m.notesList.SelectedIndex = prevSelected
+	m.notesList.ScrollOffset = prevScroll
 }
 
 // handleStatsViewInput handles key events when the stats view is active.
