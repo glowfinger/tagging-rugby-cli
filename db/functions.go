@@ -616,6 +616,8 @@ type EditTackleData struct {
 	Player     string
 	Attempt    int
 	Outcome    string
+	Height     string
+	Technique  string
 	Followed   string
 	Notes      string
 	Zone       string

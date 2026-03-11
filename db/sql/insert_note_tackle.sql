@@ -1,1 +1,1 @@
-INSERT INTO note_tackles (note_id, player, attempt, outcome) VALUES (?, ?, ?, ?);
+INSERT INTO note_tackles (note_id, player, attempt, outcome, height, technique) VALUES (?, ?, ?, ?, ?, ?);
