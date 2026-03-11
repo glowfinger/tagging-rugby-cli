@@ -1,39 +1,23 @@
 # Ralph Progress Log
-# Branch: ralph/notes-list-clip-indicator
+# Branch: ralph/tackle-height-technique
 # Started: 2026-03-11
 
 ## Codebase Patterns
-- Badge rendering in noteslist.go: prepend plain `[X] ` to raw text BEFORE truncation, then render badge segments separately with per-character styles after baseStyle is determined
-- sql.NullTime for nullable timestamp columns from SQLite via database/sql
+- EditTackleData lives in db/functions.go (not db/models.go) — check there for data structs related to forms
+- SQL files are 1-liners embedded via go:embed; always update both migration schema AND the individual query files when changing table columns
+- When adding new columns to note_tackles: update (1) migration SQL, (2) insert SQL, (3) select SQL, (4) NoteTackle struct, (5) EditTackleData struct, (6) InsertNoteTackle(), (7) SelectNoteTacklesByNote() scan, (8) InsertNoteWithChildren() loop, (9) UpdateNoteWithChildren() loop, (10) LoadNoteForEdit(), (11) form result struct, (12) form constructors, (13) tui.go save functions
 
-## 2026-03-11 - US-001
-- Added `ClipStatus string` and `ClipFinishedAt *time.Time` fields to `components.ListItem` in tui/components/noteslist.go
-- Added `"time"` import to noteslist.go
-- Files changed: tui/components/noteslist.go
+## 2026-03-11 - US-001 through US-005 (all stories)
+- Implemented all 5 user stories in a single session
+- **US-001:** Added `height TEXT` and `technique TEXT` to note_tackles in migration SQL; updated insert/select SQL; added Height/Technique fields to NoteTackle struct and EditTackleData struct
+- **US-002:** Extended InsertNoteTackle() signature with height/technique params; updated SelectNoteTacklesByNote() scan; updated tackle loops in InsertNoteWithChildren() and UpdateNoteWithChildren(); updated LoadNoteForEdit() to populate Height/Technique from tackles[0]
+- **US-003:** Added Height/Technique fields to TackleFormResult; added huh.NewSelect for Height and huh.NewInput for Technique in Step 2 of both NewTackleForm() and NewEditTackleForm() (after Zone, before Star)
+- **US-004:** Updated saveTackleFromForm() and saveEditTackleFromForm() NoteTackle literals; updated editTackleFormResult mapping to include Height/Technique
+- **US-005:** Updated TUI-ARCHITECTURE.md Available Forms table; added note_tackles schema documentation section
+- Files changed: db/sql/migrations/001_create_videos_table.sql, db/sql/insert_note_tackle.sql, db/sql/select_note_tackles_by_note.sql, db/models.go, db/functions.go, tui/forms/tackleform.go, tui/tui.go, tui/TUI-ARCHITECTURE.md
 - **Learnings for future iterations:**
-  - The ListItem struct is in tui/components/noteslist.go (same file as NotesList/renderTableRow)
-  - CGO_ENABLED=0 required for all go build/vet due to modernc.org/sqlite
+  - EditTackleData is defined in db/functions.go, not db/models.go — always search functions.go for data structs
+  - The zone field in EditTackleData uses only Horizontal (not Vertical) from NoteZone
+  - huh.NewSelect[string]() requires the type parameter — don't forget [string]
+  - When the Zone+Star pattern appears in both form constructors, the Edit operation on the pattern will fail due to duplicate matches — rewrite the whole file instead
 ---
-
-## 2026-03-11 - US-002
-- Extended loadNotesAndTackles() SQL query to LEFT JOIN note_clips and select status + finished_at
-- Used sql.NullTime to scan nullable finished_at column
-- Set ClipStatus and ClipFinishedAt on each ListItem
-- Files changed: tui/tui.go
-- **Learnings for future iterations:**
-  - database/sql and time packages already imported in tui/tui.go
-  - note_clips table has columns: note_id, status, finished_at
----
-
-## 2026-03-11 - US-003
-- Added badge determination logic (badgeLetter + badgeColor) based on ClipStatus before text truncation
-- Prepended `[X] ` to raw text before truncation so full field stays bounded to textWidth
-- Added time.Now() call at top of NotesList(), passed now to renderTableRow
-- Rendered badge with split styling: brackets+space use baseStyle, letter uses badgeColor
-- Files changed: tui/components/noteslist.go
-- **Learnings for future iterations:**
-  - Badge is 4 chars `[X] ` — after truncation, `text[4:]` gives the remaining display text
-  - `baseStyle.Foreground(color)` creates a new style inheriting background from baseStyle — correct for selected/match rows
-  - The `renderField` helper handles query highlighting for all non-badge fields; text field needs custom rendering when badge present
----
-
