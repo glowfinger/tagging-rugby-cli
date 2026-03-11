@@ -4,6 +4,7 @@ package components
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/user/tagging-rugby-cli/pkg/timeutil"
@@ -38,6 +39,10 @@ type ListItem struct {
 	Player string
 	// Team is the optional team name
 	Team string
+	// ClipStatus is the export status of the note's clip record (empty, 'pending', 'processing', 'completed', 'error')
+	ClipStatus string
+	// ClipFinishedAt is the time the clip export finished, or nil if not finished
+	ClipFinishedAt *time.Time
 }
 
 // NotesListState holds the state for the notes list component.
