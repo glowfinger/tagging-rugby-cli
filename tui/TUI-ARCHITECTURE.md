@@ -395,8 +395,22 @@ Forms use the [huh](https://github.com/charmbracelet/huh) library with a custom 
 | Form | Constructor | Result Type | Purpose |
 |------|------------|-------------|---------|
 | Note form | `NewNoteForm(timestamp, result)` | `NoteFormResult{Text, Category, Player, Team}` | Create/edit timestamped notes |
-| Tackle wizard | `NewTackleForm(timestamp, result)` | `TackleFormResult{Player, Attempt, Outcome, ...}` | Multi-step tackle entry |
+| Tackle wizard | `NewTackleForm(timestamp, result)` | `TackleFormResult{Player, Attempt, Outcome, Followed, Notes, Zone, Height, Technique, Star}` | Multi-step tackle entry |
 | Confirm discard | `NewConfirmDiscardForm(discard)` | `*bool` | Confirm before discarding form data |
+
+### note_tackles Schema
+
+The `note_tackles` table stores per-tackle data. All columns except `id`, `note_id`, and `attempt` are optional (no NOT NULL, no default):
+
+| Column | Type | Values | Notes |
+|--------|------|---------|-------|
+| `player` | TEXT | free text | Required in form |
+| `attempt` | INTEGER | positive int | Required in form |
+| `outcome` | TEXT | completed/missed/possible/other | Required in form |
+| `height` | TEXT | high/mid/low or empty string | Optional |
+| `technique` | TEXT | free text (e.g. shoulder, choke, ankle) | Optional |
+
+Height and Technique are bound in Step 2 of both `NewTackleForm` and `NewEditTackleForm`.
 
 ### Theme (`theme.go`)
 
