@@ -196,6 +196,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loadTackleStatsForPanel()
 		// Refresh export progress for the indicator in column 1
 		m.refreshExportProgress()
+		// Refresh notes list to pick up clip status changes from background worker
+		m.loadNotesAndTackles()
 		// Continue ticking
 		return m, tickCmd()
 
@@ -2104,9 +2106,17 @@ func (m *Model) loadNotesAndTackles() {
 		items = append(items, item)
 	}
 
+	prevSelected := m.notesList.SelectedIndex
+	prevScroll := m.notesList.ScrollOffset
 	m.notesList.Items = items
-	m.notesList.SelectedIndex = 0
-	m.notesList.ScrollOffset = 0
+	if prevSelected >= len(items) {
+		prevSelected = len(items) - 1
+	}
+	if prevSelected < 0 {
+		prevSelected = 0
+	}
+	m.notesList.SelectedIndex = prevSelected
+	m.notesList.ScrollOffset = prevScroll
 }
 
 // handleStatsViewInput handles key events when the stats view is active.

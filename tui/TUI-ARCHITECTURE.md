@@ -167,7 +167,21 @@ Each component in `tui/components/` follows the pattern:
 - Row number column: 5 chars wide, right-aligned, no `#` prefix (e.g., `  1`, ` 12`, `123`)
 - **Inline match highlighting:** matched rows get a subtle `MatchBg` background; the matching substring within each field is highlighted with Amber (match) or Pink (current match) background
 - Highlight priority: current match inline > match inline > selected (BrightPurple full row) > default
-- `ListItem` struct: `{ID, Type, TimestampSeconds, Text, Starred, Category, Player, Team}`
+- `ListItem` struct: `{ID, Type, TimestampSeconds, Text, Starred, Category, Player, Team, ClipStatus, ClipFinishedAt}`
+
+#### Clip Status Indicator
+
+When a note has an associated clip record, a one-letter badge is prepended to the Text column: `[X] <text>`. The badge letter is coloured; the brackets and space use the row's base style.
+
+| `ClipStatus` | Letter | Colour |
+|---|---|---|
+| `"pending"` | `p` | `Lavender` |
+| `"processing"` | `w` | `Amber` |
+| `"error"` | `e` | `Red` |
+| `"completed"` (≤ 5 s since `ClipFinishedAt`) | `f` | `Green` |
+| `"completed"` (> 5 s) or `""` | *(no badge)* | — |
+
+`time.Now()` is called once at the top of `NotesList()` and passed to `renderTableRow`. The badge prefix is prepended before the `textWidth` truncation step so the full field (badge + text) is always bounded. `ClipStatus` and `ClipFinishedAt` are populated by `loadNotesAndTackles()` via `LEFT JOIN note_clips` on the inline SQL query.
 
 ### SearchInput (`searchinput.go`)
 
