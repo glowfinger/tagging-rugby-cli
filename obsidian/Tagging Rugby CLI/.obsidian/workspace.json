@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Active Prompt.md",
+                "file": "Prompt dump.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Active Prompt"
+              "title": "Prompt dump"
             }
           },
           {
@@ -199,8 +199,8 @@
   },
   "active": "6d4094e1033ec707",
   "lastOpenFiles": [
-    "Prompt dump.md",
     "Active Prompt.md",
+    "Prompt dump.md",
     "Bugs.md",
     "Untitled.md",
     "Welcome.md"
