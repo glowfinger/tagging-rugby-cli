@@ -1,0 +1,83 @@
+{
+  "project": "tagging-rugby-cli",
+  "branchName": "ralph/tackle-height-technique",
+  "description": "Add height and technique fields to note_tackles - two optional columns surfaced on Step 2 of the tackle wizard (add + edit), propagated through SQL, db models, db functions, form types, and tui.go save logic.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Update canonical DB schema and SQL for note_tackles",
+      "description": "As a developer, I need the note_tackles table and its SQL queries to include height and technique columns so the data can be persisted and retrieved.",
+      "acceptanceCriteria": [
+        "db/sql/migrations/001_create_videos_table.sql — note_tackles table has `height TEXT` and `technique TEXT` columns (no NOT NULL, no default)",
+        "db/sql/insert_note_tackle.sql — INSERT statement is: `INSERT INTO note_tackles (note_id, player, attempt, outcome, height, technique) VALUES (?, ?, ?, ?, ?, ?);`",
+        "db/sql/select_note_tackles_by_note.sql — SELECT includes height and technique: `SELECT id, note_id, player, attempt, outcome, height, technique FROM note_tackles WHERE note_id = ?;`",
+        "db/models.go — NoteTackle struct has `Height string` and `Technique string` fields",
+        "db/models.go — EditTackleData struct has `Height string` and `Technique string` fields",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Update db functions to handle height and technique",
+      "description": "As a developer, I need all database functions that read or write note_tackles to handle the new columns.",
+      "acceptanceCriteria": [
+        "db/functions.go — InsertNoteTackle() signature extended to: InsertNoteTackle(db *sql.DB, noteID int64, player string, attempt int, outcome, height, technique string) error",
+        "db/functions.go — InsertNoteTackle() passes height and technique as 5th and 6th bind params to InsertNoteTackleSQL",
+        "db/functions.go — SelectNoteTacklesByNote() scan includes &t.Height and &t.Technique after &t.Outcome",
+        "db/functions.go — InsertNoteWithChildren() tackle loop: tx.Exec call passes t.Height and t.Technique as additional args after t.Outcome",
+        "db/functions.go — UpdateNoteWithChildren() tackle loop: tx.Exec call passes t.Height and t.Technique as additional args after t.Outcome",
+        "db/functions.go — LoadNoteForEdit() populates data.Height and data.Technique from tackles[0].Height and tackles[0].Technique",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Add Height and Technique fields to TackleFormResult and both form constructors",
+      "description": "As a user, I want to optionally record the height and technique of a tackle when adding or editing one, so that analysis can be more detailed.",
+      "acceptanceCriteria": [
+        "tui/forms/tackleform.go — TackleFormResult struct has `Height string` and `Technique string` fields",
+        "tui/forms/tackleform.go — NewTackleForm() Step 2 group includes a huh.NewSelect[string]() for Height with title 'Height', description 'Optional', options: huh.NewOption('None', ''), huh.NewOption('High', 'high'), huh.NewOption('Mid', 'mid'), huh.NewOption('Low', 'low'), bound to &result.Height",
+        "tui/forms/tackleform.go — NewTackleForm() Step 2 group includes a huh.NewInput() for Technique with title 'Technique', description 'Optional - e.g. shoulder, choke, ankle', bound to &result.Technique",
+        "tui/forms/tackleform.go — NewEditTackleForm() Step 2 group includes the same Height select and Technique input bound to &result.Height and &result.Technique",
+        "Height and Technique fields appear after Zone and before Star in Step 2",
+        "Both fields have no validation — empty submission is valid",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Wire tui.go save functions to pass height and technique to the database",
+      "description": "As a developer, I need the TUI save functions to pass the new form values through to the database when creating or updating a tackle.",
+      "acceptanceCriteria": [
+        "tui/tui.go — saveTackleFromForm(): db.NoteTackle literal includes Height: result.Height and Technique: result.Technique",
+        "tui/tui.go — saveEditTackleFromForm(): db.NoteTackle literal includes Height: result.Height and Technique: result.Technique",
+        "tui/tui.go — editTackleFormResult mapping (db.EditTackleData -> forms.EditTackleFormResult) includes Height: data.Height and Technique: data.Technique inside the TackleFormResult embedded struct",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Update TUI-ARCHITECTURE.md to document new tackle fields",
+      "description": "As a developer, I need the architecture documentation to reflect the new height and technique fields so future contributors understand the full tackle data model.",
+      "acceptanceCriteria": [
+        "tui/TUI-ARCHITECTURE.md — Available Forms table row for TackleFormResult updated to list Height and Technique in the Result Type column or description",
+        "tui/TUI-ARCHITECTURE.md — note_tackles schema or a technical note documents: height TEXT (optional, values: high/mid/low) and technique TEXT (optional, free text)"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

@@ -105,9 +105,12 @@ func (p *Processor) processClip(ctx context.Context, c *db.PendingClip) {
 	filename := strings.ReplaceAll(c.Filename, ":", "\\\\:")
 
 	// Build drawtext filter chain. No single quotes used — only backslash escaping.
+	// setpts=PTS-STARTPTS resets output timestamps to 0 so that the enable=lt(t\,2)
+	// expression on each drawtext segment works correctly regardless of the source
+	// position (without this, t equals the source PTS, e.g. 90s, and is never < 2).
 	// The comma in lt(t,2) is escaped as '\,' so it is not treated as a filter
 	// separator at the filtergraph level.
-	drawtext := fmt.Sprintf(
+	drawtext := "setpts=PTS-STARTPTS," + fmt.Sprintf(
 		"drawtext=text=Note ID\\\\: %d:x=10:y=h-th:fontsize=28:fontcolor=white:bordercolor=#131211:borderw=2:enable=lt(t\\,2),"+
 			"drawtext=text=Filename\\\\: %s:x=10:y=h-th-36:fontsize=28:fontcolor=white:bordercolor=#131211:borderw=2:enable=lt(t\\,2),"+
 			"drawtext=text=Outcome\\\\: %s %d:x=10:y=h-th-72:fontsize=28:fontcolor=white:bordercolor=#131211:borderw=2:enable=lt(t\\,2),"+
@@ -124,8 +127,8 @@ func (p *Processor) processClip(ctx context.Context, c *db.PendingClip) {
 
 	args := []string{
 		"-y",
-		"-i", c.VideoPath,
 		"-ss", fmt.Sprintf("%f", c.Start),
+		"-i", c.VideoPath,
 		"-t", fmt.Sprintf("%f", duration),
 		"-vf", drawtext,
 		outPath,

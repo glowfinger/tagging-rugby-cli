@@ -1,3 +1,12 @@
+
+
+Regenerate videos regen should delete the base file
+Note information page
+
+
+
+
+
 Load the prd skill and create a PRD that reads and updates the TUI-ARCHITECTURE.md to have an Export indicator in a container in Column 1
 Row 1: Should have a Status Ready, Processing, Error or completed  
 Row 2: Should have a count of completed clips/total clips
