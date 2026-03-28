@@ -166,5 +166,5 @@ func StatsPanel(tackleStats []PlayerStats, items []ListItem, width, height int) 
 
 	tackleBox := RenderInfoBox("Tackle Stats", tackleLines, width, false)
 
-	return eventBox + "\n\n" + tackleBox
+	return eventBox + "\n" + tackleBox
 }

@@ -1,4 +1,8 @@
 
+Load the prd skill and create a PRD for removing the gap between 
+Event Distribution and Tackle Stats
+Playback and Navigation
+Navigation and Views
 
 Regenerate videos regen should delete the base file
 Note information page
