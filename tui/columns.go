@@ -166,15 +166,10 @@ func (m *Model) renderColumn4(width, height int) string {
 	var lines []string
 
 	groups := components.GetControlGroups()
-	for i, group := range groups {
+	for _, group := range groups {
 		contentLines := components.ControlGroupLines(group, width-4)
 		box := components.RenderInfoBox(group.Name, contentLines, width, false)
 		lines = append(lines, box)
-
-		// 1 blank line gap between bordered containers
-		if i < len(groups)-1 {
-			lines = append(lines, "")
-		}
 	}
 
 	return layout.Container{Width: width, Height: height}.Render(strings.Join(lines, "\n"))
