@@ -1,26 +1,34 @@
 {
   "project": "tagging-rugby-cli",
-  "branchName": "ralph/clip-overlay",
-  "description": "Clip Overlay Update - Replace the 3-line drawtext overlay with a 5-line metadata overlay (Time, Player, Outcome+Attempt, Filename, Note ID) visible for the first 2 seconds, with white text and a #131211 2px border. Single-file change to clip/processor.go.",
+  "branchName": "ralph/remove-section-gaps",
+  "description": "Remove blank-line gaps between adjacent bordered boxes in Column 3 (Event Distribution / Tackle Stats) and Column 4 (Playback / Navigation / Views).",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Update clip overlay drawtext filter to 5-line layout with border",
-      "description": "As a user, I want the exported clip to show a 5-line metadata overlay in the bottom-left for the first 2 seconds so I can immediately identify the clip.",
+      "title": "Remove gap between Event Distribution and Tackle Stats",
+      "description": "As a user, I want the Event Distribution and Tackle Stats boxes to stack flush with no blank line between them so vertical space is used efficiently.",
       "acceptanceCriteria": [
-        "clip/processor.go — processClip() drawtext filter produces exactly 5 drawtext segments chained with commas in a single -vf value",
-        "Line 1 (bottom, y=h-th): text=Note ID\\: {c.NoteID}",
-        "Line 2 (y=h-th-36): text=Filename\\: {c.Filename} — c.Filename has colons replaced with \\\\: via strings.ReplaceAll",
-        "Line 3 (y=h-th-72): text=Outcome\\: {outcome} {c.Attempt} — outcome already has colons escaped",
-        "Line 4 (y=h-th-108): text=Player\\: {player} — c.Player has colons replaced with \\\\: via strings.ReplaceAll, stored in a 'player' variable",
-        "Line 5 (top, y=h-th-144): text=Time\\: {startTimestamp}/{endTimestamp} — endTimestamp is computed from c.End using the same %02d\\\\:%02d\\\\:%02d format as the existing startTimestamp",
-        "Every drawtext segment includes bordercolor=#131211:borderw=2",
-        "Every drawtext segment has enable=lt(t\\\\,2) — 2 seconds (changed from 3)",
-        "fontsize=28, fontcolor=white, x=10 unchanged on all lines",
-        "No other files are modified",
+        "tui/components/statspanel.go line 169 — change `\"\\n\\n\"` to `\"\\n\"` in the return statement joining eventBox and tackleBox",
+        "No blank row appears between the two boxes in Column 3",
+        "CGO_ENABLED=0 go build ./... passes",
         "CGO_ENABLED=0 go vet ./... passes"
       ],
       "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Remove gaps between Playback, Navigation, and Views boxes",
+      "description": "As a user, I want the Playback, Navigation, and Views control boxes in Column 4 to stack flush with no blank lines between them so vertical space is used efficiently.",
+      "acceptanceCriteria": [
+        "tui/columns.go renderColumn4 — remove the blank-line gap block: `if i < len(groups)-1 { lines = append(lines, \"\") }`",
+        "Remove the comment `// 1 blank line gap between bordered containers` along with the if block",
+        "No blank rows appear between Playback, Navigation, and Views boxes in Column 4",
+        "CGO_ENABLED=0 go build ./... passes",
+        "CGO_ENABLED=0 go vet ./... passes"
+      ],
+      "priority": 2,
       "passes": true,
       "notes": ""
     }

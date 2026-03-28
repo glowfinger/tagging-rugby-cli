@@ -1,20 +1,21 @@
 # Ralph Progress Log
-# Branch: ralph/clip-overlay
-# Started: 2026-03-11
+# Branch: ralph/remove-section-gaps
+# Started: 2026-03-28
 
 ## Codebase Patterns
-- ffmpeg drawtext escaping: colons in option values need `\\\\:` in Go source (4 backslashes + colon) to survive two levels of filtergraph/option escaping
-- The comma in `lt(t,N)` must be escaped as `\\,` to avoid being treated as a filter separator
+- When removing a blank-line separator between boxes, also check if the loop variable `i` was only used for that gap logic — change `for i, x := range` to `for _, x := range` to avoid "declared and not used" compile error
 
-## 2026-03-11 - US-001
-- Updated `clip/processor.go` processClip() drawtext filter from 3-line to 5-line layout
-- Added endTimestamp computed from c.End using same `%02d\\\\:%02d\\\\:%02d` format
-- Added `player` and `filename` variables with colon escaping via `strings.ReplaceAll`
-- All 5 drawtext segments now include `bordercolor=#131211:borderw=2` and use `enable=lt(t\\,2)` (2 seconds, down from 3)
-- Line order bottom-to-top: Note ID, Filename, Outcome+Attempt, Player, Time (y offsets 0, 36, 72, 108, 144)
-- Files changed: `clip/processor.go`
+## 2026-03-28 - US-001
+- Changed `"\n\n"` to `"\n"` in statspanel.go line 169 joining eventBox and tackleBox
+- Files changed: tui/components/statspanel.go
 - **Learnings for future iterations:**
-  - PendingClip struct has fields: ClipID, NoteID, Folder, Filename, VideoPath, Category, Player, Attempt, Outcome, Start, End
-  - ffmpeg drawtext: `text=Label\\\\: value` renders as "Label: value" after double-escape processing
-  - Only `clip/processor.go` was modified — no other files needed changes
+  - Simple one-line change; build/vet passed immediately
+---
+
+## 2026-03-28 - US-002
+- Removed the blank-line gap block (`if i < len(groups)-1 { lines = append(lines, "") }`) and its comment from renderColumn4 in tui/columns.go
+- Also changed `for i, group := range groups` to `for _, group := range groups` since `i` was only used by the removed gap logic
+- Files changed: tui/columns.go
+- **Learnings for future iterations:**
+  - After removing gap logic that used the loop index `i`, Go compile fails with "declared and not used" — must also remove/replace the index variable
 ---
